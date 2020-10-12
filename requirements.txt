@@ -1,0 +1,10 @@
+flask
+flask-cors
+boto3
+numpy
+pandas
+requests
+shortuuid
+pyjwt
+uwsgi
+python-socketio[client]

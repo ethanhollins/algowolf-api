@@ -1,0 +1,154 @@
+import importlib
+import sys
+import requests
+import json
+import time
+import os
+from datetime import datetime, timedelta
+from threading import Thread
+
+STRATEGY_PACKAGE = 'strategies'
+
+class App(dict):
+
+	def __init__(self, api, package, strategy_id=None):
+		if package.endswith('.py'):
+			package = package.strip('.py')
+		self.api = api
+		self.package = package
+		self.strategyId = strategy_id
+
+		# Containers
+		self.strategies = {}
+		self.indicators = []
+		self.charts = []
+
+
+	# Enable use of dot operators
+	def __getattr__(self, key):
+		return self[key]
+
+	def __setattr__(self, key, value):
+		self[key] = value
+
+
+	# TODO: Add accounts parameter
+	def run(self, accounts):
+		# Start strategy for each account
+		threads = []
+		for account_id in accounts:
+			self.startStrategy(account_id)
+
+		for account_id in self.strategies:
+			# Run strategy
+			t = Thread(target=self.strategies[account_id].get('strategy').run)
+			t.start()
+			threads.append(t)
+
+		# Join threads
+		for t in threads:
+			t.join()
+
+
+	def stop(self, accounts):
+		for acc in accounts:
+			if acc in self.strategies:
+				strategy = self.strategies[acc].get('strategy')
+				strategy.stop()
+				del self.strategies[acc]
+
+
+	def backtest(self, _from, to, mode):
+
+		e = None
+		try:
+			if isinstance(_from, str):
+				_from = datetime.strptime(_from, '%Y-%m-%dT%H:%M:%SZ')
+			if isinstance(to, str):
+				to = datetime.strptime(to, '%Y-%m-%dT%H:%M:%SZ')
+			self.startStrategy('ACCOUNT_1')
+			self.strategies['ACCOUNT_1'].get('strategy').getBroker().setName(self.api.name)
+
+			backtest_id = self.strategies['ACCOUNT_1'].get('strategy').backtest(_from, to, mode)
+		except Exception as err:
+			e = err
+		finally:
+			if 'ACCOUNT_1' in self.strategies:
+				del self.strategies['ACCOUNT_1']
+
+			if e is not None:
+				raise TradelibException(str(e))
+
+		return backtest_id
+
+
+	def getPackageModule(self, package):
+		spec = importlib.util.find_spec(package)
+		module = importlib.util.module_from_spec(spec)
+		# sys.modules[spec.name] = module
+		spec.loader.exec_module(module)
+
+		if '__version__' in dir(module):
+			return self.getPackageModule(package + '.' + module.__version__)
+
+		return module
+
+	def startStrategy(self, account_id):
+		if account_id not in self.strategies:
+			strategy = Strategy(self.api, strategy_id=self.strategyId, accounts=[account_id])
+			strategy.setApp(self)
+
+			module = self.getPackageModule(f'{STRATEGY_PACKAGE}.{self.package}')
+			self.strategies[account_id] = {
+				'strategy': strategy,
+				'module': module
+			}
+
+			# Set global variables
+			module.print = strategy.log
+
+			module.strategy = strategy
+			module.utils = tl.utils
+			module.product = tl.product
+			module.period = tl.period
+			module.indicator = tl.indicator
+			for i in dir(tl.constants):
+				vars(module)[i] = vars(tl.constants)[i]
+
+			# Initialize strategy
+			if 'init' in dir(module) and callable(module.init):
+				module.init()
+
+			# Search for convertional function names
+			if 'ontrade' in dir(module) and callable(module.ontrade):
+				strategy.getBroker().subscribeOnTrade(module.ontrade)
+
+			if 'ontick' in dir(module) and callable(module.ontick):
+				for chart in strategy.getBroker().getAllCharts():
+					for period in chart.periods:
+						chart.subscribe(period, module.ontick)
+
+
+	def getStrategy(self, account_id):
+		return self.strategies.get(account_id)
+
+
+	def addChart(self, chart):
+		self.charts.append(chart)
+
+
+	def getChart(self, broker, product):
+		for i in self.charts:
+			if i.isChart(broker, product):
+				return i
+		return None
+
+
+'''
+Imports
+'''
+
+
+from .strategy import Strategy
+from .error import BrokerlibException, TradelibException
+from app import pythonsdk as tl
