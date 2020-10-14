@@ -10,6 +10,7 @@ import pandas as pd
 import traceback
 import numpy as np
 
+from threading import Thread
 from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.error import BrokerException
@@ -119,7 +120,7 @@ class IG(Broker):
 	def _periodic_refresh(self):
 		if time.time() - self._last_refresh > TWO_HOURS:
 			# Perform periodic refresh
-			self._reconnect()
+			Thread(target=self._reconnect()).start()
 
 	'''
 	Broker Utilities
@@ -1180,6 +1181,7 @@ class IG(Broker):
 		self._subscriptions.append(sub)
 
 	def _subscribe_chart_updates(self, product, listener):
+		print('subscribe')
 		product = self._convert_to_main_ig_product(product)
 		period = self._convert_to_ig_live_period(tl.period.ONE_MINUTE)
 		items = ['Chart:{}:{}'.format(product, period)]

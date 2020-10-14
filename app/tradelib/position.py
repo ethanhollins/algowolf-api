@@ -74,9 +74,12 @@ class Position(dict):
 
 	def __getattr__(self, key):
 		if key != '_broker':
-			return self[key]
-		else:
-			super().__getattr__(key)
+			try:
+				return self[key]
+			except Exception:
+				pass
+
+		super().__getattr__(key)
 
 	def __setattr__(self, key, value):
 		if key != '_broker':

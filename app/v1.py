@@ -1000,6 +1000,30 @@ def perform_backtest_ept(strategy_id, start, end):
 	)
 
 
+# `/charts` ept
+@bp.route('/strategy/<strategy_id>/charts', methods=('POST',))
+@auth.login_required
+def create_chart_ept(strategy_id):
+	account = g.user
+
+	body = getJson()
+	broker = account.getStrategyBroker(strategy_id)
+
+	result = []
+	for product in body.get('items'):
+		broker.getChart(product)
+		result.append(product)
+
+	res = {
+		'broker': broker.name,
+		'products': result
+	}
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 # `/stream` ept
 @bp.route("/strategy/<strategy_id>/stream/ontick", methods=('POST',))
 def ontick_ept(strategy_id):

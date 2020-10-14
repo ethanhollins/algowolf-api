@@ -22,6 +22,7 @@ class ContinuousThreadHandler(object):
 
 	def __init__(self):
 		self.jobs = {}
+		self._to_add = []
 		self._to_stop = []
 		self._running = True
 		self.thread = Thread(target=self.run)
@@ -30,20 +31,31 @@ class ContinuousThreadHandler(object):
 	def generateReference(self):
 		return shortuuid.uuid()
 
+
 	def addJob(self, func, *args, **kwargs):
 		ref = self.generateReference()
-		self.jobs[ref] = (func, args, kwargs)
+		self._to_add.append((ref, func, args, kwargs))
 		return ref
 
+
 	def stopJob(self, ref):
-		if ref in self.jobs:
-			del self.jobs[ref]
+		self._to_stop.append(ref)
+
+
+	def jobsHandler(self):
+		for j in self._to_add:
+			self.jobs[j[0]] = j[1:]
+
+		for j in self._to_stop:
+			if ref in self.jobs:
+				del self.jobs[ref]
+
 
 	def run(self):
 		while self._running:
-			for j in copy(list(self.jobs.values())):
+			for j in self.jobs.values():
 				j[0](*j[1], **j[2])
-			time.sleep(0.01)
+			self.jobsHandler()
 
 	def stop(self):
 		self._running = False
@@ -76,8 +88,15 @@ class Controller(object):
 		return
 
 	def setupSio(self):
-		sio = socketio.Client()
-		sio.connect(STREAM_URL, namespaces=['/admin'])
+		while True:
+			try:
+				sio = socketio.Client()
+				sio.connect(STREAM_URL, namespaces=['/admin'])
+				break
+			except socketio.exceptions.ConnectionError:
+				time.sleep(1)
+				pass
+
 		return sio
 
 	def getAccounts(self):
@@ -173,8 +192,10 @@ class Accounts(dict):
 	def initAccount(self, user_id):
 		try:
 			acc = Account(self.ctrl, user_id)
-			self[user_id] = acc
-			return acc
+			if self.get(user_id) is None:
+				self[user_id] = acc
+				
+			return self.get(user_id)
 		except AccountException:
 			return None
 

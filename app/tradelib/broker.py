@@ -418,6 +418,12 @@ class Broker(object):
 		for func in self.ontrade_subs.values():
 			func(res)
 
+		self.ctrl.sio.emit(
+			'ontrade', 
+			{'strategy_id': self.strategyId, 'item': res}, 
+			namespace='/admin'
+		)
+
 
 	def handleTransaction(self, res):
 		for k, v in res.items():

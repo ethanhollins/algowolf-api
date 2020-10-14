@@ -208,7 +208,7 @@ class Broker(object):
 				).start()
 
 		# Clear backtest postions
-		self.clearBacktestTrades()
+		# self.clearBacktestTrades()
 
 		# Update positions/orders
 		# self.updateAllPositions()

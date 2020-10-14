@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 from threading import Thread
 
-STRATEGY_PACKAGE = 'strategies'
+STRATEGY_PACKAGE = 'app.strategies'
 
 class App(dict):
 

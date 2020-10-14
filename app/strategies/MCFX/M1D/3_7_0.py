@@ -728,6 +728,9 @@ def stopPoints(chart):
 				level = STOP_LEVELS[i]
 				point = STOP_POINTS[i]
 
+
+				if pos.sl == None:
+					print(pos)
 				if pos.direction == LONG:
 					sl_range = utils.convertToPips(pos.entry_price - pos.sl)
 					profit = utils.convertToPips(chart.bids.ONE_MINUTE[0, 1] - pos.entry_price)
@@ -889,7 +892,8 @@ def report(tick):
 				f'SP: {sp} P: {pos.getProfit()}\n'
 			)
 
-	print(log)
+	if strategy.getBroker().state.value == 3:
+		print(log)
 
 '''
 Hook functions

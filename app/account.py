@@ -40,9 +40,6 @@ class Account(object):
 
 	# Strategy Functions
 	def startStrategy(self, strategy_id):
-		print(f'START STRATEGY: {strategy_id}')
-		# self.strategies[strategy_id] = 'working'
-
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 		if strategy_info is None:
 			raise AccountException('Strategy not found.')
@@ -159,7 +156,9 @@ class Account(object):
 
 
 	def _set_strategy(self, strategy_id, api, package):
-		self.strategies[strategy_id] = Strategy(strategy_id, api, package)
+		strategy = Strategy(strategy_id, api, package)
+		if self.strategies.get(strategy_id) is None:
+			self.strategies[strategy_id] = strategy
 		return self.strategies[strategy_id]
 
 
@@ -408,17 +407,15 @@ class Account(object):
 			gui['drawings'][layer] += drawings
 
 			# Send Message to web clients
-			with self.ctrl.app.app_context():
-				emit(
-					'ongui', 
-					{
-						'type': 'create_drawings',
-						'layer': layer,
-						'items': drawings
-					},
-					namespace='/user',
-					room=strategy_id
-				)
+			self.ctrl.sio.emit(
+				'ongui', 
+				{
+					'type': 'create_drawings',
+					'layer': layer,
+					'items': drawings
+				},
+				namespace='/admin'
+			)
 
 			# Update Gui Storage
 			self.updateGui(strategy_id, gui)
@@ -441,17 +438,15 @@ class Account(object):
 					del gui['drawings'][layer][i]
 
 			# Send Message to web clients
-			with self.ctrl.app.app_context():
-				emit(
-					'ongui', 
-					{
-						'type': 'delete_drawings',
-						'layer': layer,
-						'items': deleted
-					},
-					namespace='/user',
-					room=strategy_id
-				)
+			self.ctrl.sio.emit(
+				'ongui', 
+				{
+					'type': 'delete_drawings',
+					'layer': layer,
+					'items': deleted
+				},
+				namespace='/admin'
+			)
 
 			# Update Gui Storage
 			self.updateGui(strategy_id, gui)
@@ -469,16 +464,14 @@ class Account(object):
 			del gui['drawings'][layer]
 
 			# Send Message to web clients
-			with self.ctrl.app.app_context():
-				emit(
-					'ongui', 
-					{
-						'type': 'delete_drawing_layer',
-						'layer': layer
-					},
-					namespace='/user',
-					room=strategy_id
-				)
+			self.ctrl.sio.emit(
+				'ongui', 
+				{
+					'type': 'delete_drawing_layer',
+					'layer': layer
+				},
+				namespace='/admin'
+			)
 
 			# Update Gui Storage
 			self.updateGui(strategy_id, gui)
@@ -496,15 +489,13 @@ class Account(object):
 			gui['drawings'] = {}
 
 			# Send Message to web clients
-			with self.ctrl.app.app_context():
-				emit(
-					'ongui', 
-					{
-						'type': 'delete_all_drawings'
-					},
-					namespace='/user',
-					room=strategy_id
-				)
+			self.ctrl.sio.emit(
+				'ongui', 
+				{
+					'type': 'delete_all_drawings'
+				},
+				namespace='/admin'
+			)
 
 			# Update Gui Storage
 			self.updateGui(strategy_id, gui)

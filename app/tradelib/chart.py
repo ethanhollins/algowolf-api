@@ -83,8 +83,8 @@ class Chart(object):
 
 				self._subscriptions[period] = {}
 
-			# if period == tl.period.ONE_MINUTE:
-			# 	self.broker.save_data(df.iloc[:1], self.product, period)
+			if period == tl.period.ONE_MINUTE:
+				self.broker.save_data(df.iloc[:1], self.product, period)
 
 
 	def _load_data(self, period, start=None, end=None, count=None, force_download=False):

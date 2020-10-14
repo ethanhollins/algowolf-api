@@ -146,7 +146,9 @@ class LightstreamerClient(object):
 			self._set_control_link_url(self.session.get('ControlAddress'))
 
 			# Start thread to receive real time updates
-			self.stream_thread = self.broker.ctrl.continuousThreadHandler.addJob(self._receive)
+			# self.stream_thread = self.broker.ctrl.continuousThreadHandler.addJob(self._receive)
+			self.stream_thread = Thread(target=self._receive)
+			self.stream_thread.start()
 
 		else:
 			raise IOError(stream_line)
@@ -181,8 +183,8 @@ class LightstreamerClient(object):
 	def disconnect(self):
 		if self.stream is not None:
 			self._control({"LS_op": OP_DESTROY})
-			self.broker.ctrl.continuousThreadHandler.stopJob(self.stream_thread)
-
+			# self.broker.ctrl.continuousThreadHandler.stopJob(self.stream_thread)
+			self.stream_thread.join()
 
 	def subscribe(self, subscription):
 		""""Perform a subscription request to Lightstreamer Server."""
@@ -250,52 +252,53 @@ class LightstreamerClient(object):
 		rebind = False
 		receive = True
 
-		try:
-			message = self._read_line(self.stream)
-			if not message.strip():
+		while receive:
+			try:
+				message = self._read_line(self.stream)
+				if not message.strip():
+					message = None
+			except Exception as e:
+				print(traceback.format_exc())
 				message = None
-		except Exception as e:
-			print(traceback.format_exc())
-			message = None
-			# Reconnect
-			Thread(target=self.broker._reconnect).start()
+				# Reconnect
+				Thread(target=self.broker._reconnect).start()
 
-		if message is None:
-			receive = False
-		elif message == PROBE_CMD:
-			# skipping the PROBE message, keep on receiving messages
-			# log.debug("PROBE message")
-			pass
-		elif message.startswith(ERROR_CMD):
-			# terminate the receiving loop on ERROR message
-			receive = False
-			# log.error("ERROR")
-			pass
-		elif message.startswith(LOOP_CMD):
-			# terminate the the receiving loop on LOOP message
-			# a complete implementation should proceed with a rebind of the session
-			# log.debug("LOOP")
-			receive = False
-			rebind = True
-			pass
-		elif message.startswith(SYNC_ERROR_CMD):
-			# terminate the receiving loop on SYNC ERROR message
-			# a complete implementation should create a new session and re-subscribe to all the old items and relative fields
-			# log.error("SYNC ERROR")
-			receive = False
-			pass
-		elif message.startswith(END_CMD):
-			# terminate the receiving loop on END message
-			# the session has been forcibly closed on the server side a complete implementation should handle the "cause_code" if present
-			# log.info("Connection closed by the server")
-			receive = False
-			pass
-		elif message.startswith("Preamble"):
-			# skipping Preamble message, keep on receiving messages
-			# log.debug("Preamble")
-			pass
-		else:
-			self._forward_update(message)
+			if message is None:
+				receive = False
+			elif message == PROBE_CMD:
+				# skipping the PROBE message, keep on receiving messages
+				# log.debug("PROBE message")
+				pass
+			elif message.startswith(ERROR_CMD):
+				# terminate the receiving loop on ERROR message
+				receive = False
+				# log.error("ERROR")
+				pass
+			elif message.startswith(LOOP_CMD):
+				# terminate the the receiving loop on LOOP message
+				# a complete implementation should proceed with a rebind of the session
+				# log.debug("LOOP")
+				receive = False
+				rebind = True
+				pass
+			elif message.startswith(SYNC_ERROR_CMD):
+				# terminate the receiving loop on SYNC ERROR message
+				# a complete implementation should create a new session and re-subscribe to all the old items and relative fields
+				# log.error("SYNC ERROR")
+				receive = False
+				pass
+			elif message.startswith(END_CMD):
+				# terminate the receiving loop on END message
+				# the session has been forcibly closed on the server side a complete implementation should handle the "cause_code" if present
+				# log.info("Connection closed by the server")
+				receive = False
+				pass
+			elif message.startswith("Preamble"):
+				# skipping Preamble message, keep on receiving messages
+				# log.debug("Preamble")
+				pass
+			else:
+				self._forward_update(message)
 
 		if not receive:
 			if not rebind:
