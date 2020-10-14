@@ -16,8 +16,9 @@ def create_app(test_config=None):
 
 	cors = CORS(
 		app, resources={r"/*": {"origins": [
-			"http://127.0.0.1/*", "http://api.algowolf.com/*", 
-			"http://api.algowolf.com/*", "http://3.25.161.203/*"
+			"http://127.0.0.1/*", "https://www.algowolf.com/*", 
+			"http://www.algowolf.com/*", "http://stream.algowolf.com/*",
+			"https://stream.algowolf.com/*", "http://3.25.161.203/*"
 		]}}, 
 		supports_credentials=True,
 		allow_headers=["Authorization", "Content-Type", "Accept"]
