@@ -311,21 +311,24 @@ class Database(object):
 				return None
 			elif props.get('password') is None:
 				return None
+			elif props.get('is_demo') is None:
+				return None
 
 			# Run broker API call check
-			is_demo = True
 
 			# Upload new broker info
-			props.update({'broker': broker_name, 'is_demo': is_demo})
+			props.update({'broker': broker_name})
 			key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 			user['brokers'][name] = key
 		
 		elif broker_name == tl.broker.OANDA_NAME:
+			if props.get('is_demo') is None:
+				return None
+
 			# Run broker API call check
-			is_demo = True
 
 			# Upload new broker info
-			props.update({'broker': broker_name, 'is_demo': is_demo})
+			props.update({'broker': broker_name})
 			key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 			user['brokers'][name] = key
 		# Update changes
