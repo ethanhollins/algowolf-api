@@ -15,7 +15,10 @@ def create_app(test_config=None):
 	app = Flask(__name__, instance_relative_config=True)
 
 	cors = CORS(
-		app, resources={r"/*": {"origins": "http://127.0.0.1/*"}}, 
+		app, resources={r"/*": {"origins": [
+			"http://127.0.0.1/*", "https://api.algowolf.com/*", 
+			"https://api.algowolf.com/*", "http://3.25.161.203/*"
+		]}}, 
 		supports_credentials=True,
 		allow_headers=["Authorization", "Content-Type", "Accept"]
 	)
