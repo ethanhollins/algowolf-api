@@ -721,6 +721,7 @@ def exitSetup(chart):
 
 
 def stopPoints(chart):
+	print(f'5: {len(strategy.positions)}')
 	if len(strategy.positions) > 0:
 		print('test one')
 		for pos in strategy.positions:
@@ -945,10 +946,15 @@ def ontrade(trade):
 def ontick(tick):
 	'''Hook function for broker price events'''
 	# On Bar End
+	print('1')
 	if tick.bar_end:
+		print('2')
 		onEventLoop(tick.timestamp, tick.chart)
+		print('3')
 		report(tick)
+		print('4')
 
+	print('5')
 	# Stop Points
 	stopPoints(tick.chart)
 

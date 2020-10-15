@@ -246,6 +246,7 @@ class Strategy(object):
 
 
 	def log(self, *objects, sep=' ', end='\n', file=None, flush=None):
+		print(*objects, sep=sep, end=end, file=file, flush=flush)
 		msg = sep.join(map(str, objects)) + end
 		timestamp = self.lastTick.timestamp
 
