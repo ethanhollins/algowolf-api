@@ -17,9 +17,7 @@ def ontrade(trade):
 def ontick(tick):
 	global count
 
-	print('TICK')
 	if tick.bar_end:
-		print('END')
 		if count < 1:
 			strategy.sell(product.GBPUSD, 1.0)
 			strategy.draw(
@@ -33,7 +31,7 @@ def ontick(tick):
 		elif count < 2:
 			# pos = strategy.positions[count-10]
 			for pos in strategy.positions:
-				pos.modify(sl_range=100, tp_range=20)
+				pos.modify(sl_range=100)
 			strategy.draw(
 				'arrowAltCircleUpRegular', '0', product.GBPUSD,
 				tick.chart.bids.ONE_MINUTE[0, 3], 

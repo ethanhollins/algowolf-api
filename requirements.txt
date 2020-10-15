@@ -6,5 +6,5 @@ pandas
 requests
 shortuuid
 pyjwt
-uwsgi
 python-socketio[client]
+uwsgi

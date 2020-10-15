@@ -111,6 +111,7 @@ class Position(dict):
 
 			return result
 		else:
+			print('[CLOSE] POS IS NONE')
 			return self
 
 
@@ -133,6 +134,7 @@ class Position(dict):
 
 			return self
 		else:
+			print('[MODIFY] POS IS NONE')
 			return self
 	
 

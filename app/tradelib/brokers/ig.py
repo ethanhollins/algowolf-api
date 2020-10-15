@@ -115,7 +115,7 @@ class IG(Broker):
 		self._subscribe_heartbeat_update()
 
 		# Start refresh thread
-		self.ctrl.continuousThreadHandler.addJob(self._periodic_refresh)
+		# self.ctrl.continuousThreadHandler.addJob(self._periodic_refresh)
 
 	def _periodic_refresh(self):
 		if time.time() - self._last_refresh > TWO_HOURS:
@@ -1218,6 +1218,8 @@ class IG(Broker):
 
 			# Cancel update if no useful information
 			if not all(ask) and not all(bid): return
+			ask = list(map(float, ask))
+			bid = list(map(float, bid))
 
 			# Get timestamp
 			new_ts = int(values['UTM']) // 1000

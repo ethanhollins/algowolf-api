@@ -91,7 +91,7 @@ class Controller(object):
 		while True:
 			try:
 				sio = socketio.Client()
-				sio.connect(STREAM_URL, namespaces=['/admin'])
+				sio.connect(self.app.config['STREAM_URL'], namespaces=['/admin'])
 				break
 			except socketio.exceptions.ConnectionError:
 				time.sleep(1)

@@ -295,10 +295,7 @@ class Backtester(object):
 
 
 	def createDrawing(self, timestamp, layer, drawing):
-		drawing['layer'] = layer
-
 		item = {
-			'id': self.broker.generateReference(),
 			'timestamp': timestamp,
 			'type': tl.CREATE_DRAWING,
 			'item': drawing
@@ -309,7 +306,6 @@ class Backtester(object):
 
 	def clearDrawingLayer(self, timestamp, layer):
 		item = {
-			'id': self.broker.generateReference(),
 			'timestamp': timestamp,
 			'type': tl.CLEAR_DRAWING_LAYER,
 			'item': layer
@@ -320,7 +316,6 @@ class Backtester(object):
 
 	def deleteAllDrawings(self, timestamp):
 		item = {
-			'id': self.broker.generateReference(),
 			'timestamp': timestamp,
 			'type': tl.CLEAR_ALL_DRAWINGS,
 			'item': None

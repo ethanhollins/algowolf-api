@@ -260,8 +260,6 @@ class LightstreamerClient(object):
 			except Exception as e:
 				print(traceback.format_exc())
 				message = None
-				# Reconnect
-				Thread(target=self.broker._reconnect).start()
 
 			if message is None:
 				receive = False
@@ -306,6 +304,9 @@ class LightstreamerClient(object):
 				self.session.clear()
 				self.subscriptions.clear()
 				self._current_subscription_key = 0
+
+				# Reconnect
+				Thread(target=self.broker._reconnect).start()
 			else:
 				self.bind()
 

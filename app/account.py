@@ -38,6 +38,7 @@ class Account(object):
 		letters = string.ascii_uppercase + string.digits
 		return ''.join(random.choice(letters) for i in range(6))
 
+
 	# Strategy Functions
 	def startStrategy(self, strategy_id):
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
@@ -311,6 +312,19 @@ class Account(object):
 
 		self.updateGui(strategy_id, gui)
 		return result
+
+
+	def getBacktestInfo(self, strategy_id, backtest_id):
+		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+		broker_info = self.ctrl.getDb().getBroker(self.userId, strategy_info.get('broker'))
+		gui = self.getBacktestGui(strategy_id, backtest_id)
+		return {
+			**{ 
+				'broker_id': strategy_info.get('broker'),
+				'broker': broker_info.get('broker')
+			},
+			**gui
+		}
 
 
 	def getBacktestGui(self, strategy_id, backtest_id):

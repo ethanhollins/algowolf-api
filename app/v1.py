@@ -927,11 +927,12 @@ def delete_all_drawings_ept(strategy_id):
 
 @bp.route('/strategy/<strategy_id>/backtest/<backtest_id>', methods=('GET',))
 @auth.login_required
-def get_backtest_gui_ept(strategy_id, backtest_id):
+def get_backtest_info_ept(strategy_id, backtest_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
 
-	backtest = account.getBacktestGui(strategy_id, backtest_id)
+	backtest = account.getBacktestInfo(strategy_id, backtest_id)
+	print(backtest)
 	# backtest.update(account.getBacktestTransactions(strategy_id, backtest_id))
 	return Response(
 		json.dumps(backtest, indent=2),

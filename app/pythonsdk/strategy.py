@@ -1,7 +1,11 @@
 import json
+import time
 from app import pythonsdk as tl
 from .broker import Broker, BacktestMode, State
 from threading import Thread
+
+
+SAVE_INTERVAL = 60 # Seconds
 
 
 class Strategy(object):
@@ -12,6 +16,12 @@ class Strategy(object):
 		self.strategyId = strategy_id
 		self.broker = Broker(self, self.api, strategy_id=self.strategyId, data_path=data_path)
 		self.accounts = accounts
+
+		# GUI Queues
+		self.drawing_queue = []
+		self.log_queue = []
+		self.info_queue = []
+		self.lastSave = time.time()
 
 		self.tick_queue = []
 		self.lastTick = None
@@ -149,7 +159,9 @@ class Strategy(object):
 				color='#000000', scale=1.0, rotation=0):
 		timestamp = self.lastTick.timestamp
 		drawing = {
+			'id': self.broker.generateReference(),
 			'product': product,
+			'layer': layer,
 			'type': draw_type,
 			'timestamps': [int(timestamp)],
 			'prices': [price],
@@ -160,10 +172,21 @@ class Strategy(object):
 			}
 		}
 		if self.getBroker().state != State.BACKTEST:
-			Thread(
-				target=self.api.userAccount.createDrawings, 
-				args=(self.strategyId, layer, [drawing])
-			).start()
+			item = {
+				'timestamp': timestamp,
+				'type': tl.CREATE_DRAWING,
+				'item': drawing
+			}
+
+			# Send Gui Socket Message
+			self.api.ctrl.sio.emit(
+				'ongui', 
+				{'strategy_id': self.strategyId, 'item': item}, 
+				namespace='/admin'
+			)
+
+			# Save to drawing queue
+			self.drawing_queue.append(item)
 
 		else:
 			# Handle drawings through backtester
@@ -174,24 +197,48 @@ class Strategy(object):
 		timestamp = self.lastTick.timestamp
 
 		if self.getBroker().state != State.BACKTEST:
-			Thread(
-				target=self.api.userAccount.deleteDrawingLayer, 
-				args=(self.strategyId, layer)
-			).start()
+			item = {
+				'id': self.broker.generateReference(),
+				'timestamp': timestamp,
+				'type': tl.CLEAR_DRAWING_LAYER,
+				'item': layer
+			}
+
+			# Send Gui Socket Message
+			self.api.ctrl.sio.emit(
+				'ongui', 
+				{'strategy_id': self.strategyId, 'item': item}, 
+				namespace='/admin'
+			)
+
+			# Handle to drawing queue
+			self.drawing_queue.append(item)
 
 		else:
 			# Handle drawings through backtester
 			self.getBroker().backtester.clearDrawingLayer(timestamp, layer)
 
 
-	def deleteAllDrawings(self):
+	def clearAllDrawings(self):
 		timestamp = self.lastTick.timestamp
 
 		if self.getBroker().state != State.BACKTEST:
-			Thread(
-				target=self.api.userAccount.deleteAllDrawings, 
-				args=(self.strategyId,)
-			).start()
+			item = {
+				'id': self.broker.generateReference(),
+				'timestamp': timestamp,
+				'type': tl.CLEAR_ALL_DRAWINGS,
+				'item': None
+			}
+
+			# Send Gui Socket Message
+			self.api.ctrl.sio.emit(
+				'ongui', 
+				{'strategy_id': self.strategyId, 'item': item}, 
+				namespace='/admin'
+			)
+
+			# Handle to drawing queue
+			self.drawing_queue.append(item)
 
 		else:
 			# Handle drawings through backtester
@@ -199,16 +246,33 @@ class Strategy(object):
 
 
 	def log(self, *objects, sep=' ', end='\n', file=None, flush=None):
-		print(*objects, sep=sep, end=end, file=file, flush=flush)
 		msg = sep.join(map(str, objects)) + end
 		timestamp = self.lastTick.timestamp
 
 		if self.getBroker().state != State.BACKTEST:
-			return
+			item = {
+				'timestamp': timestamp,
+				'type': tl.CREATE_LOG,
+				'item': msg
+			}
+
+			# Send Gui Socket Message
+			self.api.ctrl.sio.emit(
+				'ongui', 
+				{'strategy_id': self.strategyId, 'item': item}, 
+				namespace='/admin'
+			)
+
+			# Save to log queue
+			self.log_queue.append(item)
 
 		else:
 			# Handle logs through backtester
 			self.getBroker().backtester.createLogItem(timestamp, msg)
+
+
+	def clearLogs(self):
+		return
 
 
 	def info(self, name, value):
@@ -223,7 +287,21 @@ class Strategy(object):
 		}
 
 		if self.getBroker().state != State.BACKTEST:
-			return
+			item = {
+				'timestamp': timestamp,
+				'type': tl.CREATE_INFO,
+				'item': item
+			}
+
+			# Send Gui Socket Message
+			self.api.ctrl.sio.emit(
+				'ongui', 
+				{'strategy_id': self.strategyId, 'item': item}, 
+				namespace='/admin'
+			)
+
+			# Handle to info queue
+			self.info_queue.append(item)
 
 		else:
 			# Handle info through backtester
@@ -233,11 +311,82 @@ class Strategy(object):
 	Setters
 	'''
 
+	def resetGuiQueues(self):
+		self.drawing_queue = []
+		self.log_queue = []
+		self.info_queue = []
+		self.lastSave = time.time()
+
+
+	def handleDrawingsSave(self, gui):
+		if gui is None:
+			gui = self.api.userAccount.getGui(self.strategyId)
+		if 'drawings' not in gui:
+			gui['drawings'] = {}
+
+		for i in self.drawing_queue:
+			if i['type'] == tl.CREATE_DRAWING:
+				if i['item']['layer'] not in gui['drawings']:
+					gui['drawings'][i['item']['layer']] = []
+				gui['drawings'][i['item']['layer']].append(i['item'])
+
+			elif i['type'] == tl.CLEAR_DRAWING_LAYER:
+				if i['item'] in gui['drawings']:
+					gui['drawings'][i['item']] = []
+
+			elif i['type'] == tl.CLEAR_ALL_DRAWINGS:
+				for layer in gui['drawings']:
+					gui['drawings'][layer] = []
+
+		return gui
+
+	def handleLogsSave(self, gui):
+		if gui is None:
+			gui = self.api.userAccount.getGui(self.strategyId)
+		if 'logs' not in gui:
+			gui['logs'] = []
+
+		gui['logs'] += self.log_queue
+
+		return gui
+
+	def handleInfoSave(self, gui):
+		if gui is None:
+			gui = self.api.userAccount.getGui(self.strategyId)
+		if 'info' not in gui:
+			gui['info'] = []
+
+		gui['info'] += self.info_queue
+
+		return gui
+
+
+	def saveGui(self):
+		if time.time() - self.lastSave > SAVE_INTERVAL:
+			gui = None
+
+			if len(self.drawing_queue) > 0:
+				gui = self.handleDrawingsSave(gui)
+
+			if len(self.log_queue) > 0:
+				gui = self.handleLogsSave(gui)
+
+			if len(self.info_queue) > 0:
+				gui = self.handleInfoSave(gui)
+
+			if gui is not None:
+				Thread(target=self.api.userAccount.updateGui, args=(self.strategyId, gui)).start()
+				self.resetGuiQueues()
+
+
 	def setApp(self, app):
 		self.getBroker().setApp(app)
 
 	def setTick(self, tick):
 		self.lastTick = tick
+
+		# Save GUI
+		self.saveGui()
 
 	'''
 	Getters

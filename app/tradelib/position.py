@@ -132,8 +132,8 @@ class Position(dict):
 
 
 	def getProfit(self):
-		ask = self._broker.getAsk()
-		bid = self._broker.getBid()
+		ask = self._broker.getAsk(self.product)
+		bid = self._broker.getBid(self.product)
 
 		if direction == tl.LONG:
 			if self.close:
