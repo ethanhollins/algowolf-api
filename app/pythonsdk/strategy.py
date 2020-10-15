@@ -171,7 +171,7 @@ class Strategy(object):
 				'rotation': rotation
 			}
 		}
-		if self.getBroker().state != State.BACKTEST:
+		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_DRAWING,
@@ -196,7 +196,7 @@ class Strategy(object):
 	def clearDrawingLayer(self, layer):
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state != State.BACKTEST:
+		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
 			item = {
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
@@ -222,7 +222,7 @@ class Strategy(object):
 	def clearAllDrawings(self):
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state != State.BACKTEST:
+		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
 			item = {
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
@@ -249,7 +249,7 @@ class Strategy(object):
 		msg = sep.join(map(str, objects)) + end
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state != State.BACKTEST:
+		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_LOG,
@@ -286,7 +286,7 @@ class Strategy(object):
 			'value': value
 		}
 
-		if self.getBroker().state != State.BACKTEST:
+		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_INFO,
