@@ -722,7 +722,7 @@ def exitSetup(chart):
 
 def stopPoints(chart):
 	if len(strategy.positions) > 0:
-
+		print('test one')
 		for pos in strategy.positions:
 			for i in range(len(STOP_LEVELS)-1,-1,-1):
 				level = STOP_LEVELS[i]
@@ -731,9 +731,11 @@ def stopPoints(chart):
 				if pos.direction == LONG:
 					sl_range = utils.convertToPips(pos.entry_price - pos.sl)
 					profit = utils.convertToPips(chart.bids.ONE_MINUTE[0, 1] - pos.entry_price)
+					print(f'LONG: {sl_range}, {profit}, {level}, {point}')
 				else:
 					sl_range = utils.convertToPips(pos.sl - pos.entry_price)
 					profit = utils.convertToPips(pos.entry_price - chart.bids.ONE_MINUTE[0, 2])
+					print(f'SHORT: {sl_range}, {profit}, {level}, {point}')
 
 				if sl_range > -point:
 					if profit >= level:
