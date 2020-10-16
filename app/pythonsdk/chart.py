@@ -196,7 +196,6 @@ class Chart(object):
 			self._data[item['period']].loc[next_ts] = ohlc
 
 		else:
-			self._idx[item['period']] += 1
 			self._data[item['period']].iloc[-1] = ohlc
 
 		# Handle Indicators
