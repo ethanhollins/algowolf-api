@@ -7,5 +7,5 @@ requests
 shortuuid
 pyjwt
 python-socketio[client]
-uwsgi
 pendulum
+uwsgi
