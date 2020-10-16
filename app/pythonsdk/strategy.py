@@ -356,10 +356,14 @@ class Strategy(object):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
 		if 'info' not in gui:
-			gui['info'] = []
+			gui['info'] = {}
 
-		gui['info'] += self.info_queue
+		for i in self.info_queue:
+			if i['timestamp'] not in gui['info']:
+				gui['info'][i['timestamp']] = []
 
+			gui['info'][i['timestamp']].append(i['item'])
+		
 		return gui
 
 

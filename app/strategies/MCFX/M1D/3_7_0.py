@@ -869,6 +869,11 @@ def report(tick):
 	log += f'Time State: {time_state}, Exit State: {exit_state}, Last Direction: {last_direction}\n\n'
 
 	log += f'OHLC: {tick.chart.bids.ONE_MINUTE[0]}\n'
+	log += f'DONCH: {tick.chart.indicators.donch30.bids[0]}, '\
+		   f'SMA 15 {tick.chart.indicators.sma15.bids[0]}, '\
+		   f'SMA 5 {tick.chart.indicators.sma5.bids[0]}, '\
+		   f'EMA 3 {tick.chart.indicators.ema3.bids[0]}\n'
+
 	log += f'L: {long_trigger}\n\n'
 	log += f'S: {short_trigger}\n\n'
 
