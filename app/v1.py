@@ -742,7 +742,10 @@ def get_historical_prices_ept(broker, product, period):
 				content_type='application/json'
 			)
 
-		prices = broker.dl.download(product, period, start=_from, end=to, count=count)
+		prices = broker._download_historical_data(
+			product, period, start=_from, end=to,
+			count=count, force_download=False
+		)
 		
 	else:
 		res = {
@@ -932,7 +935,6 @@ def get_backtest_info_ept(strategy_id, backtest_id):
 	account = ctrl.accounts.getAccount(user_id)
 
 	backtest = account.getBacktestInfo(strategy_id, backtest_id)
-	print(backtest)
 	# backtest.update(account.getBacktestTransactions(strategy_id, backtest_id))
 	return Response(
 		json.dumps(backtest, indent=2),

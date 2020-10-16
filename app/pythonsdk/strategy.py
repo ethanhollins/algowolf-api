@@ -171,7 +171,7 @@ class Strategy(object):
 				'rotation': rotation
 			}
 		}
-		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
+		if self.getBroker().state == State.LIVE:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_DRAWING,
@@ -188,7 +188,7 @@ class Strategy(object):
 			# Save to drawing queue
 			self.drawing_queue.append(item)
 
-		else:
+		elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
 			# Handle drawings through backtester
 			self.getBroker().backtester.createDrawing(timestamp, layer, drawing)
 
@@ -196,7 +196,7 @@ class Strategy(object):
 	def clearDrawingLayer(self, layer):
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
+		if self.getBroker().state == State.LIVE:
 			item = {
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
@@ -214,7 +214,7 @@ class Strategy(object):
 			# Handle to drawing queue
 			self.drawing_queue.append(item)
 
-		else:
+		elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
 			# Handle drawings through backtester
 			self.getBroker().backtester.clearDrawingLayer(timestamp, layer)
 
@@ -222,7 +222,7 @@ class Strategy(object):
 	def clearAllDrawings(self):
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
+		if self.getBroker().state == State.LIVE:
 			item = {
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
@@ -240,17 +240,18 @@ class Strategy(object):
 			# Handle to drawing queue
 			self.drawing_queue.append(item)
 
-		else:
+		elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
 			# Handle drawings through backtester
 			self.getBroker().backtester.deleteAllDrawings(timestamp)
 
 
 	def log(self, *objects, sep=' ', end='\n', file=None, flush=None):
-		print(*objects, sep=sep, end=end, file=file, flush=flush)
+		if self.getBroker().state.value == 3:
+			print(*objects, sep=sep, end=end, file=file, flush=flush)
 		msg = sep.join(map(str, objects)) + end
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
+		if self.getBroker().state == State.LIVE:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_LOG,
@@ -267,7 +268,7 @@ class Strategy(object):
 			# Save to log queue
 			self.log_queue.append(item)
 
-		else:
+		elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
 			# Handle logs through backtester
 			self.getBroker().backtester.createLogItem(timestamp, msg)
 
@@ -287,7 +288,7 @@ class Strategy(object):
 			'value': value
 		}
 
-		if self.getBroker().state != State.BACKTEST and self.getBroker().state != State.BACKTEST_AND_RUN:
+		if self.getBroker().state == State.LIVE:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_INFO,
@@ -304,7 +305,7 @@ class Strategy(object):
 			# Handle to info queue
 			self.info_queue.append(item)
 
-		else:
+		elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
 			# Handle info through backtester
 			self.getBroker().backtester.createInfoItem(timestamp, item)
 
@@ -387,7 +388,8 @@ class Strategy(object):
 		self.lastTick = tick
 
 		# Save GUI
-		self.saveGui()
+		if self.getBroker().state == State.LIVE:
+			self.saveGui()
 
 	'''
 	Getters

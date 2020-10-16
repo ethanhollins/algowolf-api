@@ -721,9 +721,7 @@ def exitSetup(chart):
 
 
 def stopPoints(chart):
-	print(f'5: {len(strategy.positions)}')
 	if len(strategy.positions) > 0:
-		print('test one')
 		for pos in strategy.positions:
 			for i in range(len(STOP_LEVELS)-1,-1,-1):
 				level = STOP_LEVELS[i]
@@ -732,11 +730,9 @@ def stopPoints(chart):
 				if pos.direction == LONG:
 					sl_range = utils.convertToPips(pos.entry_price - pos.sl)
 					profit = utils.convertToPips(chart.bids.ONE_MINUTE[0, 1] - pos.entry_price)
-					print(f'LONG: {sl_range}, {profit}, {level}, {point}')
 				else:
 					sl_range = utils.convertToPips(pos.sl - pos.entry_price)
 					profit = utils.convertToPips(pos.entry_price - chart.bids.ONE_MINUTE[0, 2])
-					print(f'SHORT: {sl_range}, {profit}, {level}, {point}')
 
 				if sl_range > -point:
 					if profit >= level:
@@ -885,14 +881,15 @@ def report(tick):
 		if pos.close_price is None:
 			log += (
 				f'(O) D: {pos.direction.upper()} E: {pos.entry_price} SL: {pos.sl} TP: {pos.tp} '
-				f'SP: {sp} P: {pos.getProfit()}\n'
+				f'SP: {sp} P: {pos.getProfit()} -> {pos.account_id}\n'
 			)
 		else:
 			log += (
 				f'(C) D: {pos.direction.upper()} E: {pos.entry_price} SL: {pos.sl} TP: {pos.tp} '
-				f'SP: {sp} P: {pos.getProfit()}\n'
+				f'SP: {sp} P: {pos.getProfit()} -> {pos.account_id}\n'
 			)
 
+	log += f'POS: {strategy.positions}\n'
 	print(log)
 
 '''
@@ -946,15 +943,10 @@ def ontrade(trade):
 def ontick(tick):
 	'''Hook function for broker price events'''
 	# On Bar End
-	print('1')
 	if tick.bar_end:
-		print('2')
 		onEventLoop(tick.timestamp, tick.chart)
-		print('3')
 		report(tick)
-		print('4')
 
-	print('5')
 	# Stop Points
 	stopPoints(tick.chart)
 

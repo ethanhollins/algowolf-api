@@ -1,4 +1,4 @@
-import pytz
+import pendulum
 import math
 from datetime import datetime, timedelta
 
@@ -15,10 +15,10 @@ def convertToPrice(x):
 	return round(x / 10000, 5)
 
 def convertTimezone(dt, tz):
-	return dt.astimezone(pytz.timezone(tz))
+	return dt.astimezone(pendulum.timezone(tz))
 
 def setTimezone(dt, tz):
-	return pytz.timezone(tz).localize(dt)
+	return pendulum.timezone(tz).convert(dt)
 
 def isOffsetAware(dt):
 	if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:

@@ -206,7 +206,7 @@ class IG(Broker):
 				return self._switch_account(account_id, attempts=attempts+1)
 
 	def _download_historical_data(self, product, period, start=None, end=None, count=None, force_download=False):
-		df = self._create_empty_df()			
+		df = self._create_empty_df()		
 		result = {}
 		page_number = 0
 		ig_product = self._convert_to_main_ig_product(product)
@@ -258,6 +258,7 @@ class IG(Broker):
 
 				data = res.json()
 
+				start = time.time()
 				for price in data['prices']:
 					if 'snapshotTimeUTC' in price:
 						dt = datetime.strptime(price['snapshotTimeUTC'], '%Y-%m-%dT%H:%M:%S')
@@ -272,17 +273,6 @@ class IG(Broker):
 					price_keys = ['openPrice', 'highPrice', 'lowPrice', 'closePrice']
 					asks = [price[i]['ask'] for i in price_keys]
 					bids = [price[i]['bid'] for i in price_keys]
-					if all(asks):
-						asks = list(map(float, asks))
-					elif all(bids):
-						asks = list(map(float, bids))
-					else:
-						continue
-
-					if all(bids):
-						bids = list(map(float, bids))
-					else:
-						bids = list(map(float, asks))
 
 					result['ask_open'].append(asks[0])
 					result['ask_high'].append(asks[1])
@@ -312,10 +302,13 @@ class IG(Broker):
 
 		# Concatenate loaded data
 		if len(result) > 0:
-			new_data = pd.DataFrame(data=result).set_index('timestamp')
+			new_data = pd.DataFrame(data=result).set_index('timestamp').astype(float)
 
 			if not force_download and not self.is_demo:
-				self.save_data(new_data.copy(), product, period)
+				Thread(
+					target=self.save_data, 
+					args=(new_data.copy(), product, period)
+				).start()
 			df = pd.concat((df, new_data)).sort_index()
 
 		return self._process_df(df)

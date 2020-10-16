@@ -76,6 +76,7 @@ class Broker(object):
 		self.state = State.IDLE
 		self.backtester = None
 		self.isUploadBacktest = False
+		self.isClearBacktestTrades = False
 		self._start_from = None
 		self._data_path = data_path
 		self._app = None
@@ -154,6 +155,10 @@ class Broker(object):
 		self.isUploadBacktest = is_upload
 
 
+	def clearBacktestTrades(self, is_clear=True):
+		self.isClearBacktestTrades = is_clear
+
+
 	def _perform_backtest(self, start, end, mode=BacktestMode.RUN, download=True, quick_download=False):
 		# Collect relevant data
 		self._collect_data(start, end, download=download, quick_download=quick_download)
@@ -208,7 +213,8 @@ class Broker(object):
 				).start()
 
 		# Clear backtest postions
-		# self.clearBacktestTrades()
+		if self.isClearBacktestTrades:
+			self._clear_backtest_trades()
 
 		# Update positions/orders
 		# self.updateAllPositions()
@@ -337,7 +343,10 @@ class Broker(object):
 		return int(self.getChart(product).getTimestamp(period))
 
 	def updateAllPositions(self):
-		self.positions = [tl.position.Position.fromDict(self, pos) for pos in self.api.getAllPositions() if pos.account_id in self.accounts]
+		self.positions = (
+			[pos for pos in self.positions if pos.isBacktest()] +
+			[tl.position.Position.fromDict(self, pos) for pos in self.api.getAllPositions() if pos.account_id in self.accounts]
+		)
 
 	def getAllPositions(self, account_id=None):
 		return [
@@ -352,7 +361,10 @@ class Broker(object):
 		return None
 
 	def updateAllOrders(self):
-		self.orders = [tl.order.Order.fromDict(self, order) for order in self.api.getAllOrders() if order.account_id in self.accounts]
+		self.orders = (
+			[order for order in self.orders if order.isBacktest()] +
+			[tl.order.Order.fromDict(self, order) for order in self.api.getAllOrders() if order.account_id in self.accounts]
+		)
 
 	def getAllOrders(self, account_id=None):
 		return [
@@ -367,7 +379,7 @@ class Broker(object):
 		return None
 
 
-	def clearBacktestTrades(self):
+	def _clear_backtest_trades(self):
 		for i in range(len(self.positions)):
 			pos = self.positions[i]
 			if pos.isBacktest():

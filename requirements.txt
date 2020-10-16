@@ -8,3 +8,4 @@ shortuuid
 pyjwt
 python-socketio[client]
 uwsgi
+pendulum
