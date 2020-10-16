@@ -190,10 +190,10 @@ class Chart(object):
 		ohlc = item['item']['ask'] + item['item']['bid']
 
 		last_ts = self._data[item['period']].index.values[-1]
-		next_ts = self.getNextTimestamp(item['period'], last_ts)
-		if not item['bar_end'] and item['timestamp'] >= next_ts:
+		if not item['bar_end'] and item['timestamp'] >= last_ts:
+			new_ts = item['timestamp'] + tl.period.getPeriodOffsetSeconds(item['period'])
 			self._idx[item['period']] += 1
-			self._data[item['period']].loc[next_ts] = ohlc
+			self._data[item['period']].loc[new_ts] = ohlc
 
 		else:
 			self._data[item['period']].iloc[-1] = ohlc
@@ -255,17 +255,18 @@ class Chart(object):
 		self._handle_indicators(period)
 
 
-	def getNextTimestamp(self, period, ts):
+	def getNextTimestamp(self, period, ts, now=None):
 		new_ts = ts + tl.period.getPeriodOffsetSeconds(period)
 		dt = tl.convertTimestampToTime(new_ts)
 		if tl.isWeekend(dt):
 			new_ts = tl.convertTimeToTimestamp(tl.getWeekstartDate(dt))
 
-		while new_ts + tl.period.getPeriodOffsetSeconds(period) < time.time():
-			new_ts += tl.period.getPeriodOffsetSeconds(period)
-			dt = tl.convertTimestampToTime(new_ts)
-			if tl.isWeekend(dt):
-				new_ts = tl.convertTimeToTimestamp(tl.getWeekstartDate(dt))
+		if now is not None:
+			while new_ts + tl.period.getPeriodOffsetSeconds(period) <= now:
+				new_ts += tl.period.getPeriodOffsetSeconds(period)
+				dt = tl.convertTimestampToTime(new_ts)
+				if tl.isWeekend(dt):
+					new_ts = tl.convertTimeToTimestamp(tl.getWeekstartDate(dt))
 			
 		return new_ts
 
@@ -291,6 +292,7 @@ class Chart(object):
 		
 		df = self._quick_download_prices(period, start, end)
 
+		print(f'DL: {df.index.values[-1]}')
 		# Set data to chart data store
 		self._set_data(df, period)
 		return df
