@@ -425,9 +425,10 @@ class IG(Broker):
 	Account Utilities
 	'''
 
-	def _get_account_details(self, accounts):
+	def _get_account_details(self, accounts, override=False):
 		# Check auth
-		key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+		if not override:
+			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
 
 		endpoint = 'accounts'
 		version = { 'Version': '1' }
@@ -1326,14 +1327,20 @@ class IG(Broker):
 	def _convert_to_ig_product(self, product):
 		if product == tl.product.GBPUSD:
 			return 'CS.D.GBPUSD.MINI.IP'
+		elif product == tl.product.AUDUSD:
+			return 'CS.D.AUDUSD.MINI.IP'
 
 	def _convert_to_main_ig_product(self, product):
 		if product == tl.product.GBPUSD:
 			return 'CS.D.GBPUSD.CFD.IP'
+		elif product == tl.product.AUDUSD:
+			return 'CS.D.AUDUSD.CFD.IP'
 
 	def _convert_to_standard_product(self, product):
 		if product == 'CS.D.GBPUSD.MINI.IP':
 			return tl.product.GBPUSD
+		elif product == 'CS.D.AUDUSD.MINI.IP':
+			return tl.product.AUDUSD
 
 	def _convert_to_ig_live_period(self, period):
 		if period == tl.period.ONE_MINUTE:

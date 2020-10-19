@@ -277,10 +277,7 @@ class Broker(object):
 
 	# Public
 	def getAccountInfo(self, accounts, override=False):
-		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
-
-		return self._get_account_details(accounts)
+		return self._get_account_details(accounts, override=override)
 
 	'''
 	Dealing Utilities

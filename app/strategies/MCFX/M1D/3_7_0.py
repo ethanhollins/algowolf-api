@@ -241,7 +241,7 @@ def getCurrentPositionDirection():
 def getIGLotsize():
 	global bank
 	usable_bank = min(bank + EXTERNAL_BANK, MAXIMUM_BANK)
-	aud_usd = strategy.getBid(product.AUD_USD)
+	aud_usd = strategy.getBid(product.AUDUSD)
 	return max(round((usable_bank * (RISK / 100) / STOP_RANGE) * aud_usd, 2), 1.0)
 
 
@@ -1232,10 +1232,10 @@ class Trigger(dict):
 
 	def setTRevHL(self, x):
 		if self.direction == LONG:
-			if x > self.t_rev_hl:
+			if self.t_rev_hl is None or x > self.t_rev_hl:
 				self.t_rev_hl = x
 		else:
-			if x < self.t_rev_hl:
+			if self.t_rev_hl is None or x < self.t_rev_hl:
 				self.t_rev_hl = x
 
 
@@ -1249,7 +1249,8 @@ class TRevState(Enum):
 	ONE = 1
 	TWO = 2
 	THREE = 3
-	COMPLETE = 4
+	FOUR = 4
+	COMPLETE = 5
 
 
 class EntryState(Enum):
@@ -1266,6 +1267,7 @@ class StopLineState(Enum):
 	TWO = 3
 	ACTIVE_ONE = 4
 	ACTIVE_TWO = 5
+	RESET = 6
 
 
 class ExitState(Enum):
