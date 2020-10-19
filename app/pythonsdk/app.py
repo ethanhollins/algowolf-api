@@ -3,6 +3,7 @@ import sys
 import requests
 import json
 import time
+import traceback
 import os
 from datetime import datetime, timedelta
 from threading import Thread
@@ -33,22 +34,29 @@ class App(dict):
 
 
 	# TODO: Add accounts parameter
-	def run(self, accounts):
+	def run(self, accounts, input_variables):
 		# Start strategy for each account
-		threads = []
+		starting = []
 		for account_id in accounts:
-			self.startStrategy(account_id)
+			self.startStrategy(account_id, input_variables)
 
-		for account_id in self.strategies:
-			# Run strategy
-			t = Thread(target=self.strategies[account_id].get('strategy').run)
-			t.start()
-			threads.append(t)
+		for account_id in accounts:
+			if self.strategies[account_id].get('strategy').getBroker().state.value <= 2:
+				# Run strategy
+				t = Thread(target=self.strategies[account_id].get('strategy').run)
+				t.start()
+				starting.append((account_id, t))
 
 		# Join threads
-		for t in threads:
-			t.join()
+		for t in starting:
+			t[1].join()
 
+		for t in starting:
+			module = self.strategies[t[0]].get('module')
+			# Call strategy onStart
+			if 'onStart' in dir(module) and callable(module.onStart):
+				module.onStart()
+			
 
 	def stop(self, accounts):
 		for acc in accounts:
@@ -58,7 +66,7 @@ class App(dict):
 				del self.strategies[acc]
 
 
-	def backtest(self, _from, to, mode):
+	def backtest(self, _from, to, mode, input_variables):
 
 		e = None
 		try:
@@ -66,7 +74,7 @@ class App(dict):
 				_from = datetime.strptime(_from, '%Y-%m-%dT%H:%M:%SZ')
 			if isinstance(to, str):
 				to = datetime.strptime(to, '%Y-%m-%dT%H:%M:%SZ')
-			self.startStrategy('ACCOUNT_1')
+			self.startStrategy('ACCOUNT_1', input_variables)
 			self.strategies['ACCOUNT_1'].get('strategy').getBroker().setName(self.api.name)
 
 			backtest_id = self.strategies['ACCOUNT_1'].get('strategy').backtest(_from, to, mode)
@@ -82,6 +90,27 @@ class App(dict):
 		return backtest_id
 
 
+	def compile(self):
+		properties = {}
+		e = None
+		try:
+			self.startStrategy('ACCOUNT_1', {})
+
+		except Exception as err:
+			print(traceback.format_exc())
+			e = err
+		finally:
+			if 'ACCOUNT_1' in self.strategies:
+				strategy = self.strategies['ACCOUNT_1'].get('strategy')
+				properties['input_variables'] = strategy.input_variables
+				del self.strategies['ACCOUNT_1']
+
+			if e is not None:
+				raise TradelibException(str(e))
+
+			return properties
+
+
 	def getPackageModule(self, package):
 		spec = importlib.util.find_spec(package)
 		module = importlib.util.module_from_spec(spec)
@@ -93,12 +122,12 @@ class App(dict):
 
 		return module
 
-	def startStrategy(self, account_id):
+	def startStrategy(self, account_id, input_variables):
 		if account_id not in self.strategies:
-			strategy = Strategy(self.api, strategy_id=self.strategyId, accounts=[account_id])
-			strategy.setApp(self)
-
 			module = self.getPackageModule(f'{STRATEGY_PACKAGE}.{self.package}')
+			strategy = Strategy(self.api, module, strategy_id=self.strategyId, accounts=[account_id], user_variables=input_variables)
+			strategy.setApp(self)
+			
 			self.strategies[account_id] = {
 				'strategy': strategy,
 				'module': module
@@ -120,13 +149,13 @@ class App(dict):
 				module.init()
 
 			# Search for convertional function names
-			if 'ontrade' in dir(module) and callable(module.ontrade):
-				strategy.getBroker().subscribeOnTrade(module.ontrade)
+			if 'onTrade' in dir(module) and callable(module.onTrade):
+				strategy.getBroker().subscribeOnTrade(module.onTrade)
 
-			if 'ontick' in dir(module) and callable(module.ontick):
+			if 'onTick' in dir(module) and callable(module.onTick):
 				for chart in strategy.getBroker().getAllCharts():
 					for period in chart.periods:
-						chart.subscribe(period, module.ontick)
+						chart.subscribe(period, module.onTick)
 
 
 	def getStrategy(self, account_id):

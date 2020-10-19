@@ -35,31 +35,31 @@ Conditionals
 def isDonchFlat(chart, direction, length, offset=0, reverse=False):
 	if reverse:
 		if direction == LONG:
-			vals = chart.indicators.donch30.bids[offset:length+1+offset, 1]
+			vals = chart.indicators.donch.bids[offset:length+1+offset, 1]
 			return all([i == vals[0] for i in vals])
 		else:
-			vals = chart.indicators.donch30.bids[offset:length+1+offset, 0]
+			vals = chart.indicators.donch.bids[offset:length+1+offset, 0]
 			return all([i == vals[0] for i in vals])
 	else:
 		if direction == LONG:
-			vals = chart.indicators.donch30.bids[offset:length+1+offset, 0]
+			vals = chart.indicators.donch.bids[offset:length+1+offset, 0]
 			return all([i == vals[0] for i in vals])
 		else:
-			vals = chart.indicators.donch30.bids[offset:length+1+offset, 1]
+			vals = chart.indicators.donch.bids[offset:length+1+offset, 1]
 			return all([i == vals[0] for i in vals])
 
 
 def isDonchTag(chart, direction, reverse=False):
 	if reverse:
 		if direction == LONG:
-			return chart.bids.ONE_MINUTE[0,2] <= chart.indicators.donch30.bids[0,1]
+			return chart.bids.ONE_MINUTE[0,2] <= chart.indicators.donch.bids[0,1]
 		else:
-			return chart.bids.ONE_MINUTE[0,1] >= chart.indicators.donch30.bids[0,0]
+			return chart.bids.ONE_MINUTE[0,1] >= chart.indicators.donch.bids[0,0]
 	else:
 		if direction == LONG:
-			return chart.bids.ONE_MINUTE[0,1] >= chart.indicators.donch30.bids[0,0]
+			return chart.bids.ONE_MINUTE[0,1] >= chart.indicators.donch.bids[0,0]
 		else:
-			return chart.bids.ONE_MINUTE[0,2] <= chart.indicators.donch30.bids[0,1]
+			return chart.bids.ONE_MINUTE[0,2] <= chart.indicators.donch.bids[0,1]
 
 
 # Candlestick functions
@@ -82,6 +82,9 @@ def isDoji(chart, size):
 # Misc functions
 def isMinDist(x, y, dist):
 	return utils.convertToPips(abs(x - y)) > dist
+
+def isMinEqualDist(x, y, dist):
+	return utils.convertToPips(abs(x - y)) >= dist
 
 
 def isCrossed(x, y, direction, reverse=False):
@@ -112,7 +115,7 @@ def isTagged(x, y, direction, reverse=False):
 
 def isSessionLoss():
 	profit = getSessionProfit()
-	return profit / SL_RANGE * RISK <= -(RISK * LOSS_LIMIT)
+	return profit / STOP_RANGE * RISK <= -(RISK * D_FIVE)
 
 
 '''
@@ -152,14 +155,14 @@ def getSessionPotentialProfit(chart):
 def getDonchValue(chart, direction, offset=0, reverse=False):
 	if reverse:
 		if direction == LONG:
-			return chart.indicators.donch30.bids[offset, 1]
+			return chart.indicators.donch.bids[offset, 1]
 		else:
-			return chart.indicators.donch30.bids[offset, 0]
+			return chart.indicators.donch.bids[offset, 0]
 	else:
 		if direction == LONG:
-			return chart.indicators.donch30.bids[offset, 0]
+			return chart.indicators.donch.bids[offset, 0]
 		else:
-			return chart.indicators.donch30.bids[offset, 1]
+			return chart.indicators.donch.bids[offset, 1]
 
 
 def getSessionTimes(now):
@@ -235,6 +238,12 @@ def getCurrentPositionDirection():
 
 	return None
 
+def getIGLotsize():
+	global bank
+	usable_bank = min(bank + EXTERNAL_BANK, MAXIMUM_BANK)
+	aud_usd = strategy.getBid(product.AUD_USD)
+	return max(round((usable_bank * (RISK / 100) / STOP_RANGE) * aud_usd, 2), 1.0)
+
 
 '''
 Confirmations
@@ -245,7 +254,7 @@ def tRevFlatConf(chart, trigger):
 	donch_val = getDonchValue(chart, trigger.direction)
 	return (
 		isCrossed(donch_val, trigger.reverse_line, trigger.direction) and
-		isDonchFlat(chart, trigger.direction, 1)
+		isDonchFlat(chart, trigger.direction, B_FOUR)
 	)
 
 
@@ -272,7 +281,8 @@ def tRevCtDonchCancelConf(chart, trigger):
 def tRevOneConf(chart, trigger):
 	donch_val = getDonchValue(chart, trigger.direction)
 	return (
-		isCrossed(donch_val, trigger.reverse_line, trigger.direction)
+		isCrossed(donch_val, trigger.reverse_line, trigger.direction) and
+		isMinEqualDist(donch_val, trigger.reverse_line, B_ONE)
 	)
 
 
@@ -282,63 +292,72 @@ def tRevTwoConf(chart, trigger):
 	return (
 		isCrossed(close, trigger.reverse_line, trigger.direction) and
 		(trigger.t_rev_flat is None or isCrossed(close, trigger.t_rev_flat, trigger.direction)) and
-		isBB(chart, trigger.direction) and not isDoji(chart, 0.2) and
-		isMinDist(trigger.reverse_line, close, RL_CLOSE_MIN_DIST)
+		isBB(chart, trigger.direction) and not isDoji(chart, B_TWO) and
+		isMinDist(trigger.reverse_line, close, B_THREE)
 	)
 
 
 def tRevThreeConf(chart, trigger):
 	close = chart.bids.ONE_MINUTE[0, 3]
 	donch_val = getDonchValue(chart, trigger.direction)
+	hl = getHL(chart, trigger.direction)
 	return (
 		isCrossed(close, trigger.reverse_line, trigger.direction) and
-		isMinDist(close, trigger.reverse_line, RL_CLOSE_MIN_DIST) and
-		isBB(chart, trigger.direction) and not isDoji(chart, 0.2)
-	)
-
-
-def tRevFourConf(chart, trigger):
-	hl = getHL(chart, trigger.direction)
-	
-	return (
+		isMinDist(close, trigger.reverse_line, B_SIX) and
+		isBB(chart, trigger.direction) and not isDoji(chart, B_FIVE) and
 		isCrossed(hl, trigger.t_rev_hl, trigger.direction)
 	)
 
 
-# Entry Confirmations
-def goldCrossVariationConf(chart, direction):
-	ema3_val = chart.indicators.ema3.bids[0]
-	sma5_val = chart.indicators.sma5.bids[0]
-	sma15_val = chart.indicators.sma15.bids[0]
+def tTwoRevConf(chart, trigger):
+	rev_donch_val = getDonchValue(chart, trigger.direction, reverse=True)
+	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	sma_fast_val = chart.indicators.sma_fast.bids[0]
+	sma_slow_val = chart.indicators.sma_slow.bids[0]
 
 	return (
-		isCrossed(ema3_val, sma15_val, direction, reverse=True) and
-		isCrossed(sma5_val, sma15_val, direction, reverse=True)
+		isCrossed(rev_donch_val, trigger.baseline, trigger.direction) and
+		isCrossed(ema_fast_val, sma_slow_val, trigger.direction) and
+		isCrossed(sma_fast_val, sma_slow_val, trigger.direction)
+	)
+
+
+
+# Entry Confirmations
+def goldCrossVariationConf(chart, direction):
+	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	sma_fast_val = chart.indicators.sma_fast.bids[0]
+	sma_slow_val = chart.indicators.sma_slow.bids[0]
+
+	return (
+		isCrossed(ema_fast_val, sma_slow_val, direction, reverse=True) and
+		isCrossed(sma_fast_val, sma_slow_val, direction, reverse=True)
 	)
 
 
 def goldCrossOneConf(chart, direction, reverse=False):
-	ema3_val = chart.indicators.ema3.bids[0]
-	sma5_val = chart.indicators.sma5.bids[0]
+	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	sma_fast_val = chart.indicators.sma_fast.bids[0]
 	close = chart.bids.ONE_MINUTE[0, 3]
 
 	return (
-		isCrossed(ema3_val, sma5_val, direction, reverse=not reverse) and
-		isCrossed(close, sma5_val, direction, reverse=not reverse)
+		isCrossed(ema_fast_val, sma_fast_val, direction, reverse=not reverse) and
+		isCrossed(close, sma_fast_val, direction, reverse=not reverse) and
+		isCrossed(close, ema_fast_val, direction, reverse=not reverse)
 	)
 
 
 def goldCrossTwoConf(chart, direction, reverse=False):
-	ema3_val = chart.indicators.ema3.bids[0]
-	sma5_val = chart.indicators.sma5.bids[0]
+	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	sma_fast_val = chart.indicators.sma_fast.bids[0]
 	donch_val = getDonchValue(chart, direction)
 	close = chart.bids.ONE_MINUTE[0, 3]
 
 	return (
-		isTagged(ema3_val, sma5_val, direction, reverse=reverse) and
-		not isBB(chart, direction, reverse=not reverse) and
-		isCrossed(close, sma5_val, direction, reverse=reverse) and
-		isCrossed(close, ema3_val, direction, reverse=reverse)
+		isTagged(ema_fast_val, sma_fast_val, direction, reverse=reverse) and
+		isBB(chart, direction, reverse=not reverse) and not isDoji(chart, C_ONE) and
+		isCrossed(close, sma_fast_val, direction, reverse=reverse) and
+		isCrossed(close, ema_fast_val, direction, reverse=reverse)
 	)
 
 
@@ -348,23 +367,30 @@ def goldCrossCancelConf(chart, direction, reverse=False):
 
 	return (
 		isDonchTag(chart, direction, reverse=reverse) or
-		not isMinDist(close, donch_val, CLOSE_DONCH_MIN_DIST)
+		not isMinDist(close, donch_val, C_TWO)
 	)
+
+
+def isReEntryTDonchConf(chart, direction):
+	donch_val = getDonchValue(chart, direction)
+	hl = getHL(chart, trigger.direction)
+
+	return isTagged(hl, donch_val, direction)
 
 
 # Stop Line Confirmations
 def stopLineOneConf(chart, direction):
-	ema3_val = chart.indicators.ema3.bids[0]
-	sma15_val = chart.indicators.sma15.bids[0]
+	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	sma_slow_val = chart.indicators.sma_slow.bids[0]
 
-	return isCrossed(ema3_val, sma15_val, direction, reverse=True)
+	return isCrossed(ema_fast_val, sma_slow_val, direction, reverse=True)
 
 
 def stopLineTwoConf(chart, direction):
-	sma5_val = chart.indicators.sma5.bids[0]
-	sma15_val = chart.indicators.sma15.bids[0]
+	sma_fast_val = chart.indicators.sma_fast.bids[0]
+	sma_slow_val = chart.indicators.sma_slow.bids[0]
 
-	return isCrossed(sma5_val, sma15_val, direction)
+	return isCrossed(sma_fast_val, sma_slow_val, direction)
 
 
 def stopLineActiveOneConf(chart, trigger):
@@ -372,8 +398,8 @@ def stopLineActiveOneConf(chart, trigger):
 
 	return (
 		isCrossed(close, trigger.stop_line, trigger.direction, reverse=True) and
-		isBB(chart, trigger.direction, reverse=True) and not isDoji(chart, 0.2) and
-		isMinDist(close, trigger.stop_line, CLOSE_SL_MIN_DIST)
+		isBB(chart, trigger.direction, reverse=True) and not isDoji(chart, D_ONE) and
+		isMinDist(close, trigger.stop_line, D_TWO)
 	)
 
 
@@ -390,21 +416,36 @@ def stopLineActiveTwoConf(chart, trigger):
 
 # Exit Confirmations
 def exitOneConf(chart):
-	return getSessionPotentialProfit(chart) >= EXIT_POINTS_PIPS[0]
+	return getSessionPotentialProfit(chart) >= E_ONE
 
 
 def exitTwoConf(chart):
 	profit = getSessionPotentialProfit(chart)
 	return (
-		profit >= EXIT_POINTS_PIPS[1]
+		profit >= E_TWO
 	)
 
 
 def exitThreeConf(chart):
 	profit = getSessionPotentialProfit(chart)
 	return (
-		profit >= EXIT_POINTS_PIPS[2] or
-		profit / SL_RANGE * RISK >= EXIT_POINTS_PERC[2]
+		profit >= E_THREE or
+		profit / STOP_RANGE * RISK >= E_FOUR
+	)
+
+
+def exitOverrideOneConf(chart):
+	profit = getSessionPotentialProfit(chart)
+	return (
+		profit / STOP_RANGE <= -D_THREE
+	)
+
+
+def exitOverrideTwoConf(chart):
+	profit = getSessionPotentialProfit(chart)
+	return (
+		profit >= D_FOUR or
+		profit / STOP_RANGE * RISK >= D_FOURTEEN
 	)
 
 
@@ -416,10 +457,14 @@ def confirmation(chart, trigger, reverse=False):
 	'''On entry confirmation, enter position'''
 	global time_state
 
-	if isSessionLoss():
-		time_state = TimeState.NO_NEW_ENTRIES
-
 	if time_state == TimeState.TRADING:
+
+		if isSessionLoss():
+			time_state = TimeState.NO_NEW_ENTRIES
+			# Draw session line
+			drawSessionLine(chart)
+			return False
+
 		if reverse:
 			direction = getOppDirection(trigger.direction)
 		else:
@@ -428,7 +473,7 @@ def confirmation(chart, trigger, reverse=False):
 		if len(strategy.positions) == 0:
 			if direction == LONG:
 				result = strategy.buy(
-					product.GBPUSD, 1.0, sl_range=SL_RANGE, tp_range=TP_RANGE
+					product.GBPUSD, getIGLotsize(), sl_range=STOP_RANGE, tp_range=LIMIT_RANGE
 				)
 
 				strategy.draw(
@@ -439,7 +484,7 @@ def confirmation(chart, trigger, reverse=False):
 				)
 			else:
 				result = strategy.sell(
-					product.GBPUSD, 1.0, sl_range=SL_RANGE, tp_range=TP_RANGE
+					product.GBPUSD, getIGLotsize(), sl_range=STOP_RANGE, tp_range=LIMIT_RANGE
 				)
 
 				strategy.draw(
@@ -482,12 +527,12 @@ def baselineSetup(chart, trigger):
 	if value == trigger.current_baseline:
 		trigger.current_baseline_count += 1
 	else:
-		if trigger.current_baseline_count == 3:
+		if trigger.current_baseline_count in range(3, A_ONE):
 			trigger.preceding_baseline = value
 
 		if trigger.baseline_state == BaselineState.COMPLETE_A:
 			if (
-				trigger.current_baseline_count in (2,3) and
+				trigger.current_baseline_count in range(2, A_ONE) and
 				isCrossed(trigger.current_baseline, trigger.baseline, 
 							trigger.direction, reverse=True)
 			):
@@ -496,7 +541,7 @@ def baselineSetup(chart, trigger):
 		trigger.current_baseline = value
 		trigger.current_baseline_count = 0
 
-	if isDonchFlat(chart, trigger.direction, BL_MIN_FLAT):
+	if isDonchFlat(chart, trigger.direction, A_ONE):
 		if trigger.isValidBaseline(value):
 			trigger.setBaseline(value)
 
@@ -512,7 +557,7 @@ def baselineSetup(chart, trigger):
 			trigger.preceding_baseline = None
 
 	# Handle Start Baseline
-	if isDonchFlat(chart, trigger.direction, BL_MIN_FLAT):
+	if isDonchFlat(chart, trigger.direction, A_FOUR):
 		trigger.start_baseline = value
 
 
@@ -525,10 +570,10 @@ def reverseLineSetup(chart, trigger):
 
 		# Reverse Line (b) (i)
 		if isCrossed(value, trigger.baseline, trigger.direction):
-			if isDonchFlat(chart, trigger.direction, RL_MIN_FLAT):
+			if isDonchFlat(chart, trigger.direction, A_TWO):
 
 				if (trigger.baseline_state == BaselineState.COMPLETE_B or 
-						isMinDist(trigger.baseline, value, BL_RL_MIN_DIST)):
+						isMinDist(trigger.baseline, value, A_THREE)):
 					trigger.setReverseLine(value)
 					trigger.baseline_state = BaselineState.WAIT
 
@@ -544,15 +589,6 @@ def tRevSetup(chart, trigger):
 			trigger.t_rev_flat = None
 
 
-		# Cancel on T Donch tick below RL
-		if (trigger.t_rev_state.value >= TRevState.TWO.value and
-				trigger.t_rev_state != TRevState.COMPLETE):
-			if tRevRLCrossCancelConf(chart, trigger):
-				trigger.resetReverseLine()
-				trigger.resetBaseline()
-				trigger.baseline_state = BaselineState.COMPLETE_A
-				return
-
 		# Cancel on CT Donch tick
 		if tRevCtDonchCancelConf(chart, trigger):
 			trigger.resetReverseLine()
@@ -560,7 +596,11 @@ def tRevSetup(chart, trigger):
 			trigger.baseline_state = BaselineState.COMPLETE_A
 			return
 
+		# T2-Rev
+		if trigger.t_rev_state != TRevState.COMPLETE and tTwoRevConf(chart, trigger):
+			trigger.t_rev_state = TRevState.FOUR
 
+		# T1-Rev
 		if trigger.t_rev_state == TRevState.ONE:
 			if tRevOneConf(chart, trigger):
 				trigger.t_rev_state = TRevState.TWO
@@ -569,55 +609,65 @@ def tRevSetup(chart, trigger):
 		elif trigger.t_rev_state == TRevState.TWO:
 			if tRevTwoConf(chart, trigger):
 				trigger.t_rev_state = TRevState.THREE
-				trigger.t_rev_hl = getHL(chart, trigger.direction)
+				trigger.t_rev_hl = None
+				trigger.setTRevHL(getHL(chart, trigger.direction))
 
 		elif trigger.t_rev_state == TRevState.THREE:
 			if tRevThreeConf(chart, trigger):
-				trigger.t_rev_close = True
-			if tRevFourConf(chart, trigger):
-				trigger.t_rev_hl_tag = True
+				trigger.t_rev_state = TRevState.FOUR
+				return tRevSetup(chart, trigger)
+			else:
+				trigger.setTRevHL(getHL(chart, trigger.direction))
 
-			if trigger.t_rev_hl_tag and trigger.t_rev_close:
-				# Set Current Trigger
-				trigger.t_rev_state = TRevState.COMPLETE
-				trigger.entry_state = EntryState.ONE
-				trigger.resetStopLine()
-				# Set Opp Trigger
-				opp_trigger = getTrigger(trigger.direction, reverse=True)
-				opp_trigger.t_rev_state = TRevState.ONE
+		elif trigger.t_rev_state == TRevState.FOUR:
 
-				opp_trigger.entry_state = EntryState.IDLE
-				opp_trigger.requires_variation = False
-				opp_trigger.is_re_entry = False
-				opp_trigger.is_stop_point = False
-				opp_trigger.resetBaseline()
-				opp_trigger.resetReverseLine()
-				# Exit Opposite trades
-				exit(trigger.direction, reverse=True)
+			# Set Current Trigger
+			trigger.t_rev_state = TRevState.COMPLETE
+			trigger.entry_state = EntryState.ONE
+			trigger.resetStopLine()
+			# Set Opp Trigger
+			opp_trigger = getTrigger(trigger.direction, reverse=True)
+			opp_trigger.t_rev_state = TRevState.ONE
 
-				if trigger.direction == LONG:
-					strategy.draw(
-						'caretSquareUpSolid', 'arrows', product.GBPUSD,
-						chart.bids.ONE_MINUTE[0, 1] + utils.convertToPrice(2.0), 
-						chart.timestamps.ONE_MINUTE[0],
-						color='#3498db', scale=7.0, rotation=0
-					)
-				else:
-					strategy.draw(
-						'caretSquareUpSolid', 'arrows', product.GBPUSD,
-						chart.bids.ONE_MINUTE[0, 2] - utils.convertToPrice(2.0), 
-						chart.timestamps.ONE_MINUTE[0],
-						color='#f1c40f', scale=7.0, rotation=180
-					)
+			opp_trigger.entry_state = EntryState.IDLE
+			opp_trigger.requires_variation = False
+			opp_trigger.is_re_entry = False
+			opp_trigger.is_stop_point = False
+			opp_trigger.resetBaseline()
+			opp_trigger.resetReverseLine()
+			# Exit Opposite trades
+			exit(trigger.direction, reverse=True)
+
+			if trigger.direction == LONG:
+				strategy.draw(
+					'caretSquareUpSolid', 'arrows', product.GBPUSD,
+					chart.bids.ONE_MINUTE[0, 1] + utils.convertToPrice(2.0), 
+					chart.timestamps.ONE_MINUTE[0],
+					color='#3498db', scale=7.0, rotation=0
+				)
+			else:
+				strategy.draw(
+					'caretSquareUpSolid', 'arrows', product.GBPUSD,
+					chart.bids.ONE_MINUTE[0, 2] - utils.convertToPrice(2.0), 
+					chart.timestamps.ONE_MINUTE[0],
+					color='#f1c40f', scale=7.0, rotation=180
+				)
 
 
 def entrySetup(chart, trigger):
 	
 	if trigger.entry_state != EntryState.IDLE:
 
+		# Set Stop Line
 		if (trigger.entry_state.value >= EntryState.TWO.value):
 			trigger.setPendingStopLine(getHL(chart, trigger.direction, reverse=True))
 
+		# Re-Entry T Donch variation
+		if trigger.is_re_entry:
+			if isReEntryTDonchConf(chart, trigger.direction):
+				trigger.is_re_entry = False
+
+		# Main Entry
 		if trigger.entry_state == EntryState.ONE:
 			if goldCrossOneConf(chart, trigger.direction):
 				if trigger.requires_variation:
@@ -646,7 +696,6 @@ def entrySetup(chart, trigger):
 						trigger.entry_state = EntryState.ONE
 						trigger.pending_stop_line = None
 						return entrySetup(chart, trigger)
-				# Check variation
 
 				# Reset re entry conditions
 				trigger.is_re_entry = False
@@ -662,9 +711,9 @@ def entrySetup(chart, trigger):
 				if confirmation(chart, trigger):
 
 					# Check which stop state is current
-					ema3_val = chart.indicators.ema3.bids[0]
-					sma15_val = chart.indicators.sma15.bids[0]
-					if isTagged(ema3_val, sma15_val, trigger.direction):
+					ema_fast_val = chart.indicators.ema_fast.bids[0]
+					sma_slow_val = chart.indicators.sma_slow.bids[0]
+					if isTagged(ema_fast_val, sma_slow_val, trigger.direction):
 						trigger.stop_line_state = StopLineState.ONE
 					else:
 						trigger.stop_line_state = StopLineState.TWO
@@ -702,14 +751,25 @@ def stopLineSetup(chart, trigger):
 	elif trigger.stop_line_state == StopLineState.ACTIVE_TWO:
 		if stopLineActiveTwoConf(chart, trigger):
 			exit(trigger.direction, re_enter=True)
-
 		else:
-			trigger.resetStopLine()
+			trigger.stop_line_state = StopLineState.RESET
+
+	elif trigger.stop_line_state == StopLineState.RESET:
+		opp_trigger = getTrigger(trigger.direction, reverse=True)
+		if opp_trigger.reverse_line is None:
+			trigger.setStopLine(opp_trigger.t_rev_hl)
+			trigger.stop_line_state = StopLineState.ACTIVE_ONE
+			return stopLineSetup(chart, trigger)
 
 
 def exitSetup(chart):
-	global exit_state, time_state
+	global exit_state, time_state, is_exit_override
 	direction = getCurrentPositionDirection()
+
+	if exitOverrideOneConf(chart):
+		is_exit_override = True
+	if is_exit_override and exitOverrideTwoConf(chart):
+		exit_state = ExitState.ACTIVE
 
 	if exit_state == ExitState.ACTIVE:
 		if goldCrossTwoConf(chart, direction, reverse=True):
@@ -718,6 +778,8 @@ def exitSetup(chart):
 				exit_state = ExitState.COMPLETE
 				time_state = TimeState.NO_NEW_ENTRIES
 				exit(direction)
+				# Draw session line
+				drawSessionLine(chart)
 
 
 def stopPoints(chart):
@@ -727,14 +789,17 @@ def stopPoints(chart):
 				level = STOP_LEVELS[i]
 				point = STOP_POINTS[i]
 
+				sl_range = None
 				if pos.direction == LONG:
-					sl_range = utils.convertToPips(pos.entry_price - pos.sl)
+					if pos.sl is not None:
+						sl_range = utils.convertToPips(pos.entry_price - pos.sl)
 					profit = utils.convertToPips(chart.bids.ONE_MINUTE[0, 1] - pos.entry_price)
 				else:
-					sl_range = utils.convertToPips(pos.sl - pos.entry_price)
+					if pos.sl is not None:
+						sl_range = utils.convertToPips(pos.sl - pos.entry_price)
 					profit = utils.convertToPips(pos.entry_price - chart.bids.ONE_MINUTE[0, 2])
 
-				if sl_range > -point:
+				if sl_range is None or sl_range > -point:
 					if profit >= level:
 						trigger = getTrigger(pos.direction)
 						trigger.is_stop_point = True
@@ -743,7 +808,7 @@ def stopPoints(chart):
 
 
 def onTime(timestamp, chart):
-	global time_state, exit_state, session, no_more_entries
+	global time_state, exit_state, session, bank, no_more_entries, is_exit_override
 	# Get session times
 	now = utils.convertTimezone(utils.convertTimestampToTime(timestamp), TZ)
 	start_time, end_time = getSessionTimes(now)
@@ -760,6 +825,7 @@ def onTime(timestamp, chart):
 			session = []
 			exit_state = ExitState.NONE
 			no_more_entries = False
+			is_exit_override = False
 			long_trigger.resetReverseLine()
 			long_trigger.resetBaseline()
 			long_trigger.baseline_state = BaselineState.COMPLETE_A
@@ -767,17 +833,15 @@ def onTime(timestamp, chart):
 			short_trigger.resetBaseline()
 			short_trigger.baseline_state = BaselineState.COMPLETE_A
 
+			bank = strategy.getBalance()
+
 			if last_direction == LONG and long_trigger.entry_state != EntryState.IDLE:
 				long_trigger.requires_variation = True
 			if last_direction == SHORT and short_trigger.entry_state != EntryState.IDLE:
 				short_trigger.requires_variation = True
 
-			strategy.draw(
-				'verticalLine', 'arrows', product.GBPUSD,
-				None, chart.timestamps.ONE_MINUTE[0],
-				color='#000', scale=2.0
-			)
-
+			# Draw session line
+			drawSessionLine(chart)
 
 	elif time_state == TimeState.NO_NEW_ENTRIES:
 		if len(strategy.positions) == 0 and now > end_time:
@@ -790,6 +854,8 @@ def onTime(timestamp, chart):
 				exit_state = ExitState.ACTIVE
 			else:
 				time_state = TimeState.WAIT
+				# Draw session line
+				drawSessionLine(chart)
 
 		elif exit_state == ExitState.NONE:
 			# Exit FOUR
@@ -837,9 +903,88 @@ def onEventLoop(timestamp, chart):
 	# Exit Setup
 	exitSetup(chart)
 
+
+'''
+GUI
+'''
+
+def drawSessionLine(chart):
+	strategy.draw(
+		'verticalLine', 'arrows', product.GBPUSD,
+		None, chart.timestamps.ONE_MINUTE[0],
+		color='#000', scale=2.0
+	)
+
+
 '''
 Setup
 '''
+
+def setInputs():
+	global MAXIMUM_BANK, EXTERNAL_BANK, RISK, STOP_RANGE, LIMIT_RANGE
+	strategy.setInputVariable('Risk Management', HEADER)
+	MAXIMUM_BANK = strategy.setInputVariable('Maximum Bank', float, default=30000)
+	EXTERNAL_BANK = strategy.setInputVariable('External Bank', float, default=0)
+	RISK = strategy.setInputVariable('Risk', PERCENTAGE, default=0.5, properties={'min': 0.0, 'max': 1.0})
+	STOP_RANGE = strategy.setInputVariable('Stop Range', float, default=12.0)
+	LIMIT_RANGE = strategy.setInputVariable('Take Profit', float, default=84.0)
+
+	global DONCH_PERIOD, SMA_SLOW_PERIOD, SMA_FAST_PERIOD, EMA_FAST_PERIOD
+	strategy.setInputVariable('Indicators', HEADER)
+	DONCH_PERIOD = strategy.setInputVariable('Donch', int, default=30)
+	SMA_SLOW_PERIOD = strategy.setInputVariable('Sma Slow', int, default=15)
+	SMA_FAST_PERIOD = strategy.setInputVariable('Sma Fast', int, default=5)
+	EMA_FAST_PERIOD = strategy.setInputVariable('Ema Fast', int, default=3)
+
+	global A_ONE, A_TWO, A_THREE, A_FOUR
+	strategy.setInputVariable('Reverse Line', HEADER)
+	A_ONE = strategy.setInputVariable('a) 1.', int, default=3)
+	A_TWO = strategy.setInputVariable('a) 2.', int, default=1)
+	A_THREE = strategy.setInputVariable('a) 3.', float, default=1.0)
+	A_FOUR = strategy.setInputVariable('a) 4.', int, default=1)
+
+	global B_ONE, B_TWO, B_THREE, B_FOUR, B_FIVE, B_SIX
+	strategy.setInputVariable('T Reverse', HEADER)
+	B_ONE = strategy.setInputVariable('b) 1.', float, default=0.1)
+	B_TWO = strategy.setInputVariable('b) 2.', float, default=0.2)
+	B_THREE = strategy.setInputVariable('b) 3.', float, default=0.2)
+	B_FOUR = strategy.setInputVariable('b) 4.', int, default=1)
+	B_FIVE = strategy.setInputVariable('b) 5.', float, default=0.2)
+	B_SIX = strategy.setInputVariable('b) 6.', float, default=0.2)
+
+	global C_ONE, C_TWO
+	strategy.setInputVariable('Golden X', HEADER)
+	C_ONE = strategy.setInputVariable('c) 1.', float, default=0.2)
+	C_TWO = strategy.setInputVariable('c) 2.', float, default=2.0)
+
+	global D_ONE, D_TWO, D_THREE, D_FOUR, D_FIVE
+	strategy.setInputVariable('Exit', HEADER)
+	D_ONE = strategy.setInputVariable('d) 1.', float, default=0.2)
+	D_TWO = strategy.setInputVariable('d) 2.', float, default=0.2)
+	D_THREE = strategy.setInputVariable('d) 3.', float, default=3.0)
+	D_FOUR = strategy.setInputVariable('d) 4.', float, default=24.0)
+	D_FIVE = strategy.setInputVariable('d) 5.', float, default=5.0)
+	D_SIX = strategy.setInputVariable('d) 6.', float, default=24.0)
+	D_SEVEN = strategy.setInputVariable('d) 7.', float, default=0.0)
+	D_EIGHT = strategy.setInputVariable('d) 8.', float, default=48.0)
+	D_NINE = strategy.setInputVariable('d) 9.', float, default=24.0)
+	D_TEN = strategy.setInputVariable('d) 10.', float, default=60.0)
+	D_ELEVEN = strategy.setInputVariable('d) 11.', float, default=36.0)
+	D_TWELVE = strategy.setInputVariable('d) 12.', float, default=72.0)
+	D_THIRTEEN = strategy.setInputVariable('d) 13.', float, default=48.0)
+	D_FOURTEEN = strategy.setInputVariable('d) 14.', float, default=1.0)
+
+	global STOP_POINTS, STOP_LEVELS
+	STOP_POINTS = [D_SEVEN, D_NINE, D_ELEVEN, D_THIRTEEN]
+	STOP_LEVELS = [D_SIX, D_EIGHT, D_TEN, D_TWELVE]
+
+	global E_ONE, E_TWO, E_THREE, E_FOUR
+	strategy.setInputVariable('Time Exits', HEADER)
+	E_ONE = strategy.setInputVariable('e) 1.', float, default=60.0)
+	E_TWO = strategy.setInputVariable('e) 2.', float, default=48.0)
+	E_THREE = strategy.setInputVariable('e) 3.', float, default=24.0)
+	E_FOUR = strategy.setInputVariable('e) 4.', PERCENTAGE, default=1.0)
+
 
 def setGlobals():
 	'''Set global variables'''
@@ -855,6 +1000,12 @@ def setGlobals():
 	time_state = TimeState.WAIT
 	exit_state = ExitState.NONE
 
+	global is_exit_override
+	is_exit_override = False
+
+	global bank
+	bank = 0
+
 
 def report(tick):
 	log = ''
@@ -869,10 +1020,10 @@ def report(tick):
 	log += f'Time State: {time_state}, Exit State: {exit_state}, Last Direction: {last_direction}\n\n'
 
 	log += f'OHLC: {tick.chart.bids.ONE_MINUTE[0]}\n'
-	log += f'DONCH: {tick.chart.indicators.donch30.bids[0]}, '\
-		   f'SMA 15 {tick.chart.indicators.sma15.bids[0]}, '\
-		   f'SMA 5 {tick.chart.indicators.sma5.bids[0]}, '\
-		   f'EMA 3 {tick.chart.indicators.ema3.bids[0]}\n'
+	log += f'DONCH: {tick.chart.indicators.donch.bids[0]}, '\
+		   f'SMA 15 {tick.chart.indicators.sma_slow.bids[0]}, '\
+		   f'SMA 5 {tick.chart.indicators.sma_fast.bids[0]}, '\
+		   f'EMA 3 {tick.chart.indicators.ema_fast.bids[0]}\n'
 
 	log += f'L: {long_trigger}\n\n'
 	log += f'S: {short_trigger}\n\n'
@@ -903,19 +1054,25 @@ Hook functions
 
 def init():
 	'''Initialization on script startup'''
+
+	# print(strategy.getBalance())
+
+	# Set Input Variables 
+	setInputs()
+
 	# Charts
 	chart = strategy.getChart(product.GBPUSD, period.ONE_MINUTE)
 
 	# Indicators
-	donch30 = indicator.DONCH(30)
-	ema3 = indicator.EMA(3)
-	sma5 = indicator.SMA(5)
-	sma15 = indicator.SMA(15)
+	donch = indicator.DONCH(DONCH_PERIOD)
+	sma_slow = indicator.SMA(SMA_SLOW_PERIOD)
+	sma_fast = indicator.SMA(SMA_FAST_PERIOD)
+	ema_fast = indicator.EMA(EMA_FAST_PERIOD)
 
-	chart.addIndicator('donch30', period.ONE_MINUTE, donch30)
-	chart.addIndicator('ema3', period.ONE_MINUTE, ema3)
-	chart.addIndicator('sma5', period.ONE_MINUTE, sma5)
-	chart.addIndicator('sma15', period.ONE_MINUTE, sma15)
+	chart.addIndicator('donch', period.ONE_MINUTE, donch)
+	chart.addIndicator('sma_slow', period.ONE_MINUTE, sma_slow)
+	chart.addIndicator('sma_fast', period.ONE_MINUTE, sma_fast)
+	chart.addIndicator('ema_fast', period.ONE_MINUTE, ema_fast)
 
 	# Start From
 	strategy.startFrom(datetime.utcnow() - timedelta(hours=12))
@@ -924,7 +1081,13 @@ def init():
 	setGlobals()
 
 
-def ontrade(trade):
+def onStart():
+	# Clear any backtest positions if real positions exist
+	if any([not pos.isBacktest() for pos in strategy.positions]):
+		strategy.clearBacktestTrades()
+
+
+def onTrade(trade):
 	'''Hook function for broker trade events'''
 
 	# On Stop Loss
@@ -943,9 +1106,12 @@ def ontrade(trade):
 		global time_state
 		if time_state == TimeState.TRADING:
 			time_state = TimeState.NO_NEW_ENTRIES
+			# Draw session line
+			drawSessionLine(chart)
 
 
-def ontick(tick):
+
+def onTick(tick):
 	'''Hook function for broker price events'''
 	# On Bar End
 	if tick.bar_end:
@@ -968,24 +1134,6 @@ EXIT_TWO = [15, 0] # Hour, Minute
 EXIT_THREE = [17, 30] # Hour, Minute
 EXIT_FOUR = [19, 30] # Hour, Minute
 
-BL_MIN_FLAT = 5 # periods
-RL_MIN_FLAT = 2 # periods
-BL_RL_MIN_DIST = 0.5 # pips
-RL_CLOSE_MIN_DIST = 0.2 # pips
-CLOSE_DONCH_MIN_DIST = 2.0 # pips
-CLOSE_SL_MIN_DIST = 0.2 # pips
-
-STOP_POINTS = [0, 24, 36, 48, 72]
-STOP_LEVELS = [24, 48, 60, 72, 84]
-EXIT_POINTS_PIPS = [60, 48, 24]
-EXIT_POINTS_PERC = [None, 2.0, 1.0]
-
-SL_RANGE = 12 # pips
-TP_RANGE = 96 # pips
-
-RISK = 0.5
-LOSS_LIMIT = 5 # R
-
 '''
 Structures
 '''
@@ -1006,8 +1154,6 @@ class Trigger(dict):
 		self.t_rev_state = TRevState.ONE
 		self.t_rev_flat = None
 		self.t_rev_hl = None
-		self.t_rev_hl_tag = False
-		self.t_rev_close = False
 
 		self.entry_state = EntryState.IDLE
 		self.requires_variation = False
@@ -1057,11 +1203,8 @@ class Trigger(dict):
 
 	def resetReverseLine(self):
 		self.reverse_line = None
-		self.t_rev_hl = None
 		self.t_rev_flat = None
 		self.t_rev_state = TRevState.ONE
-		self.t_rev_close = False
-		self.t_rev_hl_tag = False
 
 	def setPendingStopLine(self, x):
 		if self.direction == LONG:
@@ -1086,6 +1229,14 @@ class Trigger(dict):
 	def resetStopLine(self):
 		self.pending_stop_line = None
 		self.stop_line_state = StopLineState.NONE
+
+	def setTRevHL(self, x):
+		if self.direction == LONG:
+			if x > self.t_rev_hl:
+				self.t_rev_hl = x
+		else:
+			if x < self.t_rev_hl:
+				self.t_rev_hl = x
 
 
 class BaselineState(Enum):

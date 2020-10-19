@@ -135,8 +135,11 @@ class Account(object):
 	def runStrategyScript(self, strategy_id, accounts):
 		strategy = self.getStrategyInfo(strategy_id)
 
-		broker = self.brokers.get(strategy_id)
-		strategy.run(accounts)
+		# Retrieve Input Variables
+		gui = self.getGui(strategy_id)
+		input_variables = gui.get('input_variables')
+
+		strategy.run(accounts, input_variables=input_variables)
 		return strategy.package
 
 
@@ -530,12 +533,46 @@ class Account(object):
 		return self.ctrl.getDb().createStrategyBacktest(self.userId, strategy_id, backtest)
 
 
-	def performBacktest(self, strategy_id, start, end, mode):
+	def performBacktest(self, strategy_id, start, end, mode, input_variables={}):
 		strategy = self.getStrategyInfo(strategy_id)
 
-		broker = self.brokers.get(strategy_id)
-		backtest_id = strategy.backtest(start, end, mode)
+		backtest_id = strategy.backtest(start, end, mode, input_variables=input_variables)
 		return backtest_id
+
+
+	def replaceInputVariables(self, strategy_id, input_variables):
+		gui = self.getGui(strategy_id)
+		gui['input_variables'] = input_variables
+		self.updateGui(strategy_id, gui)
+		return input_variables
+
+
+	def updateInputVariables(self, strategy_id, input_variables):
+		gui = self.getGui(strategy_id)
+
+		# Process input variable changes
+		if 'input_variables' in gui:
+			for name in gui['input_variables']:
+				if name in input_variables:
+					if (
+						input_variables[name]['type'] != 'header' and
+						input_variables[name]['type'] == gui['input_variables'][name]['type'] and
+						gui['input_variables'][name]['value'] is not None
+					):
+						input_variables[name]['value'] = gui['input_variables'][name]['value']
+
+		gui['input_variables'] = input_variables
+		self.updateGui(strategy_id, gui)
+		return input_variables
+
+
+	def compileStrategy(self, strategy_id):
+		strategy = self.getStrategyInfo(strategy_id)
+
+		properties = strategy.compile()
+		self.updateInputVariables(strategy_id, properties['input_variables'])
+
+		return properties
 
 
 	# Log Functions

@@ -291,8 +291,8 @@ class Chart(object):
 			raise TradelibException('Period not found in chart.')
 		
 		df = self._quick_download_prices(period, start, end)
+		df = df.dropna()
 
-		print(f'DL: {df.index.values[-1]}')
 		# Set data to chart data store
 		self._set_data(df, period)
 		return df

@@ -10,9 +10,12 @@ class Strategy(object):
 		self.app = App(self.api, package, strategy_id=self.strategyId)
 
 
-	def run(self, accounts):
+	def run(self, accounts, input_variables={}):
+		if input_variables is None:
+			input_variables = {}
+
 		# Check if already started
-		self.app.run(accounts)
+		self.app.run(accounts, input_variables)
 
 
 	def stop(self, accounts):
@@ -25,14 +28,21 @@ class Strategy(object):
 		self.run()
 
 
-	def backtest(self, _from, to, mode):
-		return self.app.backtest(_from, to, mode)
+	def backtest(self, _from, to, mode, input_variables={}):
+		if input_variables is None:
+			input_variables = {}
+
+		return self.app.backtest(_from, to, mode, input_variables)
+
+
+	def compile(self):
+		return self.app.compile()
 
 
 	def setPackage(self, package):
 		self.app.stop()
 		self.app = App(self.api, package, strategy_id=self.strategyId)
-		self.restart()
+
 
 	def isRunning(self, account):
 		return account in self.app.strategies

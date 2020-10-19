@@ -76,6 +76,8 @@ class Broker(object):
 		self.state = State.IDLE
 		self.backtester = None
 		self.isUploadBacktest = False
+		self.isClearBacktestPositions = False
+		self.isClearBacktestOrders = False
 		self.isClearBacktestTrades = False
 		self._start_from = None
 		self._data_path = data_path
@@ -155,8 +157,35 @@ class Broker(object):
 		self.isUploadBacktest = is_upload
 
 
-	def clearBacktestTrades(self, is_clear=True):
+	def setClearBacktestPositions(self, is_clear=True):
+		self.isClearBacktestPositions = is_clear
+
+
+	def setClearBacktestOrders(self, is_clear=True):
+		self.isClearBacktestOrders = is_clear
+
+
+	def setClearBacktestTrades(self, is_clear=True):
 		self.isClearBacktestTrades = is_clear
+
+
+	def _clear_backtest_positions(self):
+		for i in range(len(self.positions)):
+			pos = self.positions[i]
+			if pos.isBacktest():
+				del self.positions[i]
+
+
+	def _clear_backtest_orders(self):
+		for i in range(len(self.orders)):
+			order = self.orders[i]
+			if order.isBacktest():
+				del self.orders[i]
+
+
+	def _clear_backtest_trades(self):
+		self._clear_backtest_positions()
+		self._clear_backtest_orders()
 
 
 	def _perform_backtest(self, start, end, mode=BacktestMode.RUN, download=True, quick_download=False):
@@ -212,7 +241,13 @@ class Broker(object):
 					args=(self.strategyId, layer, self.backtester.drawings[layer])
 				).start()
 
-		# Clear backtest postions
+		# Clear backtest trades
+		if self.isClearBacktestPositions:
+			self._clear_backtest_positions()
+
+		if self.isClearBacktestOrders:
+			self._clear_backtest_orders()
+
 		if self.isClearBacktestTrades:
 			self._clear_backtest_trades()
 
@@ -323,21 +358,25 @@ class Broker(object):
 
 		return self._create_chart(product, *periods)
 
+
+	def getApiChart(self, product):
+		return self.api.getChart(product)
+
+
+	def chartExists(self, product):
+		for chart in self.charts:
+			if chart.isChart(self, product):
+				return True
+
+		return False
+
 	def getAsk(self, product):
-		chart = self.getChart(product)
-		period = chart.getLowestPeriod()
-		if period:
-			idx = chart._idx[period]
-			return self.getChart(product)._data[period].iloc[idx][3]
-		return None
+		chart = self.getApiChart(product)
+		return chart.getLatestAsk(tl.period.TICK)
 
 	def getBid(self, product):
-		chart = self.getChart(product)
-		period = chart.getLowestPeriod()
-		if period:
-			idx = chart._idx[period]
-			return self.getChart(product)._data[period].iloc[idx][7]
-		return None
+		chart = self.getApiChart(product)
+		return chart.getLatestBid(tl.period.TICK)
 
 	def getTimestamp(self, product, period):
 		return int(self.getChart(product).getTimestamp(period))
@@ -379,36 +418,20 @@ class Broker(object):
 		return None
 
 
-	def _clear_backtest_trades(self):
-		for i in range(len(self.positions)):
-			pos = self.positions[i]
-			if pos.isBacktest():
-				del self.positions[i]
-
-		for i in range(len(self.orders)):
-			order = self.orders[i]
-			if order.isBacktest():
-				del self.orders[i]
-
 	'''
 	Account Utilities
 		- All functions access brokerage directly
 	'''
 
 	def updateAccountInfo(self):
-		for account_id in accounts:
-			info = self.api.getAccountInfo(account_id)
+		info = self.api.getAccountInfo(accounts, override=True)
 
 	# Public
 	def getAccounts(self):
 		return self.accounts
 
 	def getAccountInfo(self, accounts=[]):
-		result = {}
-		for account_id in accounts:
-			result[account_id] = self.api.getAccountInfo(account_id)
-
-		return result
+		return self.api.getAccountInfo(accounts, override=True)
 
 	'''
 	Dealing Utilities

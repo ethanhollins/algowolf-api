@@ -1,5 +1,7 @@
 import json
 import time
+import math
+import socketio
 from app import pythonsdk as tl
 from .broker import Broker, BacktestMode, State
 from threading import Thread
@@ -10,9 +12,10 @@ SAVE_INTERVAL = 60 # Seconds
 
 class Strategy(object):
 
-	def __init__(self, api, strategy_id=None, accounts=None, data_path='data/'):
+	def __init__(self, api, module, strategy_id=None, accounts=None, user_variables={}, data_path='data/'):
 		# Retrieve broker type
 		self.api = api
+		self.module = module
 		self.strategyId = strategy_id
 		self.broker = Broker(self, self.api, strategy_id=self.strategyId, data_path=data_path)
 		self.accounts = accounts
@@ -23,8 +26,13 @@ class Strategy(object):
 		self.info_queue = []
 		self.lastSave = time.time()
 
+		self.input_variables = {}
+		self.user_variables = user_variables
+
 		self.tick_queue = []
 		self.lastTick = None
+
+		# self.sio = self._connect_user_input()
 
 	def run(self, auth_key=None, strategy_id=None, accounts=[]):
 		if self.strategyId is None:
@@ -36,6 +44,12 @@ class Strategy(object):
 
 	def stop(self):
 		self.broker.stop()
+
+
+	def _connect_user_input(self):
+		sio = socketio.Client()
+		sio.connect(self.api.ctrl.app.config['STREAM_URL'], namespaces=['/user'])
+		# sio.emit('onuserupdate', )
 
 
 	def __getattribute__(self, key):
@@ -64,6 +78,34 @@ class Strategy(object):
 		return self.getBroker().startFrom(dt)
 
 
+	def setClearBacktestPositions(self, is_clear=True):
+		self.getBroker().setClearBacktestPositions(is_clear)
+
+
+	def setClearBacktestOrders(self, is_clear=True):
+		self.getBroker().setClearBacktestOrders(is_clear)
+
+
+	def setClearBacktestTrades(self, is_clear=True):
+		self.getBroker().setClearBacktestTrades(is_clear)
+
+
+	def clearBacktestPositions(self):
+		self.getBroker()._clear_backtest_positions()
+
+
+	def clearBacktestOrders(self):
+		self.getBroker()._clear_backtest_orders()
+
+
+	def clearBacktestTrades(self):
+		self.getBroker()._clear_backtest_trades()
+
+
+	def getBrokerName(self):
+		return self.getBroker().name
+
+
 	# Chart functions
 	def getChart(self, product, *periods):
 		if self.getBroker().state != State.STOPPED:
@@ -72,27 +114,38 @@ class Strategy(object):
 		else:
 			raise tl.error.BrokerlibException('Strategy has been stopped.')
 
-	# Account functions
+	def getAsk(self, product):
+		return self.getBroker().getAsk(product)
 
-	def getCurrency(self, account_id):
+
+	def getBid(self, product):
+		return self.getBroker().getBid(product)
+
+
+	# Account functions
+	def getCurrency(self):
+		account_id = self.accounts[0]
 		return self.getBroker().getAccountInfo([account_id])[account_id]['currency']
 
-	def getBalance(self, account_id):
+	def getBalance(self):
+		account_id = self.accounts[0]
 		return self.getBroker().getAccountInfo([account_id])[account_id]['balance']
 
-	def getProfitLoss(self, account_id):
+	def getProfitLoss(self):
+		account_id = self.accounts[0]
 		return self.getBroker().getAccountInfo([account_id])[account_id]['pl']
 
-	def getEquity(self, account_id):
+	def getEquity(self):
+		account_id = self.accounts[0]
 		info = self.getBroker().getAccountInfo([account_id])[account_id]
 		return info['balance'] + info['pl']
 
-	def getMargin(self, account_id):
+	def getMargin(self):
+		account_id = self.accounts[0]
 		return self.getBroker().getAccountInfo([account_id])[account_id]['margin']
 
 
 	# Order functions
-
 	def getAllPositions(self):
 		result = []
 		for account_id in self.accounts:
@@ -171,7 +224,7 @@ class Strategy(object):
 				'rotation': rotation
 			}
 		}
-		if self.getBroker().state == State.LIVE:
+		if self.getBroker().state == State.LIVE or self.getBroker().state == State.IDLE:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_DRAWING,
@@ -196,7 +249,7 @@ class Strategy(object):
 	def clearDrawingLayer(self, layer):
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state == State.LIVE:
+		if self.getBroker().state == State.LIVE or self.getBroker().state == State.IDLE:
 			item = {
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
@@ -222,7 +275,7 @@ class Strategy(object):
 	def clearAllDrawings(self):
 		timestamp = self.lastTick.timestamp
 
-		if self.getBroker().state == State.LIVE:
+		if self.getBroker().state == State.LIVE or self.getBroker().state == State.IDLE:
 			item = {
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
@@ -246,12 +299,14 @@ class Strategy(object):
 
 
 	def log(self, *objects, sep=' ', end='\n', file=None, flush=None):
-		if self.getBroker().state.value == 3:
-			print(*objects, sep=sep, end=end, file=file, flush=flush)
+		# print(*objects, sep=sep, end=end, file=file, flush=flush)
 		msg = sep.join(map(str, objects)) + end
-		timestamp = self.lastTick.timestamp
+		if self.lastTick is not None:
+			timestamp = self.lastTick.timestamp
+		else:
+			timestamp = math.floor(time.time())
 
-		if self.getBroker().state == State.LIVE:
+		if self.getBroker().state == State.LIVE or self.getBroker().state == State.IDLE:
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_LOG,
@@ -383,6 +438,46 @@ class Strategy(object):
 			if gui is not None:
 				Thread(target=self.api.userAccount.updateGui, args=(self.strategyId, gui)).start()
 				self.resetGuiQueues()
+
+
+	def on_user_input(self, item):
+		for name in item:
+			if name in self.user_variables:
+				self.user_variables[name]['value'] = item[name]['value']
+
+		# Initialize strategy
+		if 'onUserInput' in dir(module) and callable(module.onUserInput):
+			module.onUserInput(item)
+
+
+	def setInputVariable(self, name, input_type, default=None, properties={}):
+		if input_type == int:
+			input_type = tl.INTEGER
+		elif input_type == float:
+			input_type = tl.DECIMAL
+		elif input_type == str:
+			input_type = tl.TEXT
+		elif input_type == None:
+			raise Exception('')
+
+		self.input_variables[name] = {
+			'default': default,
+			'type': input_type,
+			'value': default,
+			'index': len(self.input_variables),
+			'properties': properties
+		}
+
+		return self.getInputVariable(name)
+
+
+	def getInputVariable(self, name):
+		if name in self.input_variables:
+			if name in self.user_variables:
+				if self.user_variables[name]['type'] == self.input_variables[name]['type']:
+					return self.user_variables[name]['value']
+
+			return self.input_variables[name]['value']
 
 
 	def setApp(self, app):

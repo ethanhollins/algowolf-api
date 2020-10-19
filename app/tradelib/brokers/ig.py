@@ -324,6 +324,8 @@ class IG(Broker):
 	def _process_df(self, df):
 		# Remove duplicates
 		df = df[~df.index.duplicated(keep='first')]
+		# Replace NaN with None
+		df = df.where(pd.notnull(df), None)
 		# Round to 5 decimal places
 		df = df.round(pd.Series([5]*8, index=df.columns))
 		return df
@@ -387,7 +389,8 @@ class IG(Broker):
 
 			# Concatenate new data with old data
 			df = pd.concat((old_df, missing_df, df)).sort_index()
-			df = self._process_df(df)
+		# Process DataFrame
+		df = self._process_df(df)
 
 		# Loop through each year
 		for y in range(start.year, end.year+1):
@@ -422,26 +425,30 @@ class IG(Broker):
 	Account Utilities
 	'''
 
-	def _get_account_details(self, account_id):
+	def _get_account_details(self, accounts):
 		# Check auth
 		key_or_login_required(self.strategyId, AccessLevel.LIMITED)
 
 		endpoint = 'accounts'
-		self._headers['Version'] = '1'
+		version = { 'Version': '1' }
 		# Add command to working queue
-		res = self._working.run(
-			self, account_id,
-			requests.get,
-			(self._url + endpoint,),
-			{ 'headers': self._headers }
+		res = requests.get(
+			self._url + endpoint, 
+			headers={ **self._headers, **version }
 		)
 
 		if res.status_code == 200:
+			result = {}
 			for account in res.json()['accounts']:
-				if account['accountId'] == account_id:
-					return account # TODO: assort into correct dict format
-
-			raise BrokerException('Unable to find account ({}) details.'.format(account_id))	
+				if account['accountId'] in accounts:
+					result[account['accountId']] = {
+						'currency': account.get('currency'),
+						'balance': account['balance'].get('balance'),
+						'pl': account['balance'].get('profitLoss'),
+						'margin': account['balance'].get('deposit'),
+						'available': account['balance'].get('available')
+					}
+			return result 
 		else:
 			raise BrokerException('({}) Unable to get account details.\n{}'.format(
 				res.status_code, json.dumps(res.json(), indent=2)
@@ -1211,8 +1218,11 @@ class IG(Broker):
 
 			# Cancel update if no useful information
 			if not all(ask) and not all(bid): return
-			ask = list(map(float, ask))
-			bid = list(map(float, bid))
+			try:
+				ask = list(map(float, ask))
+				bid = list(map(float, bid))
+			except ValueError:
+				return
 
 			# Get timestamp
 			new_ts = int(values['UTM']) // 1000

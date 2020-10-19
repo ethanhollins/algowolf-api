@@ -335,6 +335,45 @@ def stop_script_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/compile', methods=('POST',))
+@auth.login_required
+def compile_strategy_ept(strategy_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	properties = account.compileStrategy(strategy_id)
+	res = { 'properties': properties }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/variables', methods=('POST',))
+@auth.login_required
+def replace_input_variables_ept(strategy_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	body = getJson()
+	if body.get('input_variables'):
+		input_variables = account.replaceInputVariables(strategy_id, body.get('input_variables'))
+		res = { 'input_variables': input_variables }
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+	else:
+		error = {
+			'error': 'ValueError',
+			'message': '`input_variables` not submitted.'
+		}
+		return Response(
+			json.dumps(error, indent=2),
+			status=400, content_type='application/json'
+		)
+
+
 # Order/Position Functions
 def create_order(strategy_id, data):
 	user_id = get_user_id()
@@ -994,8 +1033,10 @@ def perform_backtest_ept(strategy_id, start, end):
 		mode = body.get('mode')
 	else:
 		mode = 'run'
+	
+	input_variables = body.get('input_variables')
 
-	backtest_id = account.performBacktest(strategy_id, start, end, mode)
+	backtest_id = account.performBacktest(strategy_id, start, end, mode, input_variables=input_variables)
 	res = { 'backtest': backtest_id }
 	return Response(
 		json.dumps(res, indent=2),

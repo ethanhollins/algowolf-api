@@ -276,16 +276,11 @@ class Broker(object):
 	'''
 
 	# Public
-	def getAccountInfo(self, account_id, override=False):
+	def getAccountInfo(self, accounts, override=False):
 		if not override:
 			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
 
-		return {
-			'currency': 'AUD',
-			'balance': 10000,
-			'pl': 0,
-			'margin': 0,
-		}
+		return self._get_account_details(accounts)
 
 	'''
 	Dealing Utilities
