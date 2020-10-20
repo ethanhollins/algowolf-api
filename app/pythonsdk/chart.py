@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import time
+from copy import copy
 from datetime import datetime, timedelta
 
 
@@ -57,7 +58,7 @@ class Chart(object):
 	def __init__(self, strategy, product, periods=[], data_path='data/'):
 		self.strategy = strategy
 		self.product = product
-		self.periods = periods
+		self.periods = copy(periods)
 		
 		self.timestamps = ChartItem({p:[] for p in self.periods})
 		self.asks = ChartItem({p:[] for p in self.periods})
@@ -146,7 +147,9 @@ class Chart(object):
 	def _quick_download_prices(self, period, start, end):
 		ts_start = tl.utils.convertTimeToTimestamp(start)
 		ts_end = tl.utils.convertTimeToTimestamp(end)
+		print(f'{self.product}:{period}, {ts_start} -> {ts_end}')
 		df = self.strategy.getBroker()._download_historical_prices(self.product, period, start, end, None)
+		print(df.tail(10))
 
 		df = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
 

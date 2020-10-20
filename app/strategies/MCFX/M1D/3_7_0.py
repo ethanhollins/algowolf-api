@@ -241,7 +241,7 @@ def getCurrentPositionDirection():
 def getIGLotsize():
 	global bank
 	usable_bank = min(bank + EXTERNAL_BANK, MAXIMUM_BANK)
-	aud_usd = strategy.getBid(product.AUDUSD)
+	aud_usd = audusd_chart.getLastBidOHLC(period.DAILY)[3]
 	return max(round((usable_bank * (RISK / 100) / STOP_RANGE) * aud_usd, 2), 1.0)
 
 
@@ -957,7 +957,7 @@ def setInputs():
 	C_ONE = strategy.setInputVariable('c) 1.', float, default=0.2)
 	C_TWO = strategy.setInputVariable('c) 2.', float, default=2.0)
 
-	global D_ONE, D_TWO, D_THREE, D_FOUR, D_FIVE
+	global D_ONE, D_TWO, D_THREE, D_FOUR, D_FIVE, D_FOURTEEN
 	strategy.setInputVariable('Exit', HEADER)
 	D_ONE = strategy.setInputVariable('d) 1.', float, default=0.2)
 	D_TWO = strategy.setInputVariable('d) 2.', float, default=0.2)
@@ -1063,6 +1063,9 @@ def init():
 	# Charts
 	chart = strategy.getChart(product.GBPUSD, period.ONE_MINUTE)
 
+	global audusd_chart
+	audusd_chart = strategy.getChart(product.AUDUSD, period.DAILY)
+
 	# Indicators
 	donch = indicator.DONCH(DONCH_PERIOD)
 	sma_slow = indicator.SMA(SMA_SLOW_PERIOD)
@@ -1113,13 +1116,14 @@ def onTrade(trade):
 
 def onTick(tick):
 	'''Hook function for broker price events'''
-	# On Bar End
-	if tick.bar_end:
-		onEventLoop(tick.timestamp, tick.chart)
-		report(tick)
+	if tick.chart.product == product.GBPUSD:
+		# On Bar End
+		if tick.bar_end:
+			onEventLoop(tick.timestamp, tick.chart)
+			report(tick)
 
-	# Stop Points
-	stopPoints(tick.chart)
+		# Stop Points
+		stopPoints(tick.chart)
 
 '''
 Constants

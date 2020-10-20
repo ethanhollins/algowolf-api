@@ -230,32 +230,32 @@ class Backtester(object):
 
 
 	def modifyOrder(self, order, lotsize, sl_range, tp_range, sl_price, tp_price):
-		if lotsize:
+		if lotsize is not None:
 			order.lotsize = lotsize
 
 		# Convert to price
-		if entry_range:
+		if entry_range is not None:
 			if direction == tl.LONG:
 				order.entry_price = round(order.entry_price + tl.utils.convertToPrice(entry_range), 5)
 			else:
 				order.entry_price = round(order.entry_price - tl.utils.convertToPrice(entry_range), 5)
-		elif entry_price:
+		elif entry_price is not None:
 			order.entry_price = entry_price
 
-		if sl_range:
+		if sl_range is not None:
 			if direction == tl.LONG:
 				order.sl = round(self.entry - tl.utils.convertToPrice(sl_range), 5)
 			else:
 				order.sl = round(self.entry + tl.utils.convertToPrice(sl_range), 5)
-		elif sl_price:
+		elif sl_price is not None:
 			order.sl = sl_price
 
-		if tp_range:
+		if tp_range is not None:
 			if direction == tl.LONG:
 				order.tp = round(self.entry + tl.utils.convertToPrice(tp_range), 5)
 			else:
 				order.tp = round(self.entry - tl.utils.convertToPrice(tp_range), 5)
-		elif tp_price:
+		elif tp_price is not None:
 			order.tp = tp_price
 
 		return order

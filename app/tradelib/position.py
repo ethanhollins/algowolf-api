@@ -105,22 +105,22 @@ class Position(dict):
 		override=False
 	):
 		# Convert to price
-		if sl_range:
+		if sl_range is not None:
 			if self.direction == tl.LONG:
 				sl = round(self.entry_price - tl.utils.convertToPrice(sl_range), 5)
 			else:
 				sl = round(self.entry_price + tl.utils.convertToPrice(sl_range), 5)
-		elif sl_price:
+		elif sl_price is not None:
 			sl = sl_price
 		else:
 			sl = self.sl
 
-		if tp_range:
+		if tp_range is not None:
 			if self.direction == tl.LONG:
 				tp = round(self.entry_price + tl.utils.convertToPrice(tp_range), 5)
 			else:
 				tp = round(self.entry_price - tl.utils.convertToPrice(tp_range), 5)
-		elif tp_price:
+		elif tp_price is not None:
 			tp = tp_price
 		else:
 			tp = self.tp

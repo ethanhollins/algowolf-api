@@ -325,7 +325,8 @@ class IG(Broker):
 		# Remove duplicates
 		df = df[~df.index.duplicated(keep='first')]
 		# Replace NaN with None
-		df = df.where(pd.notnull(df), None)
+		# df = df.where(pd.notnull(df), None)
+		df = df.dropna()
 		# Round to 5 decimal places
 		df = df.round(pd.Series([5]*8, index=df.columns))
 		return df

@@ -370,13 +370,35 @@ class Broker(object):
 
 		return False
 
-	def getAsk(self, product):
+	def getBrokerAsk(self, product):
 		chart = self.getApiChart(product)
 		return chart.getLatestAsk(tl.period.TICK)
 
-	def getBid(self, product):
+	def getBrokerBid(self, product):
 		chart = self.getApiChart(product)
 		return chart.getLatestBid(tl.period.TICK)
+
+	def getAsk(self, product):
+		if self.chartExists(product):
+			chart = self.getChart(product)
+			period = chart.getLowestPeriod()
+			if period is not None:
+				return chart.getLastAskOHLC(period)[3]
+			else:
+				raise tl.error.BrokerException(f'No {product} data found.')
+		else:
+			raise tl.error.BrokerException(f'Chart {product} doesn\'t exist.')	
+
+	def getBid(self, product):
+		if self.chartExists(product):
+			chart = self.getChart(product)
+			period = chart.getLowestPeriod()
+			if period is not None:
+				return chart.getLastBidOHLC(period)[3]
+			else:
+				raise tl.error.BrokerException(f'No {product} data found.')
+		else:
+			raise tl.error.BrokerException(f'Chart {product} doesn\'t exist.')
 
 	def getTimestamp(self, product, period):
 		return int(self.getChart(product).getTimestamp(period))
@@ -431,7 +453,19 @@ class Broker(object):
 		return self.accounts
 
 	def getAccountInfo(self, accounts=[]):
-		return self.api.getAccountInfo(accounts, override=True)
+		if self.isLive():
+			return self.api.getAccountInfo(accounts, override=True)
+		else:
+			result = {}
+			for account in accounts:
+				result[account] = {
+					'currency': 'AUD',
+					'balance': 10000,
+					'pl': 0,
+					'margin': 0,
+					'available': 10000
+				}
+			return result
 
 	'''
 	Dealing Utilities

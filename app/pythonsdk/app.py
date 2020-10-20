@@ -79,6 +79,7 @@ class App(dict):
 
 			backtest_id = self.strategies['ACCOUNT_1'].get('strategy').backtest(_from, to, mode)
 		except Exception as err:
+			print(traceback.format_exc())
 			e = err
 		finally:
 			if 'ACCOUNT_1' in self.strategies:

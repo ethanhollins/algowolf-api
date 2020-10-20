@@ -114,14 +114,6 @@ class Strategy(object):
 		else:
 			raise tl.error.BrokerlibException('Strategy has been stopped.')
 
-	def getAsk(self, product):
-		return self.getBroker().getAsk(product)
-
-
-	def getBid(self, product):
-		return self.getBroker().getBid(product)
-
-
 	# Account functions
 	def getCurrency(self):
 		account_id = self.accounts[0]
