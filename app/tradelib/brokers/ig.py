@@ -588,8 +588,10 @@ class IG(Broker):
 			}
 		)
 
-		if res.status_code == 200:
-			res = res.json()
+		result = {}
+		status_code = res.status_code
+		res = res.json()
+		if status_code == 200:
 			ref = res['dealReference']
 			status = 400
 
@@ -598,10 +600,27 @@ class IG(Broker):
 			result = self._wait(ref, timeout=timeout)
 
 			return result
+
+		elif 400 <= status_code < 500:
+			err = res.get('errorCode')
+			result.update({
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'type': tl.MARKET_ORDER,
+					'accepted': False,
+					'message': err
+				}
+			})
+
 		else:
-			raise BrokerException('({}) Unable to create position ({}).\n{}'.format(
-				res.status_code, account_id, json.dumps(res.json(), indent=2)
-			))
+			result.update({
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'type': tl.MARKET_ORDER,
+					'accepted': False,
+					'message': 'IG internal server error.'
+				}
+			})
 
 
 	def modifyPosition(self, pos, sl_price, tp_price, override=False):
@@ -637,8 +656,10 @@ class IG(Broker):
 			}
 		)
 
-		if res.status_code == 200:
-			res = res.json()
+		result = {}
+		status_code = res.status_code
+		res = res.json()
+		if status_code == 200:
 			ref = res['dealReference']
 			status = 400
 
@@ -648,10 +669,33 @@ class IG(Broker):
 
 			return result
 
+		elif 400 <= status_code < 500:
+			err = res.get('errorCode')
+			result.update({
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'type': tl.MODIFY,
+					'accepted': False,
+					'message': err,
+					'item': {
+						'order_id': pos.order_id
+					}
+				}
+			})
+
 		else:
-			raise BrokerException('({}) Unable to modify position.\n{}'.format(
-				res.status_code, json.dumps(res.json(), indent=2)
-			))
+			result.update({
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'type': tl.MODIFY,
+					'accepted': False,
+					'message': 'IG internal server error.',
+					'item': {
+						'order_id': pos.order_id
+					}
+				}
+			})
+			
 
 	def deletePosition(self, pos, lotsize, override=False):
 		if pos.account_id == tl.broker.PAPERTRADER_NAME:
@@ -697,8 +741,10 @@ class IG(Broker):
 
 		self._headers.pop('_method', None)
 
-		if res.status_code == 200:
-			res = res.json()
+		result = {}
+		status_code = res.status_code
+		res = res.json()
+		if status_code == 200:
 			ref = res['dealReference']
 			status = 400
 
@@ -706,12 +752,35 @@ class IG(Broker):
 			timeout = 60*10 if self.is_demo else 5
 			result = self._wait(ref, timeout=timeout)
 
-			return result
+		elif 400 <= status_code < 500:
+			err = res.get('errorCode')
+			result.update({
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'type': tl.POSITION_CLOSE,
+					'accepted': False,
+					'message': err,
+					'item': {
+						'order_id': pos.order_id
+					}
+				}
+			})
 
 		else:
-			raise BrokerException('({}) Unable to delete position.\n{}'.format(
-				res.status_code, json.dumps(res.json(), indent=2)
-			))
+			result.update({
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'type': tl.POSITION_CLOSE,
+					'accepted': False,
+					'message': 'IG internal server error.',
+					'item': {
+						'order_id': pos.order_id
+					}
+				}
+			})
+
+		return result
+
 
 	def _get_all_orders(self, account_id):
 		self._switch_account(account_id)
