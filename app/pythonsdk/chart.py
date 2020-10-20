@@ -147,9 +147,7 @@ class Chart(object):
 	def _quick_download_prices(self, period, start, end):
 		ts_start = tl.utils.convertTimeToTimestamp(start)
 		ts_end = tl.utils.convertTimeToTimestamp(end)
-		print(f'{self.product}:{period}, {ts_start} -> {ts_end}')
 		df = self.strategy.getBroker()._download_historical_prices(self.product, period, start, end, None)
-		print(df.tail(10))
 
 		df = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
 

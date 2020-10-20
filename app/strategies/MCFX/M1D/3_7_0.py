@@ -355,7 +355,7 @@ def goldCrossTwoConf(chart, direction, reverse=False):
 
 	return (
 		isTagged(ema_fast_val, sma_fast_val, direction, reverse=reverse) and
-		isBB(chart, direction, reverse=not reverse) and not isDoji(chart, C_ONE) and
+		isBB(chart, direction, reverse=reverse) and not isDoji(chart, C_ONE) and
 		isCrossed(close, sma_fast_val, direction, reverse=reverse) and
 		isCrossed(close, ema_fast_val, direction, reverse=reverse)
 	)
@@ -373,7 +373,7 @@ def goldCrossCancelConf(chart, direction, reverse=False):
 
 def isReEntryTDonchConf(chart, direction):
 	donch_val = getDonchValue(chart, direction)
-	hl = getHL(chart, trigger.direction)
+	hl = getHL(chart, direction)
 
 	return isTagged(hl, donch_val, direction)
 
@@ -938,7 +938,7 @@ def setInputs():
 
 	global A_ONE, A_TWO, A_THREE, A_FOUR
 	strategy.setInputVariable('Reverse Line', HEADER)
-	A_ONE = strategy.setInputVariable('a) 1.', int, default=3)
+	A_ONE = strategy.setInputVariable('a) 1.', int, default=5)
 	A_TWO = strategy.setInputVariable('a) 2.', int, default=1)
 	A_THREE = strategy.setInputVariable('a) 3.', float, default=1.0)
 	A_FOUR = strategy.setInputVariable('a) 4.', int, default=1)

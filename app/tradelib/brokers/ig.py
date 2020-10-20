@@ -302,7 +302,7 @@ class IG(Broker):
 
 		# Concatenate loaded data
 		if len(result) > 0:
-			new_data = pd.DataFrame(data=result).set_index('timestamp').astype(float)
+			new_data = pd.DataFrame(data=result).set_index('timestamp').astype(np.float64)
 
 			if not force_download and not self.is_demo:
 				Thread(
@@ -335,7 +335,6 @@ class IG(Broker):
 		frags = []
 		# Loop through each year
 		for y in range(start.year, end.year+1):
-
 			if y == start.year:
 				ts_start = tl.utils.convertTimeToTimestamp(start)
 			else:
@@ -346,7 +345,7 @@ class IG(Broker):
 			else:
 				ts_end = tl.utils.convertTimeToTimestamp(datetime(year=y+1, month=1, day=1))
 
-			df = self.ctrl.getDb().getPrices(self.name, product, period, start.year)
+			df = self.ctrl.getDb().getPrices(self.name, product, period, y)
 			if isinstance(df, pd.DataFrame):
 				# Get correct time range
 				df = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
@@ -363,7 +362,7 @@ class IG(Broker):
 
 	def save_data(self, df, product, period):
 		if df.size == 0: return
-		if period != tl.period.ONE_MINUTE: return
+		# if period != tl.period.ONE_MINUTE: return
 		
 		MAX_DOWNLOAD = 10000
 
