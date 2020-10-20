@@ -331,6 +331,19 @@ class Broker(object):
 	def _prepare_for_live(self):
 		for chart in self.charts:
 			chart.prepareLive()
+			period = chart.getLowestPeriod()
+			if period is not None:
+				chart.subscribe(period, self._handle_tick_checks)
+
+
+	def _handle_tick_checks(self, item):
+		product = item.chart.product
+		timestamp = int(item.timestamp)
+		ohlc = np.array([item.ask[3]]*4 + [item.bid[3]]*4, dtype=np.float64)
+
+		self.backtester.handleOrders(product, timestamp, ohlc)
+		self.backtester.handleStopLoss(product, timestamp, ohlc)
+		self.backtester.handleTakeProfit(product, timestamp, ohlc)
 
 
 	def _create_chart(self, product, *periods):
