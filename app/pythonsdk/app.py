@@ -126,7 +126,7 @@ class App(dict):
 	def startStrategy(self, account_id, input_variables):
 		if account_id not in self.strategies:
 			module = self.getPackageModule(f'{STRATEGY_PACKAGE}.{self.package}')
-			strategy = Strategy(self.api, module, strategy_id=self.strategyId, accounts=[account_id], user_variables=input_variables)
+			strategy = Strategy(self.api, module, strategy_id=self.strategyId, account_id=account_id, user_variables=input_variables)
 			strategy.setApp(self)
 			
 			self.strategies[account_id] = {

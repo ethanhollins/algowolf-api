@@ -8,17 +8,18 @@ from threading import Thread
 
 
 SAVE_INTERVAL = 60 # Seconds
+MAX_GUI = 200
 
 
 class Strategy(object):
 
-	def __init__(self, api, module, strategy_id=None, accounts=None, user_variables={}, data_path='data/'):
+	def __init__(self, api, module, strategy_id=None, account_id=None, user_variables={}, data_path='data/'):
 		# Retrieve broker type
 		self.api = api
 		self.module = module
 		self.strategyId = strategy_id
 		self.broker = Broker(self, self.api, strategy_id=self.strategyId, data_path=data_path)
-		self.accounts = accounts
+		self.account_id = account_id
 
 		# GUI Queues
 		self.drawing_queue = []
@@ -34,11 +35,11 @@ class Strategy(object):
 
 		# self.sio = self._connect_user_input()
 
-	def run(self, auth_key=None, strategy_id=None, accounts=[]):
+	def run(self, auth_key=None, strategy_id=None, account_id=None):
 		if self.strategyId is None:
 			self.strategyId = strategy_id
-		if self.accounts is None:
-			self.accounts = accounts
+		if self.account_id is None:
+			self.account_id = account_id
 
 		self.broker.run(self.strategyId)
 
@@ -116,39 +117,30 @@ class Strategy(object):
 
 	# Account functions
 	def getCurrency(self):
-		account_id = self.accounts[0]
-		return self.getBroker().getAccountInfo([account_id])[account_id]['currency']
+		return self.getBroker().getAccountInfo([self.account_id])[self.account_id]['currency']
 
 	def getBalance(self):
-		account_id = self.accounts[0]
-		return self.getBroker().getAccountInfo([account_id])[account_id]['balance']
+		return self.getBroker().getAccountInfo([self.account_id])[self.account_id]['balance']
 
 	def getProfitLoss(self):
-		account_id = self.accounts[0]
-		return self.getBroker().getAccountInfo([account_id])[account_id]['pl']
+		return self.getBroker().getAccountInfo([self.account_id])[self.account_id]['pl']
 
 	def getEquity(self):
-		account_id = self.accounts[0]
-		info = self.getBroker().getAccountInfo([account_id])[account_id]
+		info = self.getBroker().getAccountInfo([self.account_id])[self.account_id]
 		return info['balance'] + info['pl']
 
 	def getMargin(self):
-		account_id = self.accounts[0]
-		return self.getBroker().getAccountInfo([account_id])[account_id]['margin']
+		return self.getBroker().getAccountInfo([self.account_id])[self.account_id]['margin']
 
 
 	# Order functions
 	def getAllPositions(self):
-		result = []
-		for account_id in self.accounts:
-			result += self.getBroker().getAllPositions(account_id=account_id)
+		result = self.getBroker().getAllPositions(account_id=self.account_id)
 		return result
 
 
 	def getAllOrders(self):
-		result = []
-		for account_id in self.accounts:
-			result += self.getBroker().getAllOrders(account_id=account_id)
+		result = self.getBroker().getAllOrders(account_id=self.account_id)
 		return result
 
 
@@ -161,7 +153,7 @@ class Strategy(object):
 	):
 		if self.getBroker().state != State.STOPPED:
 			return self.getBroker().buy(
-				product, lotsize, self.accounts,
+				product, lotsize, [self.account_id],
 				order_type=order_type,
 				entry_range=entry_range, entry_price=entry_price,
 				sl_range=sl_range, tp_range=tp_range,
@@ -181,7 +173,7 @@ class Strategy(object):
 	):
 		if self.getBroker().state != State.STOPPED:
 			return self.getBroker().sell(
-				product, lotsize, self.accounts,
+				product, lotsize, [self.account_id],
 				order_type=order_type,
 				entry_range=entry_range, entry_price=entry_price,
 				sl_range=sl_range, tp_range=tp_range,
@@ -370,46 +362,66 @@ class Strategy(object):
 	def handleDrawingsSave(self, gui):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
+
 		if 'drawings' not in gui:
 			gui['drawings'] = {}
 
+		if self.account_id not in gui['drawings']:
+			gui['drawings'][self.account_id] = {}
+
 		for i in self.drawing_queue:
 			if i['type'] == tl.CREATE_DRAWING:
-				if i['item']['layer'] not in gui['drawings']:
-					gui['drawings'][i['item']['layer']] = []
-				gui['drawings'][i['item']['layer']].append(i['item'])
+				if i['item']['layer'] not in gui['drawings'][self.account_id]:
+					gui['drawings'][self.account_id][i['item']['layer']] = []
+				gui['drawings'][self.account_id][i['item']['layer']].append(i['item'])
 
 			elif i['type'] == tl.CLEAR_DRAWING_LAYER:
-				if i['item'] in gui['drawings']:
-					gui['drawings'][i['item']] = []
+				if i['item'] in gui['drawings'][self.account_id]:
+					gui['drawings'][self.account_id][i['item']] = []
 
 			elif i['type'] == tl.CLEAR_ALL_DRAWINGS:
-				for layer in gui['drawings']:
-					gui['drawings'][layer] = []
+				for layer in gui['drawings'][self.account_id]:
+					gui['drawings'][self.account_id][layer] = []
+
+		for layer in gui['drawings'][self.account_id]:
+			gui['drawings'][self.account_id][layer] = gui['drawings'][self.account_id][layer][-MAX_GUI:]
 
 		return gui
 
 	def handleLogsSave(self, gui):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
-		if 'logs' not in gui:
-			gui['logs'] = []
 
-		gui['logs'] += self.log_queue
+		if 'logs' not in gui:
+			gui['logs'] = {}
+
+		if self.account_id not in gui['logs']:
+			gui['logs'][self.account_id] = []
+
+		gui['logs'][self.account_id] += self.log_queue
+		gui['logs'][self.account_id] = gui['logs'][self.account_id][-MAX_GUI:]
 
 		return gui
 
 	def handleInfoSave(self, gui):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
+
 		if 'info' not in gui:
 			gui['info'] = {}
 
-		for i in self.info_queue:
-			if i['timestamp'] not in gui['info']:
-				gui['info'][i['timestamp']] = []
+		if self.account_id not in gui['info']:
+			gui['info'][self.account_id] = {}
 
-			gui['info'][i['timestamp']].append(i['item'])
+		for i in self.info_queue:
+			if i['timestamp'] not in gui['info'][self.account_id]:
+				gui['info'][self.account_id][i['timestamp']] = []
+
+			gui['info'][self.account_id][i['timestamp']].append(i['item'])
+		
+		gui['info'][self.account_id] = dict(sorted(
+			gui['logs'][self.account_id].items(), key=lambda x: x[0]
+		)[-MAX_GUI:])
 		
 		return gui
 
