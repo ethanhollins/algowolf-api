@@ -212,6 +212,7 @@ class Strategy(object):
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_DRAWING,
+				'account_id': self.account_id,
 				'item': drawing
 			}
 
@@ -238,6 +239,7 @@ class Strategy(object):
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
 				'type': tl.CLEAR_DRAWING_LAYER,
+				'account_id': self.account_id,
 				'item': layer
 			}
 
@@ -264,6 +266,7 @@ class Strategy(object):
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
 				'type': tl.CLEAR_ALL_DRAWINGS,
+				'account_id': self.account_id,
 				'item': None
 			}
 
@@ -294,6 +297,7 @@ class Strategy(object):
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_LOG,
+				'account_id': self.account_id,
 				'item': msg
 			}
 
@@ -331,6 +335,7 @@ class Strategy(object):
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_INFO,
+				'account_id': self.account_id,
 				'item': item
 			}
 
