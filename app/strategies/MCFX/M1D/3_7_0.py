@@ -6,20 +6,7 @@ Midas Code FX
 	Script author: Ethan Hollins
 
 	licensed to Tymraft Pty. Ltd.
-
-DEFINITIONS:
-	A/B (AB): 	Above (LONG) / Below (SHORT) 
-	BB: 		Bullish / Bearish
-	BL:			Baseline
-	CT: 		Counter-Trend
-	Doji: 		Candle body less than `x` size
-	H/L:		High / Low
-	Rev:		Reverse
-	RL:			Reverse Line
-	T: 			Trend
-	Tag: 		Has touched or is AB
-	X:			Cross
-
+	
 '''
 
 from datetime import datetime, timedelta
@@ -462,7 +449,7 @@ def confirmation(chart, trigger, reverse=False):
 		if isSessionLoss():
 			time_state = TimeState.NO_NEW_ENTRIES
 			# Draw session line
-			drawSessionLine(chart)
+			drawSessionEndLine(chart)
 			return False
 
 		if reverse:
@@ -779,7 +766,7 @@ def exitSetup(chart):
 				time_state = TimeState.NO_NEW_ENTRIES
 				exit(direction)
 				# Draw session line
-				drawSessionLine(chart)
+				drawSessionEndLine(chart)
 
 
 def stopPoints(chart):
@@ -841,7 +828,7 @@ def onTime(timestamp, chart):
 				short_trigger.requires_variation = True
 
 			# Draw session line
-			drawSessionLine(chart)
+			drawSessionStartLine(chart)
 
 	elif time_state == TimeState.NO_NEW_ENTRIES:
 		if len(strategy.positions) == 0 and now > end_time:
@@ -855,7 +842,7 @@ def onTime(timestamp, chart):
 			else:
 				time_state = TimeState.WAIT
 				# Draw session line
-				drawSessionLine(chart)
+				drawSessionEndLine(chart)
 
 		elif exit_state == ExitState.NONE:
 			# Exit FOUR
@@ -908,11 +895,19 @@ def onEventLoop(timestamp, chart):
 GUI
 '''
 
-def drawSessionLine(chart):
+def drawSessionStartLine(chart):
 	strategy.draw(
 		'verticalLine', 'arrows', product.GBPUSD,
 		None, chart.timestamps.ONE_MINUTE[0],
-		color='#000', scale=2.0
+		color='#2ecc71', scale=2.0
+	)
+
+
+def drawSessionEndLine(chart):
+	strategy.draw(
+		'verticalLine', 'arrows', product.GBPUSD,
+		None, chart.timestamps.ONE_MINUTE[0],
+		color='#e74c3c', scale=2.0
 	)
 
 
@@ -1110,7 +1105,7 @@ def onTrade(trade):
 		if time_state == TimeState.TRADING:
 			time_state = TimeState.NO_NEW_ENTRIES
 			# Draw session line
-			drawSessionLine(chart)
+			drawSessionEndLine(chart)
 
 
 
