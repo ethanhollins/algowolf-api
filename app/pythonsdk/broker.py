@@ -171,7 +171,7 @@ class Broker(object):
 
 
 	def _clear_backtest_positions(self):
-		for i in range(len(self.positions)):
+		for i in range(len(self.positions)-1,-1,-1):
 			pos = self.positions[i]
 			if pos.isBacktest():
 				del self.positions[i]

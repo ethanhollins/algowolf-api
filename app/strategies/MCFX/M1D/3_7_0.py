@@ -1115,9 +1115,12 @@ def init():
 
 
 def onStart():
+	global session
+
 	# Clear any backtest positions if real positions exist
 	if any([not pos.isBacktest() for pos in strategy.positions]):
 		strategy.clearBacktestTrades()
+		session = [pos for pos in session if pos.close_price is not None] + strategy.positions
 
 
 def onTrade(trade):
