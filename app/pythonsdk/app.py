@@ -12,12 +12,13 @@ STRATEGY_PACKAGE = 'app.strategies'
 
 class App(dict):
 
-	def __init__(self, api, package, strategy_id=None):
+	def __init__(self, api, package, strategy_id, broker_id):
 		if package.endswith('.py'):
 			package = package.strip('.py')
 		self.api = api
 		self.package = package
 		self.strategyId = strategy_id
+		self.brokerId = broker_id
 
 		# Containers
 		self.strategies = {}
@@ -39,8 +40,6 @@ class App(dict):
 		starting = []
 		for account_id in accounts:
 			self.startStrategy(account_id, input_variables)
-
-		for account_id in accounts:
 			if self.strategies[account_id].get('strategy').getBroker().state.value <= 2:
 				# Run strategy
 				t = Thread(target=self.strategies[account_id].get('strategy').run)
@@ -59,14 +58,15 @@ class App(dict):
 			
 
 	def stop(self, accounts):
-		for acc in accounts:
-			if acc in self.strategies:
-				strategy = self.strategies[acc].get('strategy')
+		for account_id in accounts:
+			if account_id in self.strategies:
+				strategy = self.strategies[account_id].get('strategy')
 				strategy.stop()
-				del self.strategies[acc]
+				del self.strategies[account_id]
 
 
 	def backtest(self, _from, to, mode, input_variables):
+		account_id = 'ACCOUNT_1'
 
 		e = None
 		try:
@@ -74,16 +74,16 @@ class App(dict):
 				_from = datetime.strptime(_from, '%Y-%m-%dT%H:%M:%SZ')
 			if isinstance(to, str):
 				to = datetime.strptime(to, '%Y-%m-%dT%H:%M:%SZ')
-			self.startStrategy('ACCOUNT_1', input_variables)
-			self.strategies['ACCOUNT_1'].get('strategy').getBroker().setName(self.api.name)
+			self.startStrategy(account_id, input_variables)
+			self.strategies[account_id].get('strategy').getBroker().setName(self.api.name)
 
-			backtest_id = self.strategies['ACCOUNT_1'].get('strategy').backtest(_from, to, mode)
+			backtest_id = self.strategies[account_id].get('strategy').backtest(_from, to, mode)
 		except Exception as err:
 			print(traceback.format_exc())
 			e = err
 		finally:
-			if 'ACCOUNT_1' in self.strategies:
-				del self.strategies['ACCOUNT_1']
+			if account_id in self.strategies:
+				del self.strategies[account_id]
 
 			if e is not None:
 				raise TradelibException(str(e))
@@ -92,19 +92,20 @@ class App(dict):
 
 
 	def compile(self):
+		account_id = 'ACCOUNT_1'
 		properties = {}
 		e = None
 		try:
-			self.startStrategy('ACCOUNT_1', {})
+			self.startStrategy(account_id, {})
 
 		except Exception as err:
 			print(traceback.format_exc())
 			e = err
 		finally:
-			if 'ACCOUNT_1' in self.strategies:
-				strategy = self.strategies['ACCOUNT_1'].get('strategy')
+			if account_id in self.strategies:
+				strategy = self.strategies[account_id].get('strategy')
 				properties['input_variables'] = strategy.input_variables
-				del self.strategies['ACCOUNT_1']
+				del self.strategies[account_id]
 
 			if e is not None:
 				raise TradelibException(str(e))
@@ -126,7 +127,8 @@ class App(dict):
 	def startStrategy(self, account_id, input_variables):
 		if account_id not in self.strategies:
 			module = self.getPackageModule(f'{STRATEGY_PACKAGE}.{self.package}')
-			strategy = Strategy(self.api, module, strategy_id=self.strategyId, account_id=account_id, user_variables=input_variables)
+
+			strategy = Strategy(self.api, module, strategy_id=self.strategyId, broker_id=self.brokerId, account_id=account_id, user_variables=input_variables)
 			strategy.setApp(self)
 			
 			self.strategies[account_id] = {

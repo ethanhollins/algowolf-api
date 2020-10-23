@@ -3,19 +3,33 @@ from app.pythonsdk.app import App
 
 class Strategy(object):
 
-	def __init__(self, strategy_id, api, package):
+	def __init__(self, strategy_id, broker_id, api, package):
 		self.strategyId = strategy_id
+		self.brokerId = broker_id
 		self.api = api
 		self.package = package
-		self.app = App(self.api, package, strategy_id=self.strategyId)
+		self.app = App(self.api, package, strategy_id=self.strategyId, broker_id=self.brokerId)
 
 
-	def run(self, accounts, input_variables={}):
+	def run(self, accounts, input_variables):
 		if input_variables is None:
 			input_variables = {}
 
 		# Check if already started
 		self.app.run(accounts, input_variables)
+		# Send completion message
+		self.api.ctrl.sio.emit(
+			'ongui', 
+			{
+				'strategy_id': self.strategyId,
+				'item': {
+					'broker_id': self.brokerId,
+					'type': 'activation',
+					'accounts': { acc:True for acc in accounts }
+				}
+			},
+			namespace='/admin'
+		)
 
 
 	def stop(self, accounts):

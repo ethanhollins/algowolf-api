@@ -305,6 +305,15 @@ class Database(object):
 					v.get('key') == props.get('key')):
 				return None
 
+		broker_id = self.generateId()
+		while broker_id in user['brokers']:
+			broker_id = self.generateId()
+
+		props.update({
+			'name': name,
+			'broker': broker_name
+		})
+
 		if broker_name == tl.broker.IG_NAME:
 			# IG Validation
 			if props.get('username') is None:
@@ -316,10 +325,6 @@ class Database(object):
 
 			# Run broker API call check
 
-			# Upload new broker info
-			props.update({'broker': broker_name})
-			key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
-			user['brokers'][name] = key
 		
 		elif broker_name == tl.broker.OANDA_NAME:
 			if props.get('is_demo') is None:
@@ -327,10 +332,11 @@ class Database(object):
 
 			# Run broker API call check
 
-			# Upload new broker info
-			props.update({'broker': broker_name})
-			key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
-			user['brokers'][name] = key
+
+		# Upload new broker info
+		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+		user['brokers'][broker_id] = key
+
 		# Update changes
 		update = { 'brokers': user.get('brokers') }
 		result = self.updateUser(user_id, update)

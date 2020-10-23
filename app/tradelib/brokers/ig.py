@@ -53,10 +53,9 @@ class IG(Broker):
 	)
 	def __init__(self, 
 		ctrl, username, password, key, is_demo, 
-		user_account=None, strategy_id=None, 
-		broker_id=None, accounts={}
+		user_account=None, broker_id=None, accounts={}, display_name=None
 	):
-		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.IG_NAME, accounts)
+		super().__init__(ctrl, user_account, broker_id, tl.broker.IG_NAME, accounts, display_name)
 
 		self.dl = tl.DataLoader(broker=self)
 
@@ -95,7 +94,7 @@ class IG(Broker):
 		self._get_tokens()
 
 		# Handle strategy
-		if self.userAccount and self.strategyId:
+		if self.userAccount and self.brokerId:
 			self._handle_live_strategy_setup()
 
 		# Live Updates
@@ -428,7 +427,7 @@ class IG(Broker):
 	def _get_account_details(self, accounts, override=False):
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
 		endpoint = 'accounts'
 		version = { 'Version': '1' }
@@ -539,7 +538,7 @@ class IG(Broker):
 		if override:
 			status = 200
 		else:
-			_, status = key_or_login_required(self.strategyId, AccessLevel.DEVELOPER, disable_abort=True)
+			_, status = key_or_login_required(self.brokerId, AccessLevel.DEVELOPER, disable_abort=True)
 		
 		if (status != 200 or account_id == tl.broker.PAPERTRADER_NAME):
 			return super().createPosition(
@@ -630,7 +629,7 @@ class IG(Broker):
 			)
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.DEVELOPER)
+			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		# Switch Account
 		self._switch_account(pos.account_id)
@@ -704,7 +703,7 @@ class IG(Broker):
 			)
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.DEVELOPER)
+			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		# Switch Account
 		self._switch_account(pos.account_id)

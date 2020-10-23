@@ -28,10 +28,10 @@ class Oanda(Broker):
 
 	def __init__(self, 
 		ctrl, key, is_demo, 
-		user_account=None, strategy_id=None, 
-		broker_id=None, accounts={}
+		user_account=None, broker_id=None, 
+		accounts={}
 	):
-		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.OANDA_NAME, accounts)
+		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts)
 
 		self.dl = tl.DataLoader(broker=self)
 
@@ -65,11 +65,11 @@ class Oanda(Broker):
 				self._subscribe_account_updates(account_id)
 
 		# Handle strategy
-		if self.userAccount and self.strategyId:
+		if self.userAccount and self.brokerId:
 			self._handle_live_strategy_setup()
 
 		# Start periodic check
-		DynamicThread(self.ctrl, self._periodic_check)
+		# DynamicThread(self.ctrl, self._periodic_check)
 
 
 	def _periodic_check(self):
@@ -588,7 +588,7 @@ class Oanda(Broker):
 		if override:
 			status = 200
 		else:
-			_, status = key_or_login_required(self.strategyId, AccessLevel.DEVELOPER, disable_abort=True)
+			_, status = key_or_login_required(self.brokerId, AccessLevel.DEVELOPER, disable_abort=True)
 		
 		if (status != 200 or account_id == tl.broker.PAPERTRADER_NAME):
 			return super().createPosition(
@@ -685,7 +685,7 @@ class Oanda(Broker):
 			)
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.DEVELOPER)
+			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		payload = {}
 
@@ -783,7 +783,7 @@ class Oanda(Broker):
 			)
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.DEVELOPER)
+			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		if lotsize >= pos.lotsize: units = 'ALL'
 		else: units = str(int(lotsize))
@@ -907,7 +907,7 @@ class Oanda(Broker):
 	def getAccountInfo(self, account_id, override=False):
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
 		if (account_id == tl.broker.PAPERTRADER_NAME):
 			return super().getAccountInfo(account_id, override=override)
@@ -952,7 +952,7 @@ class Oanda(Broker):
 		if override:
 			status = 200
 		else:
-			_, status = key_or_login_required(self.strategyId, AccessLevel.DEVELOPER, disable_abort=True)
+			_, status = key_or_login_required(self.brokerId, AccessLevel.DEVELOPER, disable_abort=True)
 		
 		if (status != 200 or account_id == tl.broker.PAPERTRADER_NAME):
 			return super().createOrder(
@@ -1097,7 +1097,7 @@ class Oanda(Broker):
 			)
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.DEVELOPER)
+			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		payload_order_type = None
 		if order.order_type == tl.LIMIT_ORDER:
@@ -1204,7 +1204,7 @@ class Oanda(Broker):
 			return super().deleteOrder(order, override=override)
 		# Check auth
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.DEVELOPER)
+			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		endpoint = f'/v3/accounts/{order.account_id}/orders/{order.order_id}/cancel'
 		res = self._session.put(

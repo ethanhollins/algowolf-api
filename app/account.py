@@ -41,58 +41,70 @@ class Account(object):
 
 	# Strategy Functions
 	def startStrategy(self, strategy_id):
+		if strategy_id in self.brokers: return
+
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 		if strategy_info is None:
 			raise AccountException('Strategy not found.')
 
 		# Handle broker info
-		broker = self._set_broker(strategy_id, strategy_info)
-		# Handle keys
-		self.keys[strategy_id] = strategy_info.get('keys')
-		# Upload any strategy info changes
-		self.updateTrades(
-			strategy_id,
-			broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
-			broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
-		)
+		brokers = self._set_brokers(strategy_id, strategy_info)
 
 		# Init strategy handler
-		strategy = self._set_strategy(strategy_id, broker, strategy_info.get('package'))
+		for broker_id in brokers:
+			broker = self.brokers.get(broker_id)
+			if broker is not None:
+				self.updateTrades(
+					strategy_id,
+					broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
+					broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
+				)
+
+				strategy = self._set_strategy(strategy_id, broker_id, broker, strategy_info.get('package'))
 
 
-	def getStrategyInfo(self, strategy_id):
+	def getStrategyInfo(self, broker_id):
 		# while self.strategies.get(strategy_id) == 'working':
 		# 	pass
 		
-		strategy = self.strategies.get(strategy_id)
+		strategy = self.strategies.get(broker_id)
 		if strategy is None:
-			self.startStrategy(strategy_id)
-			strategy = self.strategies.get(strategy_id)
+			self.startStrategy(broker_id)
+			strategy = self.strategies.get(broker_id)
 
 		return strategy
 
 
 	def getStrategy(self, strategy_id):
-		broker = self.brokers.get(strategy_id)
-		if broker is None:
+		if strategy_id not in self.brokers:
 			self.startStrategy(strategy_id)
-			broker = self.brokers.get(strategy_id)
 			
+		brokers = list(self.ctrl.getDb().getStrategy(self.userId, strategy_id)['brokers'].keys())
+		brokers += [strategy_id]
+		print(brokers)
+
+		# Generate broker information
+		broker_info = {
+			broker_id: {
+				'name': self.brokers.get(broker_id).display_name,
+				'broker': self.brokers.get(broker_id).name,
+				'accounts': {
+					acc: { 
+						'strategy_status': (
+							self.strategies.get(broker_id) is not None and 
+							self.strategies[broker_id].isRunning(acc)
+						)
+					}
+					for acc in self.brokers.get(broker_id).getAccounts()
+				},
+				'positions': self.brokers.get(broker_id).getAllPositions(),
+				'orders': self.brokers.get(broker_id).getAllOrders()
+			}
+			for broker_id in brokers
+		}
 		return {
 			'strategy_id': strategy_id,
-			'broker': broker.name,
-			'broker_id': broker.brokerId,
-			'accounts': {
-				acc: { 
-					'strategy_status': (
-						self.strategies.get(strategy_id) is not None and 
-						self.strategies[strategy_id].isRunning(acc)
-					)
-				} 
-				for acc in broker.getAccounts()
-			},
-			'positions': broker.getAllPositions(),
-			'orders': broker.getAllOrders()
+			'brokers': broker_info
 		}
 
 
@@ -132,22 +144,24 @@ class Account(object):
 		self.ctrl.getDb().updateStrategy(self.userId, strategy_id, strategy_info)
 
 
-	def runStrategyScript(self, strategy_id, accounts):
-		strategy = self.getStrategyInfo(strategy_id)
+	def runStrategyScript(self, strategy_id, broker_id, accounts):
+		strategy = self.getStrategyInfo(broker_id)
 
 		# Retrieve Input Variables
 		gui = self.getGui(strategy_id)
 		input_variables = gui.get('input_variables')
 
-		strategy.run(accounts, input_variables=input_variables)
+		Thread(target=strategy.run, args=(accounts, input_variables)).start()
 		return strategy.package
 
 
-	def stopStrategyScript(self, strategy_id, accounts):
-		strategy = self.strategies.get(strategy_id)
+	def stopStrategyScript(self, broker_id, accounts):
+		strategy = self.strategies.get(broker_id)
 		if strategy is not None:
 			strategy.stop(accounts)
-		return strategy.package
+			return strategy.package
+		else:
+			return None
 
 
 	def updateStrategyPackage(self, strategy_id, new_package):
@@ -159,11 +173,12 @@ class Account(object):
 		self.ctrl.getDb().updateStrategy(self.userId, strategy_id, strategy_info)
 
 
-	def _set_strategy(self, strategy_id, api, package):
-		strategy = Strategy(strategy_id, api, package)
-		if self.strategies.get(strategy_id) is None:
-			self.strategies[strategy_id] = strategy
-		return self.strategies[strategy_id]
+	def _set_strategy(self, strategy_id, broker_id, api, package):
+		strategy = self.strategies.get(broker_id)
+		if strategy is None:
+			strategy = Strategy(strategy_id, broker_id, api, package)
+			self.strategies[broker_id] = strategy
+		return self.strategies[broker_id]
 
 
 	def getStrategyBroker(self, strategy_id):
@@ -365,44 +380,55 @@ class Account(object):
 			raise AccountException('User does not exist.')
 
 
-	def _set_broker(self, strategy_id, strategy_info):
-		broker_id = strategy_info['broker']
-
-		broker_args = {
-			'ctrl': self.ctrl,
-			'user_account': self,
-			'strategy_id': strategy_id,
-			'broker_id': broker_id,
-			'accounts': strategy_info['accounts']
+	def _set_brokers(self, strategy_id, strategy_info):
+		brokers = {
+			**strategy_info['brokers'],
+			**{ strategy_id: [tl.broker.PAPERTRADER_NAME] }
 		}
 
-		if broker_id != tl.broker.PAPERTRADER_NAME:
-			# Update relevant broker info items
-			broker_info = self.ctrl.getDb().getBroker(self.userId, broker_id)
-			if broker_info:
-				broker_name = broker_info.pop('broker')
-				broker_args.update(broker_info)
-				return self._init_broker(broker_name, broker_args)
-			else:
-				raise BrokerException('Broker does not exist')
+		for broker_id in brokers:
+			broker_args = {
+				'ctrl': self.ctrl,
+				'user_account': self,
+				'broker_id': broker_id,
+				'accounts': brokers[broker_id]
+			}
 
-		else:
 			# Update relevant broker info items
-			broker_args['name'] = tl.broker.IG_NAME
-			return self._init_broker(tl.broker.PAPERTRADER_NAME, broker_args)
+			if broker_id == strategy_id:
+				broker_name = tl.broker.PAPERTRADER_NAME
+				broker_args.update({
+					'name': tl.broker.IG_NAME,
+					'display_name': None
+				})
+				self._init_broker(broker_name, broker_args)
+
+			else:
+				broker_info = self.ctrl.getDb().getBroker(self.userId, broker_id)
+				if broker_info:
+					broker_info['display_name'] = broker_info['name']
+					del broker_info['name']
+					broker_name = broker_info.pop('broker')
+					broker_args.update(broker_info)
+					self._init_broker(broker_name, broker_args)
+				else:
+					raise BrokerException('Broker does not exist')
+
+		return brokers.keys()
+
 
 	def _init_broker(self, broker_name, broker_args):
 		# Check if broker isn't already initialized
-		if broker_args['strategy_id'] not in self.brokers:
+		if broker_args['broker_id'] not in self.brokers:
 			# Initialize broker
 			if broker_name == tl.broker.PAPERTRADER_NAME:
-				self.brokers[broker_args['strategy_id']] = tl.broker.Broker(**broker_args)
+				self.brokers[broker_args['broker_id']] = tl.broker.Broker(**broker_args)
 			elif broker_name == tl.broker.IG_NAME:
-				self.brokers[broker_args['strategy_id']] = tl.broker.IG(**broker_args)
+				self.brokers[broker_args['broker_id']] = tl.broker.IG(**broker_args)
 			elif broker_name == tl.broker.OANDA_NAME:
-				self.brokers[broker_args['strategy_id']] = tl.broker.Oanda(**broker_args)
+				self.brokers[broker_args['broker_id']] = tl.broker.Oanda(**broker_args)
 
-		return self.brokers[broker_args['strategy_id']]
+		return self.brokers[broker_args['broker_id']]
 
 	# Drawing Functions
 	def createDrawings(self, strategy_id, layer, drawings):

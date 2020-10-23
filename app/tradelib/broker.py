@@ -44,16 +44,16 @@ Parent Broker Class
 class Broker(object):
 
 	__slots__ = (
-		'ctrl', 'userAccount', 'strategyId', 'brokerId', 'name', 'backtester', 'acceptLive', 
+		'ctrl', 'userAccount', 'brokerId', 'name', 'backtester', 'acceptLive', 
 		'accounts', 'charts', 'positions', 'orders', 'is_running', '_handled', 'transactions',
-		'ontrade_subs'
+		'ontrade_subs', 'display_name'
 	)
-	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts):
+	def __init__(self, ctrl, user_account, broker_id, name, accounts, display_name):
 		self.ctrl = ctrl
 		self.userAccount = user_account
-		self.strategyId = strategy_id
 		self.brokerId = broker_id
 		self.name = name
+		self.display_name = display_name
 
 		if self.name == OANDA_NAME:
 			self.backtester = tl.OandaBacktester(self)
@@ -77,35 +77,36 @@ class Broker(object):
 
 		# Handle mandatory strategy startup functions
 		if self.userAccount:
-			self._handle_strategy_setup()
+			self._handle_papertrader_setup()
 
 	'''
 	Utilities
 	'''
 
 	# Private Functions
-	def _handle_strategy_setup(self):
+	def _handle_papertrader_setup(self):
 
-		# Get transaction history
-		transactions = self.ctrl.getDb().getStrategyTransactions(self.userAccount.userId, self.strategyId)
-		from_ts = None
-		if transactions.size > 0:
-			from_ts = transactions[['timestamp']].values[-1][0]
-		# Handle saved strategy positions
-		earliest_trade_ts = self._retrieve_strategy_trades()
-		if from_ts is None:
-			from_ts = earliest_trade_ts
+		if tl.broker.PAPERTRADER_NAME in self.accounts:
+			# Get transaction history
+			transactions = self.ctrl.getDb().getStrategyTransactions(self.userAccount.userId, self.brokerId)
+			from_ts = None
+			if transactions.size > 0:
+				from_ts = transactions[['timestamp']].values[-1][0]
+			# Handle saved strategy positions
+			earliest_trade_ts = self._retrieve_strategy_trades()
+			if from_ts is None:
+				from_ts = earliest_trade_ts
 
-		# Do backtest from last transaction timestamp
-		if from_ts is not None:
-			self._run_backtest(from_ts)
+			# Do backtest from last transaction timestamp
+			if from_ts is not None:
+				self._run_backtest(from_ts)
 
-		self.acceptLive = True
-		Thread(target=self.saveTransactions).start()
+			self.acceptLive = True
+			Thread(target=self.saveTransactions).start()
 
 
 	def _retrieve_strategy_trades(self):
-		trades = self.ctrl.getDb().getStrategyTrades(self.userAccount.userId, self.strategyId)
+		trades = self.ctrl.getDb().getStrategyTrades(self.userAccount.userId, self.brokerId)
 		positions = trades.get('positions')
 		orders = trades.get('orders')
 		earliest_trade_ts = None
@@ -214,7 +215,7 @@ class Broker(object):
 		self.charts.append(chart)
 
 		sub_id = self.generateReference()
-		chart.subscribe(tl.period.ONE_MINUTE, self.strategyId, sub_id, self._handle_tick_checks)
+		chart.subscribe(tl.period.ONE_MINUTE, self.brokerId, sub_id, self._handle_tick_checks)
 		return chart
 
 	def getAllCharts(self):
@@ -412,7 +413,7 @@ class Broker(object):
 
 		self.ctrl.sio.emit(
 			'ontrade', 
-			{'strategy_id': self.strategyId, 'item': res}, 
+			{'broker_id': self.brokerId, 'item': res}, 
 			namespace='/admin'
 		)
 
@@ -432,10 +433,11 @@ class Broker(object):
 
 
 	def saveTransactions(self):
-		transactions = self.ctrl.getDb().getStrategyTransactions(self.userAccount.userId, self.strategyId)
-		transactions = pd.concat((transactions, self.transactions))
-		self.transactions = self._create_empty_transaction_df()
-		self.ctrl.getDb().updateStrategyTransactions(self.userAccount.userId, self.strategyId, transactions)
+		if tl.broker.PAPERTRADER_NAME in self.accounts:
+			transactions = self.ctrl.getDb().getStrategyTransactions(self.userAccount.userId, self.brokerId)
+			transactions = pd.concat((transactions, self.transactions))
+			self.transactions = self._create_empty_transaction_df()
+			self.ctrl.getDb().updateStrategyTransactions(self.userAccount.userId, self.brokerId, transactions)
 
 
 	def orderValidation(self, order, min_dist=0):
@@ -485,7 +487,7 @@ class Broker(object):
 		override=False
 	):
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 		return self.backtester.createPosition(
 			product, lotsize, direction,
 			account_id, entry_range, entry_price,
@@ -495,13 +497,13 @@ class Broker(object):
 
 	def modifyPosition(self, pos, sl_price, tp_price, override=False):
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 		return self.backtester.modifyPosition(pos, sl_price, tp_price)
 
 
 	def deletePosition(self, pos, lotsize, override=False):
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 		return self.backtester.deletePosition(pos, lotsize)
 
 
@@ -512,7 +514,7 @@ class Broker(object):
 		override=False
 	):
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 		return self.backtester.createOrder(
 			product, lotsize, direction, account_id,
 			order_type, entry_range, entry_price,
@@ -522,13 +524,13 @@ class Broker(object):
 
 	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price, override=False):
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 		return self.backtester.modifyOrder(order, lotsize, entry_price, sl_price, tp_price)
 
 
 	def deleteOrder(self, order, override=False):
 		if not override:
-			key_or_login_required(self.strategyId, AccessLevel.LIMITED)
+			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 		return self.backtester.deleteOrder(order)
 
 	'''

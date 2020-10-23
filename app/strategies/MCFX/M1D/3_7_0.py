@@ -790,7 +790,6 @@ def stopPoints(chart):
 					if profit >= level:
 						trigger = getTrigger(pos.direction)
 						trigger.is_stop_point = True
-						print(f'MODIFY: {-point}')
 						pos.modify(sl_range=-point)
 
 
@@ -1049,8 +1048,6 @@ Hook functions
 
 def init():
 	'''Initialization on script startup'''
-
-	# print(strategy.getBalance())
 
 	# Set Input Variables 
 	setInputs()

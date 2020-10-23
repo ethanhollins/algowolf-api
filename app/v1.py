@@ -274,65 +274,62 @@ def init_strategy_ept(strategy_id):
 	)
 
 
-@bp.route('/strategy/<strategy_id>/start', methods=('POST',))
-def start_script_ept(strategy_id):
+@bp.route('/strategy/<strategy_id>/start/<broker_id>', methods=('POST',))
+def start_script_ept(strategy_id, broker_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.ADMIN)
+	account = ctrl.accounts.getAccount(user_id)
+
+	# Make sure strategy is started
+	account.startStrategy(strategy_id)
+
+	# Get accounts
+	body = getJson()
+
+	accounts = body.get('accounts')
+	if accounts is not None:
+		broker = account.getStrategyBroker(broker_id)
+		for account_id in accounts:
+			# Account validation check
+			if broker is None or not account_id in broker.getAccounts():
+				res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
+				return Response(
+					json.dumps(res, indent=2), 
+					status=404,
+					content_type='application/json'
+				)
+
+		package = account.runStrategyScript(strategy_id, broker_id, accounts)
+
+		res = { 'starting': package }
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+
+	else:
+		raise AccountException('Body does not contain `accounts`.')
+
+@bp.route('/strategy/<strategy_id>/stop/<broker_id>', methods=('POST',))
+def stop_script_ept(strategy_id, broker_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.ADMIN)
 	account = ctrl.accounts.getAccount(user_id)
 	broker = account.getStrategyBroker(strategy_id)
 
 	# Get accounts
-	accounts = request.args.get('accounts')
-	if accounts:
-		accounts = re.split(', |,', accounts)
-	else:
-		accounts = broker.getAccounts()
+	body = getJson()
 
-	# Account validation check
-	if not all(x in broker.getAccounts() for x in accounts):
-		res = { 'error': 'NotFound', 'message': 'Account(s) not found.' }
+	accounts = body.get('accounts')
+	if accounts is not None:
+		package = account.stopStrategyScript(broker_id, accounts)
+
+		res = account.getStrategy(strategy_id)
 		return Response(
-			json.dumps(res, indent=2), 
-			status=404,
-			content_type='application/json'
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
 		)
 
-	package = account.runStrategyScript(strategy_id, accounts)
-
-	res = account.getStrategy(strategy_id)
-	return Response(
-		json.dumps(res, indent=2),
-		status=200, content_type='application/json'
-	)
-
-@bp.route('/strategy/<strategy_id>/stop', methods=('POST',))
-def stop_script_ept(strategy_id):
-	user_id, _ = key_or_login_required(strategy_id, AccessLevel.ADMIN)
-	account = ctrl.accounts.getAccount(user_id)
-	broker = account.getStrategyBroker(strategy_id)
-
-	# Get accounts
-	accounts = request.args.get('accounts')
-	if accounts:
-		accounts = re.split(', |,', accounts)
 	else:
-		accounts = broker.getAccounts()
-
-	# Account validation check
-	if not all(x in broker.getAccounts() for x in accounts):
-		res = { 'error': 'NotFound', 'message': 'Account(s) not found.' }
-		return Response(
-			json.dumps(res, indent=2), 
-			status=404,
-			content_type='application/json'
-		)
-
-	package = account.stopStrategyScript(strategy_id, accounts)
-
-	res = account.getStrategy(strategy_id)
-	return Response(
-		json.dumps(res, indent=2),
-		status=200, content_type='application/json'
-	)
+		raise AccountException('Body does not contain `accounts`.')
 
 
 @bp.route('/strategy/<strategy_id>/compile', methods=('POST',))

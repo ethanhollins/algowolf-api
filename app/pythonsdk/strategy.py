@@ -13,12 +13,13 @@ MAX_GUI = 200
 
 class Strategy(object):
 
-	def __init__(self, api, module, strategy_id=None, account_id=None, user_variables={}, data_path='data/'):
+	def __init__(self, api, module, strategy_id=None, broker_id=None, account_id=None, user_variables={}, data_path='data/'):
 		# Retrieve broker type
 		self.api = api
 		self.module = module
 		self.strategyId = strategy_id
-		self.broker = Broker(self, self.api, strategy_id=self.strategyId, data_path=data_path)
+		self.brokerId = broker_id
+		self.broker = Broker(self, self.api, broker_id=self.brokerId, data_path=data_path)
 		self.account_id = account_id
 
 		# GUI Queues
@@ -35,16 +36,22 @@ class Strategy(object):
 
 		# self.sio = self._connect_user_input()
 
-	def run(self, auth_key=None, strategy_id=None, account_id=None):
+	def run(self, auth_key=None, strategy_id=None, broker_id=None, account_id=None):
 		if self.strategyId is None:
 			self.strategyId = strategy_id
+		if self.brokerId is None:
+			self.brokerId = broker_id
 		if self.account_id is None:
 			self.account_id = account_id
 
-		self.broker.run(self.strategyId)
+		self.broker.run(self.brokerId)
 
 	def stop(self):
 		self.broker.stop()
+
+
+	def getAccountCode(self):
+		return self.brokerId + '.' + self.account_id
 
 
 	def _connect_user_input(self):
@@ -212,7 +219,7 @@ class Strategy(object):
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_DRAWING,
-				'account_id': self.account_id,
+				'account_id': self.getAccountCode(),
 				'item': drawing
 			}
 
@@ -239,7 +246,7 @@ class Strategy(object):
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
 				'type': tl.CLEAR_DRAWING_LAYER,
-				'account_id': self.account_id,
+				'account_id': self.getAccountCode(),
 				'item': layer
 			}
 
@@ -266,7 +273,7 @@ class Strategy(object):
 				'id': self.broker.generateReference(),
 				'timestamp': timestamp,
 				'type': tl.CLEAR_ALL_DRAWINGS,
-				'account_id': self.account_id,
+				'account_id': self.getAccountCode(),
 				'item': None
 			}
 
@@ -297,7 +304,7 @@ class Strategy(object):
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_LOG,
-				'account_id': self.account_id,
+				'account_id': self.getAccountCode(),
 				'item': msg
 			}
 
@@ -335,7 +342,7 @@ class Strategy(object):
 			item = {
 				'timestamp': timestamp,
 				'type': tl.CREATE_INFO,
-				'account_id': self.account_id,
+				'account_id': self.getAccountCode(),
 				'item': item
 			}
 
@@ -368,28 +375,28 @@ class Strategy(object):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
 
-		if 'drawings' not in gui:
+		if 'drawings' not in gui or not isinstance(gui['drawings'], dict):
 			gui['drawings'] = {}
 
-		if self.account_id not in gui['drawings']:
-			gui['drawings'][self.account_id] = {}
+		if self.getAccountCode() not in gui['drawings']:
+			gui['drawings'][self.getAccountCode()] = {}
 
 		for i in self.drawing_queue:
 			if i['type'] == tl.CREATE_DRAWING:
-				if i['item']['layer'] not in gui['drawings'][self.account_id]:
-					gui['drawings'][self.account_id][i['item']['layer']] = []
-				gui['drawings'][self.account_id][i['item']['layer']].append(i['item'])
+				if i['item']['layer'] not in gui['drawings'][self.getAccountCode()]:
+					gui['drawings'][self.getAccountCode()][i['item']['layer']] = []
+				gui['drawings'][self.getAccountCode()][i['item']['layer']].append(i['item'])
 
 			elif i['type'] == tl.CLEAR_DRAWING_LAYER:
-				if i['item'] in gui['drawings'][self.account_id]:
-					gui['drawings'][self.account_id][i['item']] = []
+				if i['item'] in gui['drawings'][self.getAccountCode()]:
+					gui['drawings'][self.getAccountCode()][i['item']] = []
 
 			elif i['type'] == tl.CLEAR_ALL_DRAWINGS:
-				for layer in gui['drawings'][self.account_id]:
-					gui['drawings'][self.account_id][layer] = []
+				for layer in gui['drawings'][self.getAccountCode()]:
+					gui['drawings'][self.getAccountCode()][layer] = []
 
-		for layer in gui['drawings'][self.account_id]:
-			gui['drawings'][self.account_id][layer] = gui['drawings'][self.account_id][layer][-MAX_GUI:]
+		for layer in gui['drawings'][self.getAccountCode()]:
+			gui['drawings'][self.getAccountCode()][layer] = gui['drawings'][self.getAccountCode()][layer][-MAX_GUI:]
 
 		return gui
 
@@ -397,14 +404,14 @@ class Strategy(object):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
 
-		if 'logs' not in gui:
+		if 'logs' not in gui or not isinstance(gui['logs'], dict):
 			gui['logs'] = {}
 
-		if self.account_id not in gui['logs']:
-			gui['logs'][self.account_id] = []
+		if self.getAccountCode() not in gui['logs']:
+			gui['logs'][self.getAccountCode()] = []
 
-		gui['logs'][self.account_id] += self.log_queue
-		gui['logs'][self.account_id] = gui['logs'][self.account_id][-MAX_GUI:]
+		gui['logs'][self.getAccountCode()] += self.log_queue
+		gui['logs'][self.getAccountCode()] = gui['logs'][self.getAccountCode()][-MAX_GUI:]
 
 		return gui
 
@@ -412,20 +419,20 @@ class Strategy(object):
 		if gui is None:
 			gui = self.api.userAccount.getGui(self.strategyId)
 
-		if 'info' not in gui:
+		if 'info' not in gui or not isinstance(gui['info'], dict):
 			gui['info'] = {}
 
-		if self.account_id not in gui['info']:
-			gui['info'][self.account_id] = {}
+		if self.getAccountCode() not in gui['info']:
+			gui['info'][self.getAccountCode()] = {}
 
 		for i in self.info_queue:
-			if i['timestamp'] not in gui['info'][self.account_id]:
-				gui['info'][self.account_id][i['timestamp']] = []
+			if i['timestamp'] not in gui['info'][self.getAccountCode()]:
+				gui['info'][self.getAccountCode()][i['timestamp']] = []
 
-			gui['info'][self.account_id][i['timestamp']].append(i['item'])
+			gui['info'][self.getAccountCode()][i['timestamp']].append(i['item'])
 		
-		gui['info'][self.account_id] = dict(sorted(
-			gui['logs'][self.account_id].items(), key=lambda x: x[0]
+		gui['info'][self.getAccountCode()] = dict(sorted(
+			gui['logs'][self.getAccountCode()].items(), key=lambda x: x[0]
 		)[-MAX_GUI:])
 		
 		return gui

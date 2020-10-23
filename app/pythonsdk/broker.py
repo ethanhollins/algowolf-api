@@ -66,10 +66,11 @@ class Broker(object):
 	# 	'name', 'controller', 'charts', 'positions', 'closed_positions', 'orders', 
 	# 	'on_tick', 'on_new_bar', 'on_trade', 'on_stop_loss', 'on_take_profit'
 	# )
-	def __init__(self, strategy, api, strategy_id=None, data_path='data/'):
+	def __init__(self, strategy, api, strategy_id=None, broker_id=None, data_path='data/'):
 		self.strategy = strategy
 		self.api = api
 		self.strategyId = strategy_id
+		self.brokerId = broker_id
 
 		self.name = None
 		self.brokerId = None
@@ -98,14 +99,14 @@ class Broker(object):
 	'''
 
 	# TODO: DO TOKENS INSTEAD and VALIDATION
-	def run(self, strategy_id=None):
-		if self.strategyId is None:
-			self.strategyId = strategy_id
+	def run(self, broker_id=None):
+		if self.brokerId is None:
+			self.brokerId = broker_id
 
 		self.setName(self.api.name)
 		self.brokerId = self.api.brokerId
 		self.accounts = self.api.getAccounts()
-		
+
 		# Subscribe all charts
 		self._chart_subs = {}
 		self._subscribe_charts(self.charts)
@@ -140,7 +141,7 @@ class Broker(object):
 			for period in self._chart_subs[product]:
 				if period in self._chart_subs[api_chart.product]:
 					for sub_id in self._chart_subs[api_chart.product][period]:
-						api_chart.unsubscribe(period, self.strategyId, sub_id)
+						api_chart.unsubscribe(period, self.brokerId, sub_id)
 
 		for sub_id in self._on_trade_subs:
 			self.api.unsubscribeOnTrade(sub_id)
@@ -206,10 +207,6 @@ class Broker(object):
 		}
 
 
-	def _upload_backtest_positions(self):
-		self.api.uploadTrades(self.positions, self.orders)
-
-
 	def backtest(self, start, end, mode=BacktestMode.RUN, upload=False, download=True, quick_download=False):
 		self.state = State.BACKTEST
 
@@ -231,15 +228,14 @@ class Broker(object):
 
 
 		if self.isUploadBacktest:
-			# Update Papertrader Positions
-			self._upload_backtest_positions()
 
 			# Update GUI Drawings
-			for layer in self.backtester.drawings:
-				threading.Thread(
-					target=self.api.userAccount.createDrawings,
-					args=(self.strategyId, layer, self.backtester.drawings[layer])
-				).start()
+			# for layer in self.backtester.drawings:
+			# 	threading.Thread(
+			# 		target=self.api.userAccount.createDrawings,
+			# 		args=(self.strategyId, layer, self.backtester.drawings[layer])
+			# 	).start()
+			pass
 
 		# Clear backtest trades
 		if self.isClearBacktestPositions:
@@ -317,7 +313,7 @@ class Broker(object):
 				ref_id = self.generateReference()
 				self._chart_subs[chart.product][period].append(ref_id)
 				api_chart.subscribe(
-					period, self.strategyId, 
+					period, self.brokerId, 
 					ref_id, self._stream_ontick
 				)
 
@@ -794,7 +790,7 @@ class Broker(object):
 		self.sio.emit(
 			'subscribe',
 			{
-				'strategy_id': self.strategyId,
+				'broker_id': self.brokerId,
 				'field': 'ontrade'
 			},
 			namespace='/user'
