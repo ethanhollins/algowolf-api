@@ -288,11 +288,17 @@ def tRevThreeConf(chart, trigger):
 	close = chart.bids.ONE_MINUTE[0, 3]
 	donch_val = getDonchValue(chart, trigger.direction)
 	hl = getHL(chart, trigger.direction)
+
+	if trigger.direction == LONG:
+		hl_cross = trigger.t_rev_hl + utils.convertToPrice(B_SEVEN)
+	else:
+		hl_cross = trigger.t_rev_hl - utils.convertToPrice(B_SEVEN)
+
 	return (
 		isCrossed(close, trigger.reverse_line, trigger.direction) and
 		isMinDist(close, trigger.reverse_line, B_SIX) and
 		isBB(chart, trigger.direction) and not isDoji(chart, B_FIVE) and
-		isCrossed(hl, trigger.t_rev_hl, trigger.direction)
+		isCrossed(hl, hl_cross, trigger.direction)
 	)
 
 
@@ -421,14 +427,21 @@ def exitThreeConf(chart):
 	)
 
 
-def exitOverrideOneConf(chart):
+def lossOneConf(chart):
 	profit = getSessionPotentialProfit(chart)
 	return (
 		profit / STOP_RANGE <= -D_THREE
 	)
 
 
-def exitOverrideTwoConf(chart):
+def lossTwoConf(chart):
+	profit = getSessionPotentialProfit(chart)
+	return (
+		profit <= -D_SEVENTEEN
+	)
+
+
+def exitOverrideConf(chart):
 	profit = getSessionPotentialProfit(chart)
 	return (
 		profit >= D_FOUR or
@@ -749,13 +762,23 @@ def stopLineSetup(chart, trigger):
 			return stopLineSetup(chart, trigger)
 
 
+def lossSetup(chart):
+	global loss_state
+
+	if loss_state == LossState.NONE:
+		if lossOneConf(chart):
+			loss_state = LossState.ONE
+			return lossSetup(chart)
+	elif loss_state == LossState.ONE:
+		if lossTwoConf(chart):
+			loss_state = LossState.TWO
+
+
 def exitSetup(chart):
 	global exit_state, time_state, is_exit_override
 	direction = getCurrentPositionDirection()
 
-	if exitOverrideOneConf(chart):
-		is_exit_override = True
-	if is_exit_override and exitOverrideTwoConf(chart):
+	if loss_state.value >= LossState.ONE.value and exitOverrideConf(chart):
 		exit_state = ExitState.ACTIVE
 
 	if exit_state == ExitState.ACTIVE:
@@ -786,15 +809,16 @@ def stopPoints(chart):
 						sl_range = utils.convertToPips(pos.sl - pos.entry_price)
 					profit = utils.convertToPips(pos.entry_price - chart.bids.ONE_MINUTE[0, 2])
 
-				if sl_range is None or sl_range > -point:
-					if profit >= level:
-						trigger = getTrigger(pos.direction)
-						trigger.is_stop_point = True
-						pos.modify(sl_range=-point)
+				if level != D_FIFTEEN or loss_state == LossState.TWO:
+					if sl_range is None or sl_range > -point:
+						if profit >= level:
+							trigger = getTrigger(pos.direction)
+							trigger.is_stop_point = True
+							pos.modify(sl_range=-point)
 
 
 def onTime(timestamp, chart):
-	global time_state, exit_state, session, bank, no_more_entries, is_exit_override
+	global time_state, exit_state, session, bank, no_more_entries, loss_state
 	# Get session times
 	now = utils.convertTimezone(utils.convertTimestampToTime(timestamp), TZ)
 	start_time, end_time = getSessionTimes(now)
@@ -811,7 +835,7 @@ def onTime(timestamp, chart):
 			session = []
 			exit_state = ExitState.NONE
 			no_more_entries = False
-			is_exit_override = False
+			loss_state = LossState.NONE
 			long_trigger.resetReverseLine()
 			long_trigger.resetBaseline()
 			long_trigger.baseline_state = BaselineState.COMPLETE_A
@@ -886,6 +910,9 @@ def onEventLoop(timestamp, chart):
 	stopLineSetup(chart, long_trigger)
 	stopLineSetup(chart, short_trigger)
 
+	# Loss Setup
+	lossSetup(chart)
+
 	# Exit Setup
 	exitSetup(chart)
 
@@ -937,7 +964,7 @@ def setInputs():
 	A_THREE = strategy.setInputVariable('a) 3.', float, default=1.0)
 	A_FOUR = strategy.setInputVariable('a) 4.', int, default=1)
 
-	global B_ONE, B_TWO, B_THREE, B_FOUR, B_FIVE, B_SIX
+	global B_ONE, B_TWO, B_THREE, B_FOUR, B_FIVE, B_SIX, B_SEVEN
 	strategy.setInputVariable('T Reverse', HEADER)
 	B_ONE = strategy.setInputVariable('b) 1.', float, default=0.1)
 	B_TWO = strategy.setInputVariable('b) 2.', float, default=0.2)
@@ -945,13 +972,14 @@ def setInputs():
 	B_FOUR = strategy.setInputVariable('b) 4.', int, default=1)
 	B_FIVE = strategy.setInputVariable('b) 5.', float, default=0.2)
 	B_SIX = strategy.setInputVariable('b) 6.', float, default=0.2)
+	B_SEVEN = strategy.setInputVariable('b) 7.', float, default=0.1)
 
 	global C_ONE, C_TWO
 	strategy.setInputVariable('Golden X', HEADER)
 	C_ONE = strategy.setInputVariable('c) 1.', float, default=0.2)
 	C_TWO = strategy.setInputVariable('c) 2.', float, default=2.0)
 
-	global D_ONE, D_TWO, D_THREE, D_FOUR, D_FIVE, D_FOURTEEN
+	global D_ONE, D_TWO, D_THREE, D_FOUR, D_FIVE, D_FOURTEEN, D_FIFTEEN, D_SEVENTEEN
 	strategy.setInputVariable('Exit', HEADER)
 	D_ONE = strategy.setInputVariable('d) 1.', float, default=0.2)
 	D_TWO = strategy.setInputVariable('d) 2.', float, default=0.2)
@@ -966,11 +994,21 @@ def setInputs():
 	D_ELEVEN = strategy.setInputVariable('d) 11.', float, default=36.0)
 	D_TWELVE = strategy.setInputVariable('d) 12.', float, default=72.0)
 	D_THIRTEEN = strategy.setInputVariable('d) 13.', float, default=48.0)
-	D_FOURTEEN = strategy.setInputVariable('d) 14.', float, default=1.0)
+	D_FOURTEEN = strategy.setInputVariable('d) 14.', PERCENTAGE, default=1.0)
+	D_FIFTEEN = strategy.setInputVariable('d) 15.', float, default=30.0)
+	D_SIXTEEN = strategy.setInputVariable('d) 16.', float, default=12.0)
+	D_SEVENTEEN = strategy.setInputVariable('d) 17.', float, default=12.0)
 
 	global STOP_POINTS, STOP_LEVELS
-	STOP_POINTS = [D_SEVEN, D_NINE, D_ELEVEN, D_THIRTEEN]
-	STOP_LEVELS = [D_SIX, D_EIGHT, D_TEN, D_TWELVE]
+	STOP_LEVELS = [D_SIX, D_FIFTEEN, D_EIGHT, D_TEN, D_TWELVE]
+	STOP_POINTS = [D_SEVEN, D_SIXTEEN, D_NINE, D_ELEVEN, D_THIRTEEN]
+
+	# Sort lists
+	STOP_POINTS = [
+		x for _, x in
+		sorted(zip(STOP_LEVELS, STOP_POINTS))
+	]
+	STOP_LEVELS = sorted(STOP_LEVELS)
 
 	global E_ONE, E_TWO, E_THREE, E_FOUR
 	strategy.setInputVariable('Time Exits', HEADER)
@@ -994,8 +1032,8 @@ def setGlobals():
 	time_state = TimeState.WAIT
 	exit_state = ExitState.NONE
 
-	global is_exit_override
-	is_exit_override = False
+	global loss_state
+	loss_state = LossState.NONE
 
 	global bank
 	bank = 0
@@ -1102,7 +1140,7 @@ def onTrade(trade):
 		if time_state == TimeState.TRADING:
 			time_state = TimeState.NO_NEW_ENTRIES
 			# Draw session line
-			drawSessionEndLine(chart)
+			drawSessionEndLine(strategy.getChart(product.GBPUSD))
 
 
 
@@ -1270,6 +1308,12 @@ class ExitState(Enum):
 	NONE = 1
 	ACTIVE = 2
 	COMPLETE = 3
+
+
+class LossState(Enum):
+	NONE = 1
+	ONE = 2
+	TWO = 3
 
 
 class TimeState(Enum):
