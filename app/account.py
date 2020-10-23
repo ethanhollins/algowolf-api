@@ -334,12 +334,12 @@ class Account(object):
 
 	def getBacktestInfo(self, strategy_id, backtest_id):
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
-		broker_info = self.ctrl.getDb().getBroker(self.userId, strategy_info.get('broker'))
+		# broker_info = self.ctrl.getDb().getBroker(self.userId, strategy_info['brokers'][strategy_id].get('broker'))
 		gui = self.getBacktestGui(strategy_id, backtest_id)
 		return {
 			**{ 
-				'broker_id': strategy_info.get('broker'),
-				'broker': broker_info.get('broker')
+				# 'broker_id': strategy_info.get('broker'),
+				'broker': tl.broker.IG_NAME
 			},
 			**gui
 		}

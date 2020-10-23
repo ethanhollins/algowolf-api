@@ -19,7 +19,7 @@ class Strategy(object):
 		self.module = module
 		self.strategyId = strategy_id
 		self.brokerId = broker_id
-		self.broker = Broker(self, self.api, broker_id=self.brokerId, data_path=data_path)
+		self.broker = Broker(self, self.api, strategy_id=self.strategyId, broker_id=self.brokerId, data_path=data_path)
 		self.account_id = account_id
 
 		# GUI Queues
