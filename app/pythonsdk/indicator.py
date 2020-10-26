@@ -52,11 +52,19 @@ class Indicator(object):
 		# Calculate bid prices
 		for i in range(idx, timestamps.shape[0]):
 			new_bid = [self._perform_calculation('bid', bids, i)]
+
+			# if self.name == 'ema' and idx > 1000:
+			# 	print(f'NEW: {idx}, {timestamps.shape[0]}, {bids[-1]}, {new_bid}')
+
 			if isinstance(self._bids, type(None)):
 				self._bids = np.array(new_bid, dtype=np.float64)
 			elif i < self._bids.shape[0]:
+				# if self.name == 'ema' and idx > 1000:
+				# 	print(1)
 				self._bids[i] = new_bid[0]
 			else:
+				# if self.name == 'ema' and idx > 1000:
+				# 	print(2)
 				self._bids = np.concatenate((self._bids, new_bid))
 
 		self.idx = self._asks.shape[0]-1

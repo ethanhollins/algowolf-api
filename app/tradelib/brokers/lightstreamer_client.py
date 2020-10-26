@@ -261,6 +261,9 @@ class LightstreamerClient(object):
 				print(traceback.format_exc())
 				message = None
 
+			# Run Pre-emptive Token Check
+			self.broker._token_check()
+
 			if message is None:
 				receive = False
 			elif message == PROBE_CMD:

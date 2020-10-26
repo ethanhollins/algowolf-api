@@ -123,6 +123,15 @@ def isTagged(x, y, direction, reverse=False):
 Utilities
 '''
 
+def getIndName(period, chart, ind_name):
+	if period == CHART_A:
+		return ind_name + '_a'
+	elif period == CHART_B:
+		return ind_name + '_b'
+	elif period == CHART_C:
+		return ind_name + '_c'
+
+
 def getBollValue(boll, direction, offset=0, reverse=False):
 	if reverse:
 		if direction == LONG:
@@ -134,6 +143,14 @@ def getBollValue(boll, direction, offset=0, reverse=False):
 			return boll.bids[offset, 0]
 		else:
 			return boll.bids[offset, 1]
+
+
+def getMaValue(ma, offset=0):
+	return ma.bids[offset, 0]
+
+
+def getAtrValue(atr, offset=0):
+	return atr.bids[offset, 0]
 
 
 def getMaeValue(mae, direction, offset=0, reverse=False):
@@ -160,6 +177,19 @@ def getHL(chart, direction, offset=0, reverse=False):
 			return chart[offset, 1]
 		else:
 			return chart[offset, 2]
+
+
+def addOffset(x, y, direction, reverse=False):
+	if reverse:
+		if direction == LONG:
+			return y - x
+		else:
+			return y + x
+	else:
+		if direction == LONG:
+			return y + x
+		else:
+			return y - x
 
 
 '''
@@ -230,18 +260,111 @@ def isRtcBarCancelConf(trigger):
 # Confirming Evidence Confirmations
 def isBollingerTouchOneConf(period, chart, trigger):
 	# Select Correct Chart Period
-	if period == CHART_B:
-		ohlc = chart.bids[CHART_B]
-		boll = chart.indicators.boll_b
-	else:
-		ohlc = chart.bids[CHART_C]
-		boll = chart.indicators.boll_c
+	ohlc = chart.bids[period]
+	boll = chart.indicators[getIndName(period, chart, 'boll')]
 
-	boll_val = getBollValue(boll, direction, reverse=True)
-	hl = getHL(ohlc, direction, reverse=True)
+	boll_val = getBollValue(boll, trigger.direction, reverse=True)
+	hl = getHL(ohlc, trigger.direction, reverse=True)
 
 	return (
-		isTagged(hl, boll_val, direction, reverse=True)
+		isTagged(hl, boll_val, trigger.direction, reverse=True)
+	)
+
+
+def isTrendingWithPullbackOneConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	ema_fast = chart.indicators[getIndName(period, chart, 'ema_fast')]
+
+	ema_fast_val = getMaValue(ema_fast)
+	hl = getHL(ohlc, trigger.direction, reverse=True)
+
+	return (
+		isTagged(hl, ema_fast_val, trigger.direction, reverse=True)
+	)
+
+
+def isTrendingWithPullbackIntraConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	boll = chart.indicators[getIndName(period, chart, 'boll')]
+	ema_fast = chart.indicators[getIndName(period, chart, 'ema_fast')]
+
+	boll_val = getBollValue(boll, trigger.direction, reverse=True)
+	ema_fast_val = getMaValue(ema_fast)
+	hl = getHL(ohlc, trigger.direction, reverse=True)
+	off = utils.convertToPrice(1.0)
+
+	return (
+		isTagged(hl, addOffset(off, ema_fast_val), trigger.direction, reverse=True) and
+		not isTagged(hl, boll_val, trigger.direction, reverse=True)
+	)
+
+
+def isBollingWalkOneConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	boll = chart.indicators[getIndName(period, chart, 'boll')]
+
+	boll_val = getBollValue(boll, trigger.direction)
+
+	return (
+		isCrossed(ohlc[0, 3], boll_val, trigger.direction)
+	)
+
+
+def isDvTrendingOneConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	atr = chart.indicators[getIndName(period, chart, 'atr')]
+
+	curr_atr_val = getAtrValue(atr)
+	prev_atr_val = getAtrValue(atr, offset=1)
+
+	return (
+		prev_atr_val < curr_atr_val and
+		trigger.close is None or isCrossed(ohlc[0, 3], trigger.close, trigger.direction)
+	)
+
+
+def isDvPivotOneConf(period, chart, trigger):
+	atr = chart.indicators[getIndName(period, chart, 'atr')]
+
+	curr_atr_val = getAtrValue(atr)
+	prev_atr_val = getAtrValue(atr, offset=1)
+
+	return (
+		prev_atr_val > curr_atr_val
+	)
+
+
+def isDvPivotTwoConf(period, chart, trigger):
+	atr = chart.indicators[getIndName(period, chart, 'atr')]
+
+	curr_atr_val = getAtrValue(atr)
+	prev_atr_val = getAtrValue(atr, offset=1)
+
+	return (
+		prev_atr_val < curr_atr_val
+	)
+
+
+def isDvNewHighCancelConf(period, chart, trigger):
+	atr = chart.indicators[getIndName(period, chart, 'atr')]
+	atr_val = getAtrValue(atr)
+
+	return (
+		atr_val > trigger.high
+	)
+
+
+def isDvPivotCancelConf(period, chart, trigger):
+	atr = chart.indicators[getIndName(period, chart, 'atr')]
+	atr_val = getAtrValue(atr)
+
+	return (
+		trigger.pivot is not None and
+		atr_val > trigger.pivot
 	)
 
 
@@ -263,6 +386,117 @@ def isConfirmingEvidence(direction):
 def isBollingerTouchBarCancelConf(trigger):
 	return (
 		trigger.bars_passed > 2
+	)
+
+
+def isTrendingWithPullbackCancelConf(trigger):
+	return (
+		trigger.bars_passed > 2
+	)
+
+
+def isBollingerWalkCancelConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	boll = chart.indicators[getIndName(period, chart, 'boll')]
+
+	boll_val = getBollValue(boll, trigger.direction)
+	hl = getHL(ohlc, trigger.direction)
+
+	return (
+		isTagged(hl, boll_val, trigger.direction, reverse=True)
+	)
+
+
+# Trend Confirmations
+def trendOneConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	boll = chart.indicators[getIndName(period, chart, 'boll')]
+
+	boll_val = getBollValue(boll, trigger.direction)
+	hl = getHL(ohlc, trigger.direction)
+
+	return (
+		isTagged(hl, boll_val, trigger.direction)
+	)
+
+
+def trendTwoConf(period, chart, trigger):
+	ohlc = chart.bids[period]
+	hl = getHL(ohlc, trigger.direction)
+	close = ohlc[0, 3]
+
+	return (
+		isCrossed(hl, trigger.hl, trigger.direction) and
+		isCrossed(close, trigger.close, trigger.direction)
+	)
+
+
+# Trend Cancellations
+
+# Bollinger Cancel Confirmation
+def trendBollingerCancelConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	boll = chart.indicators[getIndName(period, chart, 'boll')]
+
+	boll_val = getBollValue(boll, trigger.direction, reverse=True)
+	hl = getHL(ohlc, trigger.direction, reverse=True)
+
+	return (
+		isTagged(hl, boll_val, trigger.direction, reverse=True)
+	)
+
+# Bars Passed Cancel Confirmation
+def trendBarsPassedCancelConf(period, chart, trigger):
+	return (
+		trigger.bars_passed > 20
+	)
+
+# Swing Cancel Confirmations
+def trendSwingOneCancelConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	ema_slow = chart.indicators[getIndName(period, chart, 'ema_slow')]
+	ema_fast = chart.indicators[getIndName(period, chart, 'ema_fast')]
+
+	ema_slow_val = getMaValue(ema_slow)
+	ema_fast_val = getMaValue(ema_fast)
+
+	return (
+		isCrossed(ohlc[0, 3], ema_slow_val, trigger.direction, reverse=True) and
+		isCrossed(ohlc[0, 3], ema_fast_val, trigger.direction, reverse=True)
+	)
+
+
+def trendSwingTwoCancelConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	ema_slow = chart.indicators[getIndName(period, chart, 'ema_slow')]
+	ema_fast = chart.indicators[getIndName(period, chart, 'ema_fast')]
+
+	ema_slow_val = getMaValue(ema_slow)
+	ema_fast_val = getMaValue(ema_fast)
+
+	return (
+		isCrossed(ohlc[0, 3], ema_slow_val, trigger.direction) and
+		isCrossed(ohlc[0, 3], ema_fast_val, trigger.direction)
+	)
+
+
+def trendSwingThreeCancelConf(period, chart, trigger):
+	# Select Correct Chart Period
+	ohlc = chart.bids[period]
+	ema_slow = chart.indicators[getIndName(period, chart, 'ema_slow')]
+	ema_fast = chart.indicators[getIndName(period, chart, 'ema_fast')]
+
+	ema_slow_val = getMaValue(ema_slow)
+	ema_fast_val = getMaValue(ema_fast)
+
+	return (
+		isCrossed(ohlc[0, 3], ema_slow_val, trigger.direction, reverse=True) and
+		isCrossed(ohlc[0, 3], ema_fast_val, trigger.direction, reverse=True)
 	)
 
 
@@ -325,6 +559,52 @@ def onRetestCancelSetup(chart, trigger):
 		trigger.reset()
 
 
+# Trend
+def trendBarEndCancelSetup(period, chart, trigger):
+
+	if trigger.state == TrendState.ACTIVE:
+		# Bollinger Cancel
+		if trendBollingerCancelConf(period, chart, trigger):
+			trigger.turnOff()
+
+		# Bars Passed Cancel
+		elif trendBarsPassedCancelConf(period, chart, trigger):
+			trigger.turnOff()
+
+		# Swing Cancel 
+		elif trigger.swing_cancel_state == TrendSwingCancelState.ONE:
+			if trendSwingOneCancelConf(period, chart, trigger):
+				trigger.swing_cancel_state = TrendSwingCancelState.TWO
+
+		elif trigger.swing_cancel_state == TrendSwingCancelState.TWO:
+			if trendSwingTwoCancelConf(period, chart, trigger):
+				trigger.swing_cancel_state = TrendSwingCancelState.THREE
+
+		elif trigger.swing_cancel_state == TrendSwingCancelState.THREE:
+			if trendSwingThreeCancelConf(period, chart, trigger):
+				trigger.swing_cancel_state = TrendSwingCancelState.ONE
+				trigger.turnOff()
+
+
+def trendBarEndSetup(period, chart, trigger):
+	ohlc = chart.bids[period]
+
+	if trigger.state == TrendState.ONE:
+		if trendOneConf(period, chart, trigger):
+			trigger.state = TrendState.TWO
+			trigger.setHL(getHL(ohlc, trigger.direction))
+			trigger.setClose(ohlc[0,3])
+
+	elif trigger.state == TrendState.TWO:
+		if trendTwoConf(period, chart, trigger):
+			trigger.state = TrendState.ACTIVE
+
+		else:
+			trigger.state = TrendState.TWO
+			trigger.setHL(getHL(ohlc, trigger.direction))
+			trigger.setClose(ohlc[0,3])
+
+
 # Confiming Evidence
 def bollingerTouchBarEndSetup(chart, trigger):
 	
@@ -336,21 +616,94 @@ def bollingerTouchBarEndSetup(chart, trigger):
 
 def bollingerTouchTickSetup(period, chart, trigger):
 
-	if isBollingerTouchOneConf(period, chart, trigger):
-		trigger.setActive()
+	if trigger.state == BollingerTouchState.ONE:
+		if isBollingerTouchOneConf(period, chart, trigger):
+			trigger.setActive()
 
 
-def trendingWithPullbackSetup(chart, trigger):
-	return
+def trendingWithPullbackTickSetup(period, chart, trigger, trend_trigger):
+
+	if trend_trigger.state == TrendState.ACTIVE:
+		if isTrendingWithPullbackIntraConf(period, chart, trigger):
+			trigger.intra_state = TrendingWithPullbackState.ACTIVE
+
+		else:
+			trigger.intra_state = TrendingWithPullbackState.ONE
 
 
-def bollingerWalkSetup(chart, trigger):
-	return
+def trendingWithPullbackBarEndSetup(period, chart, trigger, trend_trigger):
+	
+	if trend_trigger.state == TrendState.ACTIVE:
+		if trigger.state == TrendingWithPullbackState.ONE:
+			if isTrendingWithPullbackOneConf(period, chart, trigger):
+				trigger.state = TrendingWithPullbackState.ACTIVE
+
+		elif trigger.state == TrendingWithPullbackState.ACTIVE:
+			if isTrendingWithPullbackOneConf(period, chart, trigger):
+				trigger.state = TrendingWithPullbackState.ONE
 
 
-def dvTrendingSetup(chart, trigger):
-	return
+def bollingerWalkCancelSetup(period, chart, trigger):
 
+	if trigger.state == BollingerWalkState.ACTIVE:
+		if isBollingerWalkCancelConf(period, chart, trigger):
+			trigger.state = BollingWalkState.ONE
+
+
+def bollingerWalkSetup(period, chart, trigger):
+	
+	if trigger.state == BollingerWalkState.ONE:
+		if isBollingerWalkOneConf(period, chart, trigger):
+			trigger.state = BollingWalkState.ACTIVE
+
+
+def dvTrendingSetup(period, chart, trigger, trend_trigger):
+	
+	ohlc = chart[period]
+	atr = chart.indicators[getIndName(period, chart, 'atr')]
+	# DV Handling
+	if trigger.state == DVState.ACTIVE:
+		
+		# Pivot Setup
+		if trigger.pivot_state == DVPivotState.ONE:
+			if isDvPivotOneConf(period, chart, trigger):
+				trigger.pivot_count += 1
+				if trigger.pivot_count == 2:
+					trigger.new_pivot = getAtrValue(atr)
+					trigger.pivot_state = DVPivotState.TWO
+					trigger.pivot_count = 0
+			else:
+				trigger.pivot_count = 0
+
+		elif trigger.pivot_state == DVPivotState.TWO:
+			if isDvPivotTwoConf(period, chart, trigger):
+				trigger.pivot_count += 1
+				if trigger.pivot_count == 2:
+					trigger.pivot = trigger.new_pivot
+					trigger.pivot_state = DVPivotState.ONE
+			else:
+				trigger.pivot_state = DVPivotState.ONE
+				trigger.pivot_count = 0
+
+		# New High Cancel
+		if isDvNewHighCancelConf(period, chart, trigger):
+			trigger.state = DVState.ONE
+
+		# Pivot Cancel
+		if isDvPivotCancelConf(period, chart, trigger):
+			trigger.state = DVState.ONE
+
+	# DV Activation
+	if trend_trigger.state == TrendState.ACTIVE:
+		trigger.setHigh(getAtrValue(atr))
+		if trigger.state == DVState.ONE:
+			if isDvTrendingOneConf(period, chart, trigger):
+				trigger.state = DVState.ACTIVE
+
+		trigger.setClose(ohlc.bids[0, 3])
+
+	elif trigger.state == DVState.ONE:
+		trigger.reset()
 
 
 def onTime(timestamp, chart):
@@ -393,12 +746,35 @@ FIVE MINUTES
 
 # Bar End
 def onBarEndB(timestamp, chart):
-	return
+	
+	# Run Bollinger Touch setup
+	bollingerTouchBarEndSetup(CHART_B, chart, bollinger_touch_long_trigger_b)
+	bollingerTouchBarEndSetup(CHART_B, chart, bollinger_touch_short_trigger_b)
+
+	# Run Trending with Pullback setup
+	trendingWithPullbackBarEndSetup(CHART_B, chart, trending_with_pullback_long_trigger_b, trend_long_trigger_b)
+	trendingWithPullbackBarEndSetup(CHART_B, chart, trending_with_pullback_short_trigger_b, trend_long_trigger_b)
+
+	# Run Bollinger Walk cancellation setup
+	bollingerWalkCancelSetup(CHART_B, chart, bollinger_walk_long_trigger_b)
+	bollingerWalkCancelSetup(CHART_B, chart, bollinger_walk_short_trigger_b)
+
+	# Run Bollinger Walk setup
+	bollingerWalkSetup(CHART_B, chart, bollinger_walk_long_trigger_b)
+	bollingerWalkSetup(CHART_B, chart, bollinger_walk_short_trigger_b)
 
 
 # Tick
 def onTickB(timestamp, chart):
-	return
+	
+	# Run Bollinger Touch setup
+	bollingerTouchTickSetup(CHART_B, chart, bollinger_touch_long_trigger_b)
+	bollingerTouchTickSetup(CHART_B, chart, bollinger_touch_short_trigger_b)
+
+	# Run Trending with Pullback setup
+	trendingWithPullbackBarEndSetup(CHART_B, chart, trending_with_pullback_long_trigger_b, trend_long_trigger_b)
+	trendingWithPullbackBarEndSetup(CHART_B, chart, trending_with_pullback_short_trigger_b, trend_long_trigger_b)
+
 
 '''
 TEN MINUTES
@@ -406,12 +782,26 @@ TEN MINUTES
 
 # Bar End
 def onBarEndC(timestamp, chart):
-	return
+	
+	# Run Bollinger Touch setup
+	bollingerTouchBarEndSetup(CHART_C, chart, bollinger_touch_long_trigger_c)
+	bollingerTouchBarEndSetup(CHART_C, chart, bollinger_touch_short_trigger_c)
+
+	# Run Bollinger Walk cancellation setup
+	bollingerWalkCancelSetup(CHART_C, chart, bollinger_walk_long_trigger_c)
+	bollingerWalkCancelSetup(CHART_C, chart, bollinger_walk_short_trigger_c)
+
+	# Run Bollinger Walk setup
+	bollingerWalkSetup(CHART_C, chart, bollinger_walk_long_trigger_c)
+	bollingerWalkSetup(CHART_C, chart, bollinger_walk_short_trigger_c)
 
 
 # Tick
 def onTickC(timestamp, chart):
-	return
+	
+	# Run Bollinger Touch setup
+	bollingerTouchTickSetup(CHART_C, chart, bollinger_touch_long_trigger_c)
+	bollingerTouchTickSetup(CHART_C, chart, bollinger_touch_short_trigger_c)
 
 
 '''
@@ -434,6 +824,14 @@ def setGlobals():
 	rtc_long_trigger = RtcTrigger(LONG)
 	rtc_short_trigger = RtcTrigger(SHORT)
 
+	globals trend_long_trigger_b, trend_short_trigger_b
+	trend_long_trigger_b = TrendTrigger(LONG)
+	trend_short_trigger_b = TrendTrigger(SHORT)
+
+	globals trend_long_trigger_c, trend_short_trigger_c
+	trend_long_trigger_c = TrendTrigger(LONG)
+	trend_short_trigger_c = TrendTrigger(SHORT)
+
 	globals bollinger_touch_long_trigger_b, bollinger_touch_short_trigger_b
 	bollinger_touch_long_trigger_b = BollingerTouchTrigger(LONG)
 	bollinger_touch_short_trigger_b = BollingerTouchTrigger(SHORT)
@@ -441,6 +839,18 @@ def setGlobals():
 	globals bollinger_touch_long_trigger_c, bollinger_touch_short_trigger_c
 	bollinger_touch_long_trigger_c = BollingerTouchTrigger(LONG)
 	bollinger_touch_short_trigger_c = BollingerTouchTrigger(SHORT)
+
+	globals bollinger_touch_long_trigger_b, bollinger_touch_short_trigger_b
+	bollinger_touch_long_trigger_b = BollingerTouchTrigger(LONG)
+	bollinger_touch_short_trigger_b = BollingerTouchTrigger(SHORT)
+
+	globals bollinger_walk_long_trigger_b, bollinger_walk_short_trigger_b
+	bollinger_walk_long_trigger_b = BollingerWalkTrigger(LONG)
+	bollinger_walk_short_trigger_b = BollingerWalkTrigger(SHORT)
+
+	globals bollinger_walk_long_trigger_c, bollinger_walk_short_trigger_c
+	bollinger_walk_long_trigger_c = BollingerWalkTrigger(LONG)
+	bollinger_walk_short_trigger_c = BollingerWalkTrigger(SHORT)
 
 
 def report(tick):
@@ -586,6 +996,70 @@ class RtcTrigger(BetterDict):
 		self.bars_passed = 0
 
 
+class TrendState(Enum):
+	ONE = 1
+	TWO = 2
+	ACTIVE = 3
+
+
+class TrendSwingCancelState(Enum):
+	ONE = 1
+	TWO = 2
+	COMPLETE = 3
+
+
+class TrendTrigger(BetterDict):
+
+	def __init__(self, direction):
+		self.direction = direction
+		self.state = TrendState.ONE
+		self.swing_cancel_state = TrendSwingCancelState.ONE
+
+		self.hl = None
+		self.close = None
+
+		# Cancel Vars
+		self.bars_passed = 0
+
+		# Spike High
+		self.spike_high = None
+		self.spike_bars_passed = 0
+
+
+	def setHL(self, x):
+		if self.direction == LONG:
+			if self.hl is None or x > self.hl:
+				self.hl = x
+
+		else:
+			if self.hl is None or x < self.hl:
+				self.hl = x
+
+
+	def setClose(self, x):
+		if self.direction == LONG:
+			if self.close is None or x > self.close:
+				self.close = x
+
+		else:
+			if self.close is None or x < self.close:
+				self.close = x
+
+
+	def turnOff(self):
+		self.state = TrendState.TWO
+		self.swing_cancel_state = TrendSwingCancelState.ONE
+		self.bars_passed = 0
+
+
+	def reset(self):
+		self.state = TrendState.ONE
+		self.swing_cancel_state = TrendSwingCancelState.ONE
+		self.bars_passed = 0
+		self.hl = None
+		self.close = None
+
+
 class BollingerTouchState(Enum):
 	ONE = 1
 	ACTIVE = 2
@@ -611,24 +1085,82 @@ class BollingerTouchTrigger(BetterDict):
 		self.bars_passed = 0
 
 
-class TrendState(Enum):
+class TrendingWithPullbackState(Enum):
 	ONE = 1
-	COMPLETE = 2
+	ACTIVE = 2
 
 
-class TrendTrigger(BetterDict):
+class TrendingWithPullbackTrigger(BetterDict):
 
 	def __init__(self, direction):
 		self.direction = direction
-		self.state = TrendState.ONE
+		self.state = TrendingWithPullbackState.ONE
+		self.intra_state = TrendingWithPullbackState.ONE
 
-		# Cancel Vars
+		# Cancel Vars 
 		self.bars_passed = 0
 
 
 	def reset(self):
-		self.state = TrendState.ONE
+		self.state = TrendingWithPullbackState.ONE
 		self.bars_passed = 0
 
 
+class BollingerWalkState(Enum):
+	ONE = 1
+	ACTIVE = 2
+
+
+class BollingerWalkTrigger(BetterDict):
+	
+	def __init__(self, direction):
+		self.direction = direction
+		self.state = BollingerWalkState.ONE
+
+
+class DVState(Enum):
+	ONE = 1
+	ACTIVE = 2
+
+
+class DVTrigger(BetterDict):
+
+	def __init__(self, direction):
+		self.direction = direction
+		self.state = DVState.ONE
+
+		# Setup Vars
+		self.close = None
+
+		# ATR Vars
+		self.high = None
+		self.pivot = None
+
+		self.new_pivot = None
+		self.pivot_count = 0
+
+
+	def setClose(self, x):
+		if self.direction == LONG:
+			if self.close is None or x > self.close:
+				self.close = x
+		else:
+			if self.close is None or x < self.close:
+				self.close = x
+
+
+	def setHigh(self, x):
+		if self.high is None or x > self.high:
+			self.high = x=
+
+
+	def reset(self):
+		self.state = DVState.ONE
+
+		self.close = None
+		self.high = None
+		self.pivot = None
+
+		self.new_pivot = None
+		self.pivot_count = 0
 

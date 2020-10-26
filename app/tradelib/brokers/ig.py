@@ -129,7 +129,7 @@ class IG(Broker):
 		
 		if (datetime.utcnow() - self._last_token_update).total_seconds() > TWO_HOURS:
 			self._last_token_update = datetime.utcnow()
-			self._get_tokens(account_id=self._c_account)
+			self._get_tokens()
 
 	def _get_tokens(self, account_id=None, attempts=0):
 		endpoint = 'session'
@@ -836,6 +836,9 @@ class IG(Broker):
 			# 	pass
 
 	def _reconnect(self):
+		# Regenerate tokens
+		self._get_tokens()
+
 		while True:
 			new_ls_client = LSClient(
 				self,
