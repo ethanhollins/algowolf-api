@@ -191,7 +191,14 @@ class Chart(object):
 		ohlc = item['item']['ask'] + item['item']['bid']
 
 		last_ts = self._data[item['period']].index.values[-1]
-		if not item['bar_end'] and item['timestamp'] >= last_ts:
+
+		if item['timestamp'] <= last_ts - tl.period.getPeriodOffsetSeconds(item['period']):
+			# Skip tick
+			del self.strategy.tick_queue[queue_idx]
+			print(f'SKIP: {item["timestamp"]}')
+			return
+
+		elif not item['bar_end'] and item['timestamp'] >= last_ts:
 			new_ts = item['timestamp'] + tl.period.getPeriodOffsetSeconds(item['period'])
 			self._idx[item['period']] += 1
 			self._data[item['period']].loc[new_ts] = ohlc

@@ -53,18 +53,14 @@ class Indicator(object):
 		for i in range(idx, timestamps.shape[0]):
 			new_bid = [self._perform_calculation('bid', bids, i)]
 
-			# if self.name == 'ema' and idx > 1000:
-			# 	print(f'NEW: {idx}, {timestamps.shape[0]}, {bids[-1]}, {new_bid}')
+			if self.name == 'ema' and idx > 1000:
+				print(new_bid)
 
 			if isinstance(self._bids, type(None)):
 				self._bids = np.array(new_bid, dtype=np.float64)
 			elif i < self._bids.shape[0]:
-				# if self.name == 'ema' and idx > 1000:
-				# 	print(1)
 				self._bids[i] = new_bid[0]
 			else:
-				# if self.name == 'ema' and idx > 1000:
-				# 	print(2)
 				self._bids = np.concatenate((self._bids, new_bid))
 
 		self.idx = self._asks.shape[0]-1
@@ -125,10 +121,10 @@ class EMA(Indicator):
 	def _perform_calculation(self, price_type, ohlc, idx):
 		# Properties:
 		period = self.properties[0]
-		if price_type == 'ask':
-			prev_ema = self.storage[0]
-		else:
-			prev_ema = self.storage[1]
+		# if price_type == 'ask':
+		# 	prev_ema = self.storage[0]
+		# else:
+		# 	prev_ema = self.storage[1]
 
 		# Get relevant OHLC
 		ohlc = ohlc[max((idx+1)-period, 0):idx+1]
@@ -138,7 +134,12 @@ class EMA(Indicator):
 
 		# Perform calculation
 
-		if prev_ema:
+		if idx > period:
+			if price_type == 'ask':
+				prev_ema = self._asks[idx-1, 0]
+			else:
+				prev_ema = self._bids[idx-1, 0]
+
 			multi = 2 / (period + 1)
 			ema = (ohlc[-1, 3] - prev_ema) * multi + prev_ema
 
@@ -149,14 +150,14 @@ class EMA(Indicator):
 
 			ema = ma / period
 
-		if price_type == 'ask':
-			if self.asks is None or idx > len(self.asks)-1:
-				self.storage[0] = ema
-		else:
-			if self.bids is None or idx > len(self.bids)-1:
-				self.storage[1]	= ema
+		# if price_type == 'ask':
+		# 	if self.asks is None or idx > len(self.asks)-1:
+		# 		self.storage[0] = ema
+		# else:
+		# 	if self.bids is None or idx > len(self.bids)-1:
+		# 		self.storage[1]	= ema
 
-		return [np.around(ema, decimals=5)]
+		return [ema]
 
 
 # Simple Moving Average
