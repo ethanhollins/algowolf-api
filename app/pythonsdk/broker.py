@@ -811,7 +811,7 @@ class Broker(object):
 		start = time.time()
 		while not ref in self.handled:
 			if time.time() - start >= timeout: 
-				if func and res: return func(**res)
+				if func and res: return func(*res)
 				else: return None
 			time.sleep(polling)
 		item = self.handled[ref]
