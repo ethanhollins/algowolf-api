@@ -221,8 +221,9 @@ class Broker(object):
 
 	def _backtest_and_run(self, start, quick_download=False):
 		self.state = State.BACKTEST_AND_RUN
-		time.sleep(61)
-
+		print('now1')
+		time.sleep(20)
+		print('now2')
 		# Collect relevant data and connect to live broker
 		end = datetime.datetime.utcnow()
 		self._perform_backtest(start, end, quick_download=quick_download)

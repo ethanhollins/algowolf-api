@@ -192,10 +192,9 @@ class Chart(object):
 
 		last_ts = self._data[item['period']].index.values[-1]
 
-		if item['timestamp'] <= last_ts - tl.period.getPeriodOffsetSeconds(item['period']):
+		if item['timestamp'] < last_ts - tl.period.getPeriodOffsetSeconds(item['period']):
 			# Skip tick
 			del self.strategy.tick_queue[queue_idx]
-			print(f'SKIP: {item["timestamp"]}')
 			return
 
 		elif not item['bar_end'] and item['timestamp'] >= last_ts:

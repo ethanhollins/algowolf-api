@@ -1078,7 +1078,8 @@ def report(tick):
 			)
 
 	log += f'POS: {strategy.positions}\n'
-	print(log)
+	if strategy.getBroker().state.value == 3:
+		print(log)
 
 '''
 Hook functions
