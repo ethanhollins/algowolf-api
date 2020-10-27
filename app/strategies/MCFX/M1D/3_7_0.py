@@ -304,7 +304,7 @@ def tRevThreeConf(chart, trigger):
 
 def tTwoRevConf(chart, trigger):
 	rev_donch_val = getDonchValue(chart, trigger.direction, reverse=True)
-	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	ema_fast_val = np.around(chart.indicators.ema_fast.bids[0], decimals=5)
 	sma_fast_val = chart.indicators.sma_fast.bids[0]
 	sma_slow_val = chart.indicators.sma_slow.bids[0]
 
@@ -318,7 +318,7 @@ def tTwoRevConf(chart, trigger):
 
 # Entry Confirmations
 def goldCrossVariationConf(chart, direction):
-	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	ema_fast_val = np.around(chart.indicators.ema_fast.bids[0], decimals=5)
 	sma_fast_val = chart.indicators.sma_fast.bids[0]
 	sma_slow_val = chart.indicators.sma_slow.bids[0]
 
@@ -329,7 +329,7 @@ def goldCrossVariationConf(chart, direction):
 
 
 def goldCrossOneConf(chart, direction, reverse=False):
-	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	ema_fast_val = np.around(chart.indicators.ema_fast.bids[0], decimals=5)
 	sma_fast_val = chart.indicators.sma_fast.bids[0]
 	close = chart.bids.ONE_MINUTE[0, 3]
 
@@ -341,7 +341,7 @@ def goldCrossOneConf(chart, direction, reverse=False):
 
 
 def goldCrossTwoConf(chart, direction, reverse=False):
-	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	ema_fast_val = np.around(chart.indicators.ema_fast.bids[0], decimals=5)
 	sma_fast_val = chart.indicators.sma_fast.bids[0]
 	donch_val = getDonchValue(chart, direction)
 	close = chart.bids.ONE_MINUTE[0, 3]
@@ -373,7 +373,7 @@ def isReEntryTDonchConf(chart, direction):
 
 # Stop Line Confirmations
 def stopLineOneConf(chart, direction):
-	ema_fast_val = chart.indicators.ema_fast.bids[0]
+	ema_fast_val = np.around(chart.indicators.ema_fast.bids[0], decimals=5)
 	sma_slow_val = chart.indicators.sma_slow.bids[0]
 
 	return isCrossed(ema_fast_val, sma_slow_val, direction, reverse=True)
@@ -711,7 +711,7 @@ def entrySetup(chart, trigger):
 				if confirmation(chart, trigger):
 
 					# Check which stop state is current
-					ema_fast_val = chart.indicators.ema_fast.bids[0]
+					ema_fast_val = np.around(chart.indicators.ema_fast.bids[0], decimals=5)
 					sma_slow_val = chart.indicators.sma_slow.bids[0]
 					if isTagged(ema_fast_val, sma_slow_val, trigger.direction):
 						trigger.stop_line_state = StopLineState.ONE
@@ -1078,8 +1078,7 @@ def report(tick):
 			)
 
 	log += f'POS: {strategy.positions}\n'
-	if strategy.getBroker().state.value == 3:
-		print(log)
+	print(log)
 
 '''
 Hook functions

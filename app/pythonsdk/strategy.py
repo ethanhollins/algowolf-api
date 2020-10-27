@@ -293,34 +293,34 @@ class Strategy(object):
 
 
 	def log(self, *objects, sep=' ', end='\n', file=None, flush=None):
-		print(*objects, sep=sep, end=end, file=file, flush=flush)
-		# msg = sep.join(map(str, objects)) + end
-		# if self.lastTick is not None:
-		# 	timestamp = self.lastTick.timestamp
-		# else:
-		# 	timestamp = math.floor(time.time())
+		# print(*objects, sep=sep, end=end, file=file, flush=flush)
+		msg = sep.join(map(str, objects)) + end
+		if self.lastTick is not None:
+			timestamp = self.lastTick.timestamp
+		else:
+			timestamp = math.floor(time.time())
 
-		# if self.getBroker().state == State.LIVE or self.getBroker().state == State.IDLE:
-		# 	item = {
-		# 		'timestamp': timestamp,
-		# 		'type': tl.CREATE_LOG,
-		# 		'account_id': self.getAccountCode(),
-		# 		'item': msg
-		# 	}
+		if self.getBroker().state == State.LIVE or self.getBroker().state == State.IDLE:
+			item = {
+				'timestamp': timestamp,
+				'type': tl.CREATE_LOG,
+				'account_id': self.getAccountCode(),
+				'item': msg
+			}
 
-		# 	# Send Gui Socket Message
-		# 	self.api.ctrl.sio.emit(
-		# 		'ongui', 
-		# 		{'strategy_id': self.strategyId, 'item': item}, 
-		# 		namespace='/admin'
-		# 	)
+			# Send Gui Socket Message
+			self.api.ctrl.sio.emit(
+				'ongui', 
+				{'strategy_id': self.strategyId, 'item': item}, 
+				namespace='/admin'
+			)
 
-		# 	# Save to log queue
-		# 	self.log_queue.append(item)
+			# Save to log queue
+			self.log_queue.append(item)
 
-		# elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
-		# 	# Handle logs through backtester
-		# 	self.getBroker().backtester.createLogItem(timestamp, msg)
+		elif self.getBroker().state.value <= State.BACKTEST_AND_RUN.value:
+			# Handle logs through backtester
+			self.getBroker().backtester.createLogItem(timestamp, msg)
 
 
 	def clearLogs(self):

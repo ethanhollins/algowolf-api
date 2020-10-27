@@ -1,6 +1,7 @@
 import numpy as np
 import functools
 
+
 class Indicator(object):
 
 	def __init__(self, name, properties, storage, period=None):
@@ -52,9 +53,6 @@ class Indicator(object):
 		# Calculate bid prices
 		for i in range(idx, timestamps.shape[0]):
 			new_bid = [self._perform_calculation('bid', bids, i)]
-
-			if self.name == 'ema' and idx > 1000:
-				print(new_bid)
 
 			if isinstance(self._bids, type(None)):
 				self._bids = np.array(new_bid, dtype=np.float64)
