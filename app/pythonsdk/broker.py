@@ -10,6 +10,7 @@ import asyncio
 import threading
 import sys
 import shortuuid
+import traceback
 from copy import copy
 from enum import Enum
 from app import pythonsdk as tl
@@ -134,6 +135,7 @@ class Broker(object):
 
 
 	def stop(self):
+		print('STOPPED')
 		self.state = State.STOPPED
 
 		for product in self._chart_subs:
@@ -800,7 +802,11 @@ class Broker(object):
 
 
 	def _stream_ontick(self, item):
-		self.getChart(item['product'])._on_tick(item)
+		try:
+			self.getChart(item['product'])._on_tick(item)
+		except Exception as e:
+			print(traceback.format_exc())
+			self.stop()
 
 
 	'''
@@ -820,19 +826,23 @@ class Broker(object):
 
 
 	def _stream_ontrade(self, items):
-		for ref_id, item in items.items():
-			result = self.onTradeHandler(ref_id, item)
+		try:
+			for ref_id, item in items.items():
+				result = self.onTradeHandler(ref_id, item)
 
-			# Handle result
-			if len(result):
-				for func in self.ontrade_subs:
-					func(
-						BrokerItem({
-							'reference_id': ref_id,
-							'type': item.get('type'),
-							'item': result
-						})
-					)
+				# Handle result
+				if len(result):
+					for func in self.ontrade_subs:
+						func(
+							BrokerItem({
+								'reference_id': ref_id,
+								'type': item.get('type'),
+								'item': result
+							})
+						)
+		except Exception as e:
+			print(traceback.format_exc())
+			self.stop()
 
 
 	def _get_trade_handler(self, order_type):

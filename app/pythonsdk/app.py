@@ -55,7 +55,7 @@ class App(dict):
 			# Call strategy onStart
 			if 'onStart' in dir(module) and callable(module.onStart):
 				module.onStart()
-			
+
 
 	def stop(self, accounts):
 		for account_id in accounts:

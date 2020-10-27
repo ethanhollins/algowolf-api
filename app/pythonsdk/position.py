@@ -106,8 +106,6 @@ class Position(dict):
 				if item.get('accepted'):
 					func = self._broker._get_trade_handler(item.get('type'))
 					result = self._broker._wait(ref_id, func, (ref_id, item))
-				else:
-					return self
 
 			return result
 		else:
@@ -129,8 +127,6 @@ class Position(dict):
 				if item.get('accepted'):
 					func = self._broker._get_trade_handler(item.get('type'))
 					wait_result = self._broker._wait(ref_id, func, (ref_id, item))
-				else:
-					return self
 
 			return self
 		else:

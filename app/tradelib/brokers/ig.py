@@ -598,7 +598,15 @@ class IG(Broker):
 			timeout = 60*10 if self.is_demo else 5
 			result = self._wait(ref, timeout=timeout)
 
-			return result
+			if result is None:
+				result = {
+					self.generateReference(): {
+						'timestamp': math.floor(time.time()),
+						'type': tl.MARKET_ORDER,
+						'accepted': False,
+						'message': 'IG internal server error.'
+					}
+				}
 
 		elif 400 <= status_code < 500:
 			err = res.get('errorCode')
@@ -620,6 +628,8 @@ class IG(Broker):
 					'message': 'IG internal server error.'
 				}
 			})
+
+		return result
 
 
 	def modifyPosition(self, pos, sl_price, tp_price, override=False):
@@ -666,7 +676,18 @@ class IG(Broker):
 			timeout = 60*10 if self.is_demo else 5
 			result = self._wait(ref, timeout=timeout)
 
-			return result
+			if result is None:
+				result = {
+					self.generateReference(): {
+						'timestamp': math.floor(time.time()),
+						'type': tl.MODIFY,
+						'accepted': False,
+						'message': 'IG internal server error.',
+						'item': {
+							'order_id': pos.order_id
+						}
+					}
+				}
 
 		elif 400 <= status_code < 500:
 			err = res.get('errorCode')
@@ -694,6 +715,8 @@ class IG(Broker):
 					}
 				}
 			})
+
+		return result
 			
 
 	def deletePosition(self, pos, lotsize, override=False):
@@ -750,6 +773,19 @@ class IG(Broker):
 			# Wait for live callback
 			timeout = 60*10 if self.is_demo else 5
 			result = self._wait(ref, timeout=timeout)
+
+			if result is None:
+				result = {
+					self.generateReference(): {
+						'timestamp': math.floor(time.time()),
+						'type': tl.POSITION_CLOSE,
+						'accepted': False,
+						'message': 'IG internal server error.',
+						'item': {
+							'order_id': pos.order_id
+						}
+					}
+				}
 
 		elif 400 <= status_code < 500:
 			err = res.get('errorCode')
