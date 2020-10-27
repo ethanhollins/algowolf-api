@@ -12,6 +12,7 @@ Midas Code FX
 from datetime import datetime, timedelta
 from enum import Enum
 from copy import copy
+import numpy as np
 import json
 
 '''
