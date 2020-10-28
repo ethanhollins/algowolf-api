@@ -497,7 +497,11 @@ class IG(Broker):
 			result = {account_id: []}
 			res = res.json()
 			for pos in res['positions']:
-				lotsize = pos['position']['size']
+				if pos['position'].get('size') is not None:
+					lotsize = pos['position']['size']
+				else:
+					lotsize = pos['position']['dealSize']
+					
 				entry_price = pos['position']['level']
 
 				if pos['position']['stopLevel']: 
