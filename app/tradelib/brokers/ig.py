@@ -19,7 +19,7 @@ from app.v1 import AccessLevel, key_or_login_required
 from app.tradelib.brokers.lightstreamer_client import LightstreamerClient as LSClient
 from app.tradelib.brokers.lightstreamer_client import LightstreamerSubscription as Subscription
 
-TWO_HOURS = 60*60*2
+TWO_HOURS = 60*2
 
 # Priority queue that groups by account id
 class Working(list):
@@ -37,7 +37,9 @@ class Working(list):
 		while self[0][0] != account_id:
 			time.sleep(0.1)
 
-		broker._switch_account(account_id)
+		if account_id is not None:
+			broker._switch_account(account_id)
+
 		# Execute command
 		result = target(*args, **kwargs)
 		# del item from list once complete
@@ -131,7 +133,11 @@ class IG(Broker):
 		
 		if (datetime.utcnow() - self._last_token_update).total_seconds() > TWO_HOURS:
 			try:
-				self._get_tokens()
+				self._working.run(
+					self, None,
+					self._get_tokens,
+					(), { 'account_id': self._c_account }
+				)
 				self._last_token_update = datetime.utcnow()
 			except requests.exceptions.ConnectionError:
 				pass
