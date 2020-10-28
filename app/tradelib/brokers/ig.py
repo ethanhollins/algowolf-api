@@ -501,8 +501,12 @@ class IG(Broker):
 					lotsize = pos['position']['size']
 				else:
 					lotsize = pos['position']['dealSize']
-					
-				entry_price = pos['position']['level']
+
+				if pos['position'].get('level') is not None:
+					entry_price = pos['position']['level']
+				else:
+					entry_price = pos['position']['openLevel']
+
 
 				if pos['position']['stopLevel']: 
 					sl = pos['position']['stopLevel']
@@ -514,18 +518,30 @@ class IG(Broker):
 				else:
 					tp = None
 
+				if pos['position'].get('createdDateUTC'):
+					open_time = tl.utils.convertTimeToTimestamp(
+						datetime.strptime(
+							pos['position']['createdDateUTC'],
+							'%Y-%m-%dT%H:%M:%S'
+						)
+					)
+
+				else:
+					open_time = tl.utils.convertTimeToTimestamp(
+						tl.utils.setTimezone(datetime.strptime(
+							':'.join(pos['position']['createdDate'].split(':')[:-1]),
+							'%Y/%m/%d %H:%M:%S'
+						), 'Australia/Melbourne')
+					)
+					
+
 				new_pos = tl.Position(
 					self,
 					pos['position']['dealId'], account_id,
 					self._convert_to_standard_product(pos['market']['epic']), tl.MARKET_ENTRY,
 					self._convert_to_standard_direction(pos['position']['direction']),
 					lotsize, entry_price=entry_price, sl=sl, tp=tp,
-					open_time=tl.utils.convertTimeToTimestamp(
-						datetime.strptime(
-							pos['position']['createdDateUTC'],
-							'%Y-%m-%dT%H:%M:%S'
-						)
-					)
+					open_time=open_time
 				)
 
 				result[account_id].append(new_pos)
