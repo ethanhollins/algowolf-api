@@ -2,6 +2,7 @@ import json, jwt
 import math
 import time
 import string, random
+from app.controller import DictQueue
 from app import tradelib as tl
 from threading import Thread
 from app.strategy import Strategy
@@ -19,6 +20,9 @@ class Account(object):
 		self.keys = {}
 
 		self._user_validation()
+
+		# Queues
+		self._set_broker_queue = DictQueue()
 
 	# Public
 	def getAccountDetails(self):
@@ -387,11 +391,23 @@ class Account(object):
 		}
 
 		for broker_id in brokers:
+			self._set_broker_queue.handle(
+				broker_id,
+				self._perform_set_broker, 
+				strategy_id, broker_id, 
+				brokers[broker_id]
+			)
+
+		return brokers.keys()
+
+
+	def _perform_set_broker(self, strategy_id, broker_id, broker_info):
+		if broker_id not in self.brokers:
 			broker_args = {
 				'ctrl': self.ctrl,
 				'user_account': self,
 				'broker_id': broker_id,
-				'accounts': brokers[broker_id]
+				'accounts': broker_info
 			}
 
 			# Update relevant broker info items
@@ -413,8 +429,8 @@ class Account(object):
 					self._init_broker(broker_name, broker_args)
 				else:
 					raise BrokerException('Broker does not exist')
-
-		return brokers.keys()
+		else:
+			print('ALREADY DONE')
 
 
 	def _init_broker(self, broker_name, broker_args):

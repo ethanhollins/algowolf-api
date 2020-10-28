@@ -18,6 +18,25 @@ def initController(app):
 	ctrl = Controller(app)
 
 
+class DictQueue(dict):
+
+	def generateReference(self):
+		return shortuuid.uuid()
+
+	def handle(self, key, func, *args, **kwargs):
+		_id = self.generateReference()
+
+		if key not in self:
+			self[key] = []
+		self[key].append(_id)
+		while self[key].index(_id) != 0:
+			time.sleep(0.1)
+
+		result = func(*args, **kwargs)
+		del self[key][0]
+		return result
+
+
 class ContinuousThreadHandler(object):
 
 	def __init__(self):
@@ -148,34 +167,38 @@ class Charts(dict):
 
 	def __init__(self, ctrl):
 		self.ctrl = ctrl
+		self.queue = DictQueue()
 		self._generate_broker_keys()
+
 
 	def _generate_broker_keys(self):
 		for k in self.ctrl.brokers:
 			self[k] = {}
 
+
 	def createChart(self, broker, product):
-		if broker.name in self:
-			self[broker.name][product] = None
+		if product not in self[broker.name]:
 			chart = tl.Chart(self.ctrl, broker, product)
 			self[broker.name][product] = chart
 			return chart
+		else:
+			return self[broker.name][product]
 
-		raise abort(404, 'Broker does not exist.')
 
 	def getChart(self, broker_name, product):
 		if broker_name in self:
 			if product in self[broker_name]:
-				while not self[broker_name][product]:
-					pass
 				return self[broker_name][product]
 			else:
-				return self.createChart(
+				return self.queue.handle(
+					f'{broker_name}:{product}',
+					self.createChart,
 					self.ctrl.brokers.get(broker_name),
 					product
 				)
 
 		raise abort(404, 'Broker does not exist.')
+
 
 	def deleteChart(self, broker_name, product):
 		try:
@@ -188,16 +211,19 @@ class Accounts(dict):
 
 	def __init__(self, ctrl):
 		self.ctrl = ctrl
+		self.queue = DictQueue()
 
 	def initAccount(self, user_id):
-		try:
-			acc = Account(self.ctrl, user_id)
-			if self.get(user_id) is None:
+		if user_id not in self:
+			try:
+				acc = Account(self.ctrl, user_id)
 				self[user_id] = acc
-				
-			return self.get(user_id)
-		except AccountException:
-			return None
+					
+			except AccountException:
+				return None
+		
+		return self.get(user_id)
+
 
 	def addAccount(self, account):
 		self[account.user_id] = account
@@ -205,7 +231,7 @@ class Accounts(dict):
 	def getAccount(self, user_id):
 		acc = self.get(user_id)
 		if acc is None:
-			return self.initAccount(user_id)
+			return self.queue.handle(user_id, self.initAccount, user_id)
 		else:
 			return acc
 

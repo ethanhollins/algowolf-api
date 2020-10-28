@@ -79,6 +79,7 @@ class Broker(object):
 		if self.userAccount:
 			self._handle_papertrader_setup()
 
+
 	'''
 	Utilities
 	'''

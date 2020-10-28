@@ -11,6 +11,7 @@ import traceback
 import numpy as np
 
 from threading import Thread
+from app.controller import DictQueue
 from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.error import BrokerException
@@ -48,8 +49,8 @@ class IG(Broker):
 
 	__slots__ = (
 		'dl', '_c_account', '_last_token_update', 'is_demo', '_headers', '_url', 
-		'_creds', '_ls_endpoint', '_working', '_ls_client', '_subscriptions',
-		'_temp_data', '_last_refresh'
+		'_creds', '_ls_endpoint', '_working', '_hist_download_queue', '_ls_client', 
+		'_subscriptions', '_temp_data', '_last_refresh'
 	)
 	def __init__(self, 
 		ctrl, username, password, key, is_demo, 
@@ -90,6 +91,7 @@ class IG(Broker):
 
 		# Dealing vars
 		self._working = Working()
+		self._hist_download_queue = DictQueue()
 
 		self._get_tokens()
 
@@ -128,8 +130,12 @@ class IG(Broker):
 	def _token_check(self):
 		
 		if (datetime.utcnow() - self._last_token_update).total_seconds() > TWO_HOURS:
-			self._last_token_update = datetime.utcnow()
-			self._get_tokens()
+			try:
+				self._get_tokens()
+				self._last_token_update = datetime.utcnow()
+			except requests.exceptions.ConnectionError:
+				pass
+
 
 	def _get_tokens(self, account_id=None, attempts=0):
 		endpoint = 'session'
@@ -204,7 +210,16 @@ class IG(Broker):
 				print('[IG] [{0}] Reattempting account switch ({1})'.format(account_id, attempts))
 				return self._switch_account(account_id, attempts=attempts+1)
 
+
 	def _download_historical_data(self, product, period, start=None, end=None, count=None, force_download=False):
+		return self._hist_download_queue.handle(
+			f'{product}:{period}', self._perform_download_historical_data,
+			product, period, start=start, end=end, count=count, 
+			force_download=force_download
+		)
+
+
+	def _perform_download_historical_data(self, product, period, start=None, end=None, count=None, force_download=False):
 		df = self._create_empty_df()		
 		result = {}
 		page_number = 0
@@ -221,6 +236,7 @@ class IG(Broker):
 							tl.convertTimestampToTime(df.index.values[-1]),
 							'Australia/Melbourne'
 						)
+						print(start)
 
 				endpoint = 'prices/{}?resolution={}&from={}&to={}&pageSize=5000&pageNumber={}'.format(
 					ig_product, ig_period,
@@ -304,10 +320,11 @@ class IG(Broker):
 			new_data = pd.DataFrame(data=result).set_index('timestamp').astype(np.float64)
 
 			if not force_download and not self.is_demo:
-				Thread(
-					target=self.save_data, 
-					args=(new_data.copy(), product, period)
-				).start()
+				self.save_data(new_data.copy(), product, period)
+				# Thread(
+				# 	target=self.save_data, 
+				# 	args=(new_data.copy(), product, period)
+				# ).start()
 			df = pd.concat((df, new_data)).sort_index()
 
 		return self._process_df(df)
@@ -873,8 +890,6 @@ class IG(Broker):
 
 	def _reconnect(self):
 		# Regenerate tokens
-		self._get_tokens()
-
 		while True:
 			new_ls_client = LSClient(
 				self,
@@ -887,6 +902,7 @@ class IG(Broker):
 			)
 
 			try:
+				self._get_tokens()
 				new_ls_client.connect()
 				break
 			except Exception as e:

@@ -6,7 +6,10 @@ import json
 import time
 import math
 import traceback
+from urllib.request import urlopen, Request
+from urllib.parse import urlencode
 from copy import copy
+from threading import Thread
 from datetime import datetime, timedelta
 from app import tradelib as tl
 from app.tradelib.broker import Broker
@@ -18,10 +21,19 @@ class Subscription(object):
 	ACCOUNT = 'account'
 	CHART = 'chart'
 
-	def __init__(self, sub_type, *args):
+	def __init__(self, sub_type, listener, *args):
 		self.res = []
 		self.sub_type = sub_type
+		self.listener = listener
 		self.args = args
+
+		self.receive = False
+		self.stream = None
+		self.last_update = None
+
+	def setStream(self, stream):
+		self.receive = True
+		self.stream = stream
 
 
 class Oanda(Broker):
@@ -29,9 +41,9 @@ class Oanda(Broker):
 	def __init__(self, 
 		ctrl, key, is_demo, 
 		user_account=None, broker_id=None, 
-		accounts={}
+		accounts={}, display_name=None
 	):
-		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts)
+		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
 
 		self.dl = tl.DataLoader(broker=self)
 
@@ -1274,45 +1286,49 @@ class Oanda(Broker):
 				return
 
 
-	def _subscribe_chart_updates(self, product, listener):
-		sub = Subscription(Subscription.CHART, [product], listener)
+	def _encode_params(self, params):
+		return urlencode(dict([(k, v) for (k, v) in iter(params.items()) if v]))
+
+
+	def _subscribe_chart_updates(self, listener, products):
+		sub = Subscription(Subscription.CHART, listener, [products])
 		self._subscriptions.append(sub)
-		self._perform_chart_connection(sub)
+		self._perform_chart_connection(sub)	
 
 
 	def _perform_chart_connection(self, sub):
 		endpoint = f'/v3/accounts/{self.getAccounts()[0]}/pricing/stream'
-		res = self._session.get(
-			self._stream_url + endpoint,
-			params={
-				'instruments': '%2C'.join(sub.args[0])
-			},
-			stream=True
-		)
-		if len(sub.res) == 0:
-			sub.res.append(res)
-			DynamicThread(self.ctrl, self._stream_price_updates, res, sub.args[1])
-		else:
-			res.close()
+		params = self._encode_params({
+			'instruments': '%2C'.join(sub.args[0])
+		})
+		req = Request(f'{self._stream_url}{endpoint}?{params}', headers=self._headers)
 
-
-	def _stream_price_updates(self, res, listener):
 		try:
-			res.raise_for_status()
-			chunk_buffer = ''
-			for chunk in res.iter_content():
-				chunk_buffer += chunk.decode('utf-8')
-				try:
-					update = json.loads(chunk_buffer)
-					chunk_buffer = ''
-					listener(update)
+			stream = urlopen(req, timeout=20)
 
-				except ValueError as e:
-					pass
-
+			sub.setStream(stream)
+			Thread(target=self._stream_price_updates, args=(sub,)).start()
 		except Exception as e:
-			if self.is_running: 
-				self._reconnect()
+			time.sleep(1)
+			Thread(target=self._perform_chart_connection, args=(sub,)).start()
+			return
+
+
+	def _stream_price_updates(self, sub):		
+		while sub.receive:
+			try:
+				message = sub.stream.readline().decode('utf-8').rstrip()
+				if not message.strip():
+					sub.receive = False
+				else:
+					sub.listener(json.loads(message))
+
+			except Exception as e:
+				print(traceback.format_exc())
+				sub.receive = False
+
+		# Reconnect
+		self._perform_chart_connection(sub)
 
 
 	def onChartUpdate(self, chart, *args, **kwargs):
@@ -1398,41 +1414,41 @@ class Oanda(Broker):
 
 
 	def _subscribe_account_updates(self, account_id):
-		sub = Subscription(Subscription.ACCOUNT, account_id)
+		sub = Subscription(Subscription.ACCOUNT, self._on_account_update, account_id)
 		self._subscriptions.append(sub)
 		self._perform_account_connection(sub)
 
 
 	def _perform_account_connection(self, sub):
 		endpoint = f'/v3/accounts/{sub.args[0]}/transactions/stream'
-		res = self._session.get(
-			self._stream_url + endpoint,
-			stream=True
-		)
-		if len(sub.res) == 0:
-			sub.res.append(res)
-			DynamicThread(self.ctrl, self._stream_account_update, res)
-		else:
-			res.close()
-
-
-	def _stream_account_update(self, res):
+		req = Request(f'{self._stream_url}{endpoint}', headers=self._headers)
+		
 		try:
-			res.raise_for_status()
-			chunk_buffer = ''
-			for chunk in res.iter_content():
-				chunk_buffer += chunk.decode('utf-8')
-				try:
-					update = json.loads(chunk_buffer)
-					chunk_buffer = ''
-					self._on_account_update(update)
+			stream = urlopen(req, timeout=20)
 
-				except ValueError as e:
-					pass
-
+			sub.setStream(stream)
+			Thread(target=self._stream_account_update, args=(sub,)).start()
 		except Exception as e:
-			if self.is_running: 
-				self._reconnect()
+			time.sleep(1)
+			Thread(target=self._perform_account_connection, args=(sub,)).start()
+			return
+
+
+	def _stream_account_update(self, sub):
+		while sub.receive:
+			try:
+				message = sub.stream.readline().decode('utf-8').rstrip()
+				if not message.strip():
+					sub.receive = False
+				else:
+					sub.listener(json.loads(message))
+
+			except Exception as e:
+				print(traceback.format_exc())
+				sub.receive = False
+
+		# Reconnect
+		self._perform_account_connection(sub)
 
 
 	def _on_account_update(self, update):
