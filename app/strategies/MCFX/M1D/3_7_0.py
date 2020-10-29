@@ -978,7 +978,7 @@ def setInputs():
 	global C_ONE, C_TWO
 	strategy.setInputVariable('Golden X', HEADER)
 	C_ONE = strategy.setInputVariable('c) 1.', float, default=0.2)
-	C_TWO = strategy.setInputVariable('c) 2.', float, default=2.0)
+	C_TWO = strategy.setInputVariable('c) 2.', float, default=1.5)
 
 	global D_ONE, D_TWO, D_THREE, D_FOUR, D_FIVE, D_FOURTEEN, D_FIFTEEN, D_SEVENTEEN
 	strategy.setInputVariable('Exit', HEADER)
@@ -1014,7 +1014,7 @@ def setInputs():
 	global E_ONE, E_TWO, E_THREE, E_FOUR
 	strategy.setInputVariable('Time Exits', HEADER)
 	E_ONE = strategy.setInputVariable('e) 1.', float, default=60.0)
-	E_TWO = strategy.setInputVariable('e) 2.', float, default=48.0)
+	E_TWO = strategy.setInputVariable('e) 2.', float, default=36.0)
 	E_THREE = strategy.setInputVariable('e) 3.', float, default=24.0)
 	E_FOUR = strategy.setInputVariable('e) 4.', PERCENTAGE, default=1.0)
 

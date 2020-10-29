@@ -218,8 +218,13 @@ class IG(Broker):
 
 
 	def _download_historical_data(self, product, period, start=None, end=None, count=None, force_download=False):
-		return self._hist_download_queue.handle(
-			f'{product}:{period}', self._perform_download_historical_data,
+		# return self._hist_download_queue.handle(
+		# 	f'{product}:{period}', self._perform_download_historical_data,
+		# 	product, period, start=start, end=end, count=count, 
+		# 	force_download=force_download
+		# )
+
+		return self._perform_download_historical_data(
 			product, period, start=start, end=end, count=count, 
 			force_download=force_download
 		)

@@ -11,6 +11,7 @@ Scalpius
 
 from enum import Enum
 import json
+import math
 
 
 '''
@@ -177,6 +178,48 @@ def getHL(chart, direction, offset=0, reverse=False):
 			return chart[offset, 1]
 		else:
 			return chart[offset, 2]
+
+
+def getRoundedPrice(x, direction, reverse=False):
+	split_number = str(utils.convertToPips(x)).split('.')
+	if len(split_number) > 1:
+		decimal = int(split_number[1])
+	else:
+		decimal = 0
+
+	if reverse:
+		if direction == LONG:
+			if decimal == 0:
+				return utils.convertToPrice(float('.'.join(str(int(split_number[0]) - 1), str(5))))
+
+			if decimal <= 5:
+				return utils.convertToPrice(math.floor(x))
+			else:
+				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+
+		else:
+			if decimal >= 5:
+				return utils.convertToPrice(math.ceil(x))
+			else:
+				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+		
+	else:
+		if direction == LONG:
+			if decimal >= 5:
+				return utils.convertToPrice(math.ceil(x))
+			else:
+				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+
+		else:
+			if decimal == 0:
+				return utils.convertToPrice(float('.'.join(str(int(split_number[0]) - 1), str(5))))
+
+			if decimal <= 5:
+				return utils.convertToPrice(math.floor(x))
+			else:
+				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+
+
 
 
 def addOffset(x, y, direction, reverse=False):
@@ -503,6 +546,11 @@ def trendSwingThreeCancelConf(period, chart, trigger):
 '''
 Events
 '''
+
+def confirmation(trigger):
+
+	sl_price = getRoundedPrice(trigger.hl)
+
 
 # RTV/RTC
 def onRtvSetup(chart, trigger):
@@ -964,7 +1012,6 @@ class RtvTrigger(BetterDict):
 		self.state = RtvState.ONE
 		self.swing = None
 		self.bars_passed = 0
-
 
 
 class RtcState(Enum):
