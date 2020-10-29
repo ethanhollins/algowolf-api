@@ -177,6 +177,12 @@ class Chart(object):
 				ind.calculate(self._data[period], self._idx[period])
 
 
+	def _limit_indicators(self, period):
+		for ind in self.indicators.values():
+			if ind.period == period:
+				ind.limit()
+
+
 	def _on_tick(self, item):
 		'''Handle on tick item'''
 
@@ -199,8 +205,10 @@ class Chart(object):
 
 		elif not item['bar_end'] and item['timestamp'] >= last_ts:
 			new_ts = item['timestamp'] + tl.period.getPeriodOffsetSeconds(item['period'])
-			self._idx[item['period']] += 1
 			self._data[item['period']].loc[new_ts] = ohlc
+			self._data[item['period']] = self._data[item['period']].iloc[-1000:]
+			self._idx[item['period']] = self._data[item['period']].shape[0]-1
+			self._limit_indicators(item['period'])
 
 		else:
 			self._data[item['period']].iloc[-1] = ohlc

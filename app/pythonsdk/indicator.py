@@ -31,6 +31,12 @@ class Indicator(object):
 		self.asks = self._asks[:self.idx+1][::-1]
 		self.bids = self._bids[:self.idx+1][::-1]
 
+
+	def limit(self):
+		self._asks = self._asks[-1000:]
+		self._bids = self._bids[-1000:]
+
+
 	def isIndicator(self, name, props):
 		return (
 			name.lower() == self.name and
