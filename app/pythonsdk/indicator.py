@@ -35,6 +35,10 @@ class Indicator(object):
 	def limit(self):
 		self._asks = self._asks[-1000:]
 		self._bids = self._bids[-1000:]
+		self.idx = self._asks.shape[0]-1
+
+		self.asks = self._asks[:self.idx+1][::-1]
+		self.bids = self._bids[:self.idx+1][::-1]
 
 
 	def isIndicator(self, name, props):
@@ -67,10 +71,10 @@ class Indicator(object):
 			else:
 				self._bids = np.concatenate((self._bids, new_bid))
 
-		self.idx = self._asks.shape[0]-1
+		# self.idx = self._asks.shape[0]-1
 
-		self.asks = self._asks[:self.idx+1][::-1]
-		self.bids = self._bids[:self.idx+1][::-1]
+		# self.asks = self._asks[:self.idx+1][::-1]
+		# self.bids = self._bids[:self.idx+1][::-1]
 
 	def getCurrentAsk(self):
 		return self._asks[self.idx]

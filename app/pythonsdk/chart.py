@@ -205,16 +205,19 @@ class Chart(object):
 
 		elif not item['bar_end'] and item['timestamp'] >= last_ts:
 			new_ts = item['timestamp'] + tl.period.getPeriodOffsetSeconds(item['period'])
+			self._idx[item['period']] += 1
 			self._data[item['period']].loc[new_ts] = ohlc
-			self._data[item['period']] = self._data[item['period']].iloc[-1000:]
-			self._idx[item['period']] = self._data[item['period']].shape[0]-1
-			self._limit_indicators(item['period'])
 
 		else:
 			self._data[item['period']].iloc[-1] = ohlc
 
 		# Handle Indicators
 		self._handle_indicators(item['period'])
+
+		# Limit Data
+		self._data[item['period']] = self._data[item['period']].iloc[-1000:]
+		self._idx[item['period']] = self._data[item['period']].shape[0]-1
+		self._limit_indicators(item['period'])
 
 		idx = self._idx[item['period']]
 		self.timestamps[item['period']] = self._data[item['period']].index.values[:idx+1][::-1]
