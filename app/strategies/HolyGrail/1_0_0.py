@@ -181,45 +181,47 @@ def getHL(chart, direction, offset=0, reverse=False):
 
 
 def getRoundedPrice(x, direction, reverse=False):
-	split_number = str(utils.convertToPips(x)).split('.')
-	if len(split_number) > 1:
-		decimal = int(split_number[1])
-	else:
-		decimal = 0
-
 	if reverse:
 		if direction == LONG:
-			if decimal == 0:
-				return utils.convertToPrice(float('.'.join(str(int(split_number[0]) - 1), str(5))))
-
-			if decimal <= 5:
-				return utils.convertToPrice(math.floor(x))
-			else:
-				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+			x = utils.convertToPips(x) - .5
+			x += x % .5
+			return utils.convertToPrice(x)
 
 		else:
-			if decimal >= 5:
-				return utils.convertToPrice(math.ceil(x))
-			else:
-				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+			x = utils.convertToPips(x) + .5
+			x -= x % .5
+			return utils.convertToPrice(x)
 		
 	else:
 		if direction == LONG:
-			if decimal >= 5:
-				return utils.convertToPrice(math.ceil(x))
-			else:
-				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+			x = utils.convertToPips(x) + .5
+			x -= x % .5
+			return utils.convertToPrice(x)
 
 		else:
-			if decimal == 0:
-				return utils.convertToPrice(float('.'.join(str(int(split_number[0]) - 1), str(5))))
-
-			if decimal <= 5:
-				return utils.convertToPrice(math.floor(x))
-			else:
-				return utils.convertToPrice(float('.'.join(split_number[0], str(5))))
+			x = utils.convertToPips(x) - .5
+			x += x % .5
+			return utils.convertToPrice(x)
 
 
+def getTargetPrice(price, dist, direction, reverse=False):
+	if reverse:
+		if direction == LONG:
+			dist = max(dist, utils.convertToPrice(3.0))
+			return getRoundedPrice(price - (dist * 1.1), SHORT)
+
+		else:
+			dist = max(dist, utils.convertToPrice(3.0))
+			return getRoundedPrice(price + (dist * 1.1), LONG)
+
+	else:
+		if direction == LONG:
+			dist = max(dist, utils.convertToPrice(3.0))
+			return getRoundedPrice(price + (dist * 1.1), LONG)
+
+		else:
+			dist = max(dist, utils.convertToPrice(3.0))
+			return getRoundedPrice(price - (dist * 1.1), SHORT)
 
 
 def addOffset(x, y, direction, reverse=False):
@@ -548,8 +550,18 @@ Events
 '''
 
 def confirmation(trigger):
+	entry_price = getRoundedPrice(trigger.entry, trigger.direction)
+	sl_price = getRoundedPrice(trigger.hl, trigger.direction, reverse=True)
+	tp_price = getTargetPrice(trigger.entry, abs(trigger.entry - trigger.hl), trigger.direction)
 
-	sl_price = getRoundedPrice(trigger.hl)
+	# Check current position conditions
+
+	# Check current order conditions
+
+	# Place new order
+
+	# Modify existing order
+
 
 
 # RTV/RTC

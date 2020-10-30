@@ -993,7 +993,13 @@ class IG(Broker):
 	def _handle_confirms(self, confirms):
 		item = confirms['values']['CONFIRMS']
 		if item['dealStatus'] == 'REJECTED':
-			self._handled[item['dealReference']] = {'accepted': item['dealStatus']}
+			self._handled[item['dealReference']] = {
+				self.generateReference(): {
+					'timestamp': math.floor(time.time()),
+					'accepted': False
+				}
+			}
+			
 
 	def _handle_opu(self, opu):
 		item = opu['values']['OPU']

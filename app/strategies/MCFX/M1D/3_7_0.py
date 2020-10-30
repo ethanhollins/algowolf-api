@@ -779,7 +779,7 @@ def exitSetup(chart):
 	global exit_state, time_state, is_exit_override
 	direction = getCurrentPositionDirection()
 
-	if loss_state.value >= LossState.ONE.value and exitOverrideConf(chart):
+	if exit_state != ExitState.ACTIVE and loss_state.value >= LossState.ONE.value and exitOverrideConf(chart):
 		exit_state = ExitState.ACTIVE
 
 	if exit_state == ExitState.ACTIVE:
