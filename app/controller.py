@@ -114,7 +114,6 @@ class Controller(object):
 				break
 			except socketio.exceptions.ConnectionError:
 				time.sleep(1)
-				pass
 
 		return sio
 
