@@ -146,6 +146,9 @@ class IG(Broker):
 	def _get_tokens(self, account_id=None, attempts=0):
 		endpoint = 'session'
 		self._headers['Version'] = '2'
+		self._headers['X-SECURITY-TOKEN'] = ''
+		self._headers['CST'] = ''
+
 		res = requests.post(
 			self._url + endpoint, 
 			data=json.dumps(self._creds),

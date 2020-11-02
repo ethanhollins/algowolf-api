@@ -258,8 +258,7 @@ def delete_key(strategy_id, key):
 
 
 @bp.route('/strategy/<strategy_id>', methods=('GET',))
-@bp.route('/strategy/<strategy_id>/init', methods=('POST',))
-def init_strategy_ept(strategy_id):
+def get_strategy_ept(strategy_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
 	strategy = account.getGui(strategy_id)
@@ -267,6 +266,18 @@ def init_strategy_ept(strategy_id):
 	# strategy.update(account.getStrategyTransactions(strategy_id))
 
 
+
+	return Response(
+		json.dumps(strategy, indent=2), 
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/init', methods=('POST',))
+def init_strategy_ept(strategy_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+	strategy = account.getStrategy(strategy_id)
 
 	return Response(
 		json.dumps(strategy, indent=2), 
