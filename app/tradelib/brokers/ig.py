@@ -62,7 +62,6 @@ class IG(Broker):
 		self.dl = tl.DataLoader(broker=self)
 
 		self._c_account = None
-		self._last_token_update = datetime.utcnow()
 		self._last_refresh = time.time()
 		self.is_demo = is_demo
 
@@ -117,28 +116,34 @@ class IG(Broker):
 		self._subscribe_heartbeat_update()
 
 		# Start refresh thread
-		# self.ctrl.continuousThreadHandler.addJob(self._periodic_refresh)
+		Thread(target=self._periodic_refresh).start()
 
 	def _periodic_refresh(self):
-		if time.time() - self._last_refresh > TWO_HOURS:
-			# Perform periodic refresh
-			Thread(target=self._reconnect()).start()
+		while self.is_running:
+			if time.time() - self._last_refresh > TWO_HOURS:
+				# Perform periodic refresh
+				self._working.run(
+					self, None,
+					self._token_refresh,
+					(), {}
+				)
+
+			time.sleep(1)
 
 	'''
 	Broker Utilities
 	'''
 
-	def _token_check(self):
-		
-		if (datetime.utcnow() - self._last_token_update).total_seconds() > TWO_HOURS:
-			try:
-				self._get_tokens(account_id=self._c_account)
-				self._last_token_update = datetime.utcnow()
-				return True
-			except requests.exceptions.ConnectionError as e:
-				print(e)
-			except Exception as e:
-				print(traceback.format_exc())
+	def _token_refresh(self):
+		try:
+			self._get_tokens(account_id=self._c_account)
+			self._last_refresh = time.time()
+			Thread(target=self._reconnect()).start()
+			return True
+		except requests.exceptions.ConnectionError as e:
+			print(e)
+		except Exception as e:
+			print(traceback.format_exc())
 
 		return False
 
@@ -924,8 +929,10 @@ class IG(Broker):
 
 	def _reconnect(self):
 		# Regenerate tokens
+		old_ls_client = self.ls_client
+
 		while True:
-			new_ls_client = LSClient(
+			self.ls_client = LSClient(
 				self,
 				self._creds.get('identifier'),
 				'CST-{}|XST-{}'.format(
@@ -936,22 +943,22 @@ class IG(Broker):
 			)
 
 			try:
-				self._get_tokens()
-				new_ls_client.connect()
+				self.ls_client.connect(wait=True)
+				for sub in self._subscriptions:
+					self._subscribe(*sub)
 				break
 			except Exception as e:
 				time.sleep(1)
 				pass
 
 		try:
-			self._ls_client.disconnect()
-		except:
+			old_ls_client.disconnect()
+		except Exception:
 			pass
 
-		self._ls_client = new_ls_client
-
-		for sub in self._subscriptions:
-			self._subscribe(*sub)
+		# Turn off wait
+		self.ls_client.wait = False
+		
 
 	def _subscribe(self, mode, items, fields, listener):
 		subscription = Subscription(

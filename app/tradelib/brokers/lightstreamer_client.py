@@ -91,6 +91,7 @@ class LightstreamerClient(object):
 		self._current_subscription_key = 0
 		self._control_url = None
 		self._bind_counter = 0
+		self.wait = False
 
 
 	def _encode_params(self, params):
@@ -155,7 +156,7 @@ class LightstreamerClient(object):
 			Thread(target=self.broker._reconnect).start()
 
 
-	def connect(self):
+	def connect(self, wait=False):
 		"""Establish a connection to Lightstreamer Server to create a new session."""
 		CREATE_PARAMS = {
 			'LS_op2': 'create',
@@ -165,6 +166,7 @@ class LightstreamerClient(object):
 			"LS_password": self.password
 		}
 
+		self.wait = wait
 		self.stream = self._call(self.url, CONNECTION_URL_PATH, CREATE_PARAMS)
 		stream_line = self._read_line(self.stream)
 		self._handle_stream(stream_line)
@@ -252,9 +254,8 @@ class LightstreamerClient(object):
 	def _receive(self):
 		rebind = False
 		receive = True
-		reconnect = False
 
-		while receive and not reconnect:
+		while receive:
 			try:
 				message = self._read_line(self.stream)
 				if not message.strip():
@@ -262,14 +263,6 @@ class LightstreamerClient(object):
 			except Exception as e:
 				print(traceback.format_exc())
 				message = None
-
-			# Run Pre-emptive Token Check
-			if self.broker._working.run(
-				self.broker, None,
-				self.broker._token_check,
-				(), {}
-			):
-				reconnect = True
 
 			if message is None:
 				receive = False
@@ -305,11 +298,11 @@ class LightstreamerClient(object):
 				# skipping Preamble message, keep on receiving messages
 				# log.debug("Preamble")
 				pass
-			else:
+			elif not self.wait:
 				self._forward_update(message)
 
 		if not receive:
-			if not rebind or reconnect:
+			if not rebind:
 				self.stream = None
 				self.session.clear()
 				self.subscriptions.clear()
