@@ -19,7 +19,7 @@ from app.v1 import AccessLevel, key_or_login_required
 from app.tradelib.brokers.lightstreamer_client import LightstreamerClient as LSClient
 from app.tradelib.brokers.lightstreamer_client import LightstreamerSubscription as Subscription
 
-TWO_HOURS = 60
+TWO_HOURS = 60*60*2
 
 # Priority queue that groups by account id
 class Working(list):
@@ -1026,128 +1026,130 @@ class IG(Broker):
 				if item.get('orderType'):
 					order_id = item['dealId']
 					
-					product = self._convert_to_standard_product(item['epic'])
-					direction = self._convert_to_standard_direction(item['direction'])
-					lotsize = item['size']
+					if not order_id in [order.order_id for order in self.getAllOrders()]:
+						product = self._convert_to_standard_product(item['epic'])
+						direction = self._convert_to_standard_direction(item['direction'])
+						lotsize = item['size']
 
-					order_type = self._convert_to_standard_order_type(item['orderType'])
-					
-					entry = item['level']
+						order_type = self._convert_to_standard_order_type(item['orderType'])
+						
+						entry = item['level']
 
-					# Calculate Stop Loss
-					if item.get('stopLevel'):
-						sl = item.get('stopLevel')
-					else:
-						sl = item.get('stopDistance')
+						# Calculate Stop Loss
+						if item.get('stopLevel'):
+							sl = item.get('stopLevel')
+						else:
+							sl = item.get('stopDistance')
 
-						if sl:
-							if direction == tl.LONG:
-								sl = round(entry - tl.utils.convertToPrice(sl), 5)
-							else:
-								sl = round(entry + tl.utils.convertToPrice(sl), 5)
+							if sl:
+								if direction == tl.LONG:
+									sl = round(entry - tl.utils.convertToPrice(sl), 5)
+								else:
+									sl = round(entry + tl.utils.convertToPrice(sl), 5)
 
-					# Calculate Take Profit
-					if item.get('limitLevel'):
-						tp = item.get('limitLevel')
-					else:
-						tp = item.get('limitDistance')
+						# Calculate Take Profit
+						if item.get('limitLevel'):
+							tp = item.get('limitLevel')
+						else:
+							tp = item.get('limitDistance')
 
-						if tp:
-							if direction == tl.LONG:
-								tp = round(entry + tl.utils.convertToPrice(tp), 5)
-							else:
-								tp = round(entry - tl.utils.convertToPrice(tp), 5)
+							if tp:
+								if direction == tl.LONG:
+									tp = round(entry + tl.utils.convertToPrice(tp), 5)
+								else:
+									tp = round(entry - tl.utils.convertToPrice(tp), 5)
 
-					dt = datetime.strptime(item['timestamp'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
-					open_time = int(tl.utils.convertTimeToTimestamp(dt))
+						dt = datetime.strptime(item['timestamp'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+						open_time = int(tl.utils.convertTimeToTimestamp(dt))
 
-					order = tl.Order(
-						self, order_id, account_id, product, order_type, 
-						direction, lotsize, entry_price=entry, sl=sl, tp=tp, open_time=open_time
-					)
+						order = tl.Order(
+							self, order_id, account_id, product, order_type, 
+							direction, lotsize, entry_price=entry, sl=sl, tp=tp, open_time=open_time
+						)
 
-					self.orders.append(order)
+						self.orders.append(order)
 
-					res = {
-						self.generateReference(): {
-							'timestamp': open_time,
-							'type': order_type,
-							'accepted': True,
-							'item': order
+						res = {
+							self.generateReference(): {
+								'timestamp': open_time,
+								'type': order_type,
+								'accepted': True,
+								'item': order
+							}
 						}
-					}
-					self.handleOnTrade(res)
+						self.handleOnTrade(res)
 
-					self._handled[ref] = res
+						self._handled[ref] = res
 				
 				# POSITION
 				else:					
 					order_id = item['dealId']
 					
-					product = self._convert_to_standard_product(item['epic'])
-					direction = self._convert_to_standard_direction(item['direction'])
-					lotsize = item['size']
-					
-					entry = item['level']
+					if not order_id in [pos.order_id for pos in self.getAllPositions()]:
+						product = self._convert_to_standard_product(item['epic'])
+						direction = self._convert_to_standard_direction(item['direction'])
+						lotsize = item['size']
+						
+						entry = item['level']
 
-					# Calculate Stop Loss
-					if item.get('stopLevel'):
-						sl = item.get('stopLevel')
-					else:
-						sl = item.get('stopDistance')
+						# Calculate Stop Loss
+						if item.get('stopLevel'):
+							sl = item.get('stopLevel')
+						else:
+							sl = item.get('stopDistance')
 
-						if sl:
-							if direction == tl.LONG:
-								sl = round(entry - tl.utils.convertToPrice(sl), 5)
-							else:
-								sl = round(entry + tl.utils.convertToPrice(sl), 5)
+							if sl:
+								if direction == tl.LONG:
+									sl = round(entry - tl.utils.convertToPrice(sl), 5)
+								else:
+									sl = round(entry + tl.utils.convertToPrice(sl), 5)
 
-					# Calculate Take Profit
-					if item.get('limitLevel'):
-						tp = item.get('limitLevel')
-					else:
-						tp = item.get('limitDistance')
+						# Calculate Take Profit
+						if item.get('limitLevel'):
+							tp = item.get('limitLevel')
+						else:
+							tp = item.get('limitDistance')
 
-						if tp:
-							if direction == tl.LONG:
-								tp = round(entry + tl.utils.convertToPrice(tp), 5)
-							else:
-								tp = round(entry - tl.utils.convertToPrice(tp), 5)
+							if tp:
+								if direction == tl.LONG:
+									tp = round(entry + tl.utils.convertToPrice(tp), 5)
+								else:
+									tp = round(entry - tl.utils.convertToPrice(tp), 5)
 
-					dt = datetime.strptime(item['timestamp'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
-					open_time = int(tl.utils.convertTimeToTimestamp(dt))
+						dt = datetime.strptime(item['timestamp'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+						open_time = int(tl.utils.convertTimeToTimestamp(dt))
 
-					order_type = tl.MARKET_ENTRY
-					pos = tl.Position(
-						self, order_id, account_id, product, order_type,
-						direction, lotsize, entry_price=entry, sl=sl, tp=tp, open_time=open_time
-					)
+						order_type = tl.MARKET_ENTRY
+						pos = tl.Position(
+							self, order_id, account_id, product, order_type,
+							direction, lotsize, entry_price=entry, sl=sl, tp=tp, open_time=open_time
+						)
 
-					# Check if position entry is from order
-					for i in range(len(self.orders)):
-						order = self.orders[i]
-						if order.order_id == pos.order_id:
-							order.close_price = pos.entry_price
-							order.close_time = pos.open_time
-							if order.order_type == tl.STOP_ORDER:
-								order_type = tl.STOP_ENTRY
-							elif order.order_type == tl.LIMIT_ORDER:
-								order_type = tl.LIMIT_ENTRY
-							del self.orders[i]
-							break
+						# Check if position entry is from order
+						for i in range(len(self.orders)):
+							order = self.orders[i]
+							if order.order_id == pos.order_id:
+								order.close_price = pos.entry_price
+								order.close_time = pos.open_time
+								if order.order_type == tl.STOP_ORDER:
+									order_type = tl.STOP_ENTRY
+								elif order.order_type == tl.LIMIT_ORDER:
+									order_type = tl.LIMIT_ENTRY
+								del self.orders[i]
+								break
 
-					self.positions.append(pos)
+						self.positions.append(pos)
 
-					res = {
-						self.generateReference(): {
-							'timestamp': open_time,
-							'type': order_type,
-							'accepted': True,
-							'item': pos
+						res = {
+							self.generateReference(): {
+								'timestamp': open_time,
+								'type': order_type,
+								'accepted': True,
+								'item': pos
+							}
 						}
-					}
-					self.handleOnTrade(res)
-					self._handled[ref] = res
+						self.handleOnTrade(res)
+						self._handled[ref] = res
 
 
 			# On Position/Order Deleted
