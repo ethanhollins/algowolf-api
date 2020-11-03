@@ -30,8 +30,9 @@ class Working(list):
 
 	def run(self, broker, account_id, target, args, kwargs):
 		_id = ''.join(random.choice(string.ascii_lowercase) for i in range(4))
-		# Add id to working list
-		self.append(_id)
+		# Add item to working list
+		item = (account_id, _id)
+		self.append(item)
 		# Wait for account id to be at top of list
 		while self[0][0] != account_id:
 			time.sleep(0.1)
@@ -41,8 +42,8 @@ class Working(list):
 
 		# Execute command
 		result = target(*args, **kwargs)
-		# del id from list once complete
-		del self[self.index(_id)]
+		# del item from list once complete
+		del self[self.index(item)]
 
 		return result
 
@@ -492,7 +493,6 @@ class IG(Broker):
 	'''
 
 	def _get_all_positions(self, account_id):
-		
 		endpoint = 'positions'
 		self._headers['Version'] = '2'
 		# Add command to working queue

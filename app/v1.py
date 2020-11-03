@@ -266,7 +266,6 @@ def get_strategy_ept(strategy_id):
 	# strategy.update(account.getStrategyTransactions(strategy_id))
 
 
-
 	return Response(
 		json.dumps(strategy, indent=2), 
 		status=200, content_type='application/json'
