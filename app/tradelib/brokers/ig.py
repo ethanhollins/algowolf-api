@@ -112,9 +112,6 @@ class IG(Broker):
 			'bid_open', 'bid_high', 'bid_low', 'bid_close'
 		]).set_index('timestamp')
 
-		# Receive heartbeat connectivity checks
-		self._subscribe_heartbeat_update()
-
 		# Start refresh thread
 		Thread(target=self._periodic_refresh).start()
 
