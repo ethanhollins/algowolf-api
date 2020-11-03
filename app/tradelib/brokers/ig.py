@@ -30,9 +30,8 @@ class Working(list):
 
 	def run(self, broker, account_id, target, args, kwargs):
 		_id = ''.join(random.choice(string.ascii_lowercase) for i in range(4))
-		item = (account_id, _id)
-		# Add item to working list
-		self.append(item)
+		# Add id to working list
+		self.append(_id)
 		# Wait for account id to be at top of list
 		while self[0][0] != account_id:
 			time.sleep(0.1)
@@ -42,8 +41,8 @@ class Working(list):
 
 		# Execute command
 		result = target(*args, **kwargs)
-		# del item from list once complete
-		del self[self.index(item)]
+		# del id from list once complete
+		del self[self.index(_id)]
 
 		return result
 
@@ -133,14 +132,15 @@ class IG(Broker):
 		
 		if (datetime.utcnow() - self._last_token_update).total_seconds() > TWO_HOURS:
 			try:
-				self._working.run(
-					self, None,
-					self._get_tokens,
-					(), { 'account_id': self._c_account }
-				)
+				self._get_tokens(account_id=self._c_account)
 				self._last_token_update = datetime.utcnow()
-			except requests.exceptions.ConnectionError:
-				pass
+				return True
+			except requests.exceptions.ConnectionError as e:
+				print(e)
+			except Exception as e:
+				print(traceback.format_exc())
+
+		return False
 
 
 	def _get_tokens(self, account_id=None, attempts=0):

@@ -151,7 +151,8 @@ class LightstreamerClient(object):
 			self.stream_thread.start()
 
 		else:
-			raise IOError(stream_line)
+			# Reconnect on stream fail
+			Thread(target=self.broker._reconnect).start()
 
 
 	def connect(self):
@@ -251,8 +252,9 @@ class LightstreamerClient(object):
 	def _receive(self):
 		rebind = False
 		receive = True
+		reconnect = False
 
-		while receive:
+		while receive and not reconnect:
 			try:
 				message = self._read_line(self.stream)
 				if not message.strip():
@@ -262,7 +264,12 @@ class LightstreamerClient(object):
 				message = None
 
 			# Run Pre-emptive Token Check
-			self.broker._token_check()
+			if self.broker._working.run(
+				self.broker, None,
+				self.broker._token_check,
+				(), {}
+			):
+				reconnect = True
 
 			if message is None:
 				receive = False
@@ -302,7 +309,7 @@ class LightstreamerClient(object):
 				self._forward_update(message)
 
 		if not receive:
-			if not rebind:
+			if not rebind or reconnect:
 				self.stream = None
 				self.session.clear()
 				self.subscriptions.clear()
