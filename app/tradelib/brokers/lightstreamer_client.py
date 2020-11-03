@@ -261,7 +261,6 @@ class LightstreamerClient(object):
 		while receive:
 			try:
 				message = self._read_line(self.stream)
-				print(f'RECV: {self}, {self.wait}')
 				if not message.strip():
 					message = None
 			except Exception as e:

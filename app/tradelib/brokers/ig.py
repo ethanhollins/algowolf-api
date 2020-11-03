@@ -135,10 +135,8 @@ class IG(Broker):
 
 	def _token_refresh(self):
 		try:
-			print('TOKEN REFRESH')
 			self._get_tokens(account_id=self._c_account)
 			self._last_refresh = time.time()
-			print(self._last_refresh)
 			Thread(target=self._reconnect()).start()
 			return True
 		except requests.exceptions.ConnectionError as e:
