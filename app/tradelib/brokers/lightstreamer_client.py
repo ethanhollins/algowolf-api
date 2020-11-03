@@ -92,7 +92,7 @@ class LightstreamerClient(object):
 		self._control_url = None
 		self._bind_counter = 0
 		self.wait = False
-
+		self.reconnect = True
 
 	def _encode_params(self, params):
 		"""Encode the parameter for HTTP POST submissions, but only for non empty values."""
@@ -167,6 +167,7 @@ class LightstreamerClient(object):
 		}
 
 		self.wait = wait
+		print(f'CONN: {self}, {self.wait}')
 		self.stream = self._call(self.url, CONNECTION_URL_PATH, CREATE_PARAMS)
 		stream_line = self._read_line(self.stream)
 		self._handle_stream(stream_line)
@@ -184,6 +185,8 @@ class LightstreamerClient(object):
 
 
 	def disconnect(self):
+		print(f'DISCONN: {self}')
+		self.reconnect = False
 		if self.stream is not None:
 			self._control({"LS_op": OP_DESTROY})
 			# self.broker.ctrl.continuousThreadHandler.stopJob(self.stream_thread)
@@ -258,6 +261,7 @@ class LightstreamerClient(object):
 		while receive:
 			try:
 				message = self._read_line(self.stream)
+				print(f'RECV: {self}, {self.wait}')
 				if not message.strip():
 					message = None
 			except Exception as e:
@@ -301,7 +305,7 @@ class LightstreamerClient(object):
 			elif not self.wait:
 				self._forward_update(message)
 
-		if not receive:
+		if not receive and self.reconnect:
 			if not rebind:
 				self.stream = None
 				self.session.clear()

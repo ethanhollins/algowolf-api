@@ -19,7 +19,7 @@ from app.v1 import AccessLevel, key_or_login_required
 from app.tradelib.brokers.lightstreamer_client import LightstreamerClient as LSClient
 from app.tradelib.brokers.lightstreamer_client import LightstreamerSubscription as Subscription
 
-TWO_HOURS = 60*60*2
+TWO_HOURS = 60
 
 # Priority queue that groups by account id
 class Working(list):
@@ -119,6 +119,7 @@ class IG(Broker):
 	def _periodic_refresh(self):
 		while self.is_running:
 			if time.time() - self._last_refresh > TWO_HOURS:
+				print('PERIODIC REFRESH')
 				# Perform periodic refresh
 				self._working.run(
 					self, None,
@@ -134,8 +135,10 @@ class IG(Broker):
 
 	def _token_refresh(self):
 		try:
+			print('TOKEN REFRESH')
 			self._get_tokens(account_id=self._c_account)
 			self._last_refresh = time.time()
+			print(self._last_refresh)
 			Thread(target=self._reconnect()).start()
 			return True
 		except requests.exceptions.ConnectionError as e:
@@ -925,6 +928,7 @@ class IG(Broker):
 			# 	pass
 
 	def _reconnect(self):
+		print('RECONNECTING')
 		# Regenerate tokens
 		old_ls_client = self._ls_client
 
@@ -941,17 +945,19 @@ class IG(Broker):
 
 			try:
 				self._ls_client.connect(wait=True)
-				for sub in self._subscriptions:
-					self._subscribe(*sub)
 				break
 			except Exception as e:
+				print(traceback.format_exc())
 				time.sleep(1)
 				pass
+
+		for sub in self._subscriptions:
+			self._subscribe(*sub)
 
 		try:
 			old_ls_client.disconnect()
 		except Exception:
-			pass
+			print(traceback.format_exc())
 
 		# Turn off wait
 		self._ls_client.wait = False
