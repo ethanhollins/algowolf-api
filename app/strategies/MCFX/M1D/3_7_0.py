@@ -262,8 +262,12 @@ def tRevRLCrossCancelConf(chart, trigger):
 def tRevCtDonchCancelConf(chart, trigger):
 	curr_donch = getDonchValue(chart, trigger.direction, reverse=True)
 	prev_donch = getDonchValue(chart, trigger.direction, reverse=True, offset=1)
+	opp_trigger = getTrigger(trigger.direction, reverse=True)
 
-	return isCrossed(curr_donch, prev_donch, trigger.direction, reverse=True)
+	return (
+		isCrossed(curr_donch, prev_donch, trigger.direction, reverse=True) and
+		isCrossed(curr_donch, opp_trigger.last_flat, trigger.direction, reverse=True)
+	)
 
 
 def tRevOneConf(chart, trigger):
@@ -529,7 +533,7 @@ def baselineSetup(chart, trigger):
 		trigger.current_baseline_count += 1
 	else:
 		if trigger.current_baseline_count in range(3, A_ONE):
-			trigger.preceding_baseline = value
+			trigger.preceding_baseline = trigger.current_baseline
 
 		if trigger.baseline_state == BaselineState.COMPLETE_A:
 			if (
@@ -561,6 +565,8 @@ def baselineSetup(chart, trigger):
 	if isDonchFlat(chart, trigger.direction, A_FOUR):
 		trigger.start_baseline = value
 
+	if isDonchFlat(chart, trigger.direction, 1):
+		trigger.last_flat = value
 
 
 def reverseLineSetup(chart, trigger):
@@ -1188,6 +1194,7 @@ class Trigger(dict):
 		self.current_baseline = None
 		self.current_baseline_count = 0
 		self.reverse_line = None
+		self.last_flat = None
 
 		self.t_rev_state = TRevState.ONE
 		self.t_rev_flat = None

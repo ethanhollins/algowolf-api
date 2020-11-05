@@ -122,6 +122,7 @@ class Chart(object):
 	def handleTick(self, result):
 		for res in result:
 			period = res.get('period')
+
 			if self._subscriptions.get(period) is not None:
 				for s in self._subscriptions[period].keys():
 					try:

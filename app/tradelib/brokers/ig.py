@@ -19,7 +19,7 @@ from app.v1 import AccessLevel, key_or_login_required
 from app.tradelib.brokers.lightstreamer_client import LightstreamerClient as LSClient
 from app.tradelib.brokers.lightstreamer_client import LightstreamerSubscription as Subscription
 
-TWO_HOURS = 60*60*2
+TWO_HOURS = 75
 
 # Priority queue that groups by account id
 class Working(list):
@@ -929,6 +929,10 @@ class IG(Broker):
 		print('RECONNECTING')
 		# Regenerate tokens
 		old_ls_client = self._ls_client
+		try:
+			old_ls_client.disconnect()
+		except Exception:
+			print(traceback.format_exc())
 
 		while True:
 			self._ls_client = LSClient(
@@ -942,7 +946,7 @@ class IG(Broker):
 			)
 
 			try:
-				self._ls_client.connect(wait=True)
+				self._ls_client.connect(wait=False)
 				break
 			except Exception as e:
 				print(traceback.format_exc())
@@ -952,10 +956,10 @@ class IG(Broker):
 		for sub in self._subscriptions:
 			self._subscribe(*sub)
 
-		try:
-			old_ls_client.disconnect()
-		except Exception:
-			print(traceback.format_exc())
+		# try:
+		# 	old_ls_client.disconnect()
+		# except Exception:
+		# 	print(traceback.format_exc())
 
 		# Turn off wait
 		self._ls_client.wait = False
