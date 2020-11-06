@@ -191,7 +191,8 @@ class Chart(object):
 			unsub = self._unsubscriptions[i]
 			try:
 				sub = self._subscriptions[unsub[0]][unsub[1]]
-				del sub[unsub[2]]
+				if unsub[2] in sub:
+					del sub[unsub[2]]
 			except ValueError:
 				pass
 			del self._unsubscriptions[i]

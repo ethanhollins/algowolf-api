@@ -224,11 +224,14 @@ class Strategy(object):
 			}
 
 			# Send Gui Socket Message
-			self.api.ctrl.sio.emit(
-				'ongui', 
-				{'strategy_id': self.strategyId, 'item': item}, 
-				namespace='/admin'
-			)
+			try:
+				self.api.ctrl.sio.emit(
+					'ongui', 
+					{'strategy_id': self.strategyId, 'item': item}, 
+					namespace='/admin'
+				)
+			except Exception:
+				pass
 
 			# Save to drawing queue
 			self.drawing_queue.append(item)
@@ -251,11 +254,14 @@ class Strategy(object):
 			}
 
 			# Send Gui Socket Message
-			self.api.ctrl.sio.emit(
-				'ongui', 
-				{'strategy_id': self.strategyId, 'item': item}, 
-				namespace='/admin'
-			)
+			try:
+				self.api.ctrl.sio.emit(
+					'ongui', 
+					{'strategy_id': self.strategyId, 'item': item}, 
+					namespace='/admin'
+				)
+			except Exception:
+				pass
 
 			# Handle to drawing queue
 			self.drawing_queue.append(item)
@@ -278,11 +284,14 @@ class Strategy(object):
 			}
 
 			# Send Gui Socket Message
-			self.api.ctrl.sio.emit(
-				'ongui', 
-				{'strategy_id': self.strategyId, 'item': item}, 
-				namespace='/admin'
-			)
+			try:
+				self.api.ctrl.sio.emit(
+					'ongui', 
+					{'strategy_id': self.strategyId, 'item': item}, 
+					namespace='/admin'
+				)
+			except Exception:
+				pass
 
 			# Handle to drawing queue
 			self.drawing_queue.append(item)
@@ -309,11 +318,15 @@ class Strategy(object):
 			}
 
 			# Send Gui Socket Message
-			self.api.ctrl.sio.emit(
-				'ongui', 
-				{'strategy_id': self.strategyId, 'item': item}, 
-				namespace='/admin'
-			)
+			try:
+				self.api.ctrl.sio.emit(
+					'ongui', 
+					{'strategy_id': self.strategyId, 'item': item}, 
+					namespace='/admin'
+				)
+			except Exception:
+				pass
+
 
 			# Save to log queue
 			self.log_queue.append(item)
@@ -347,11 +360,14 @@ class Strategy(object):
 			}
 
 			# Send Gui Socket Message
-			self.api.ctrl.sio.emit(
-				'ongui', 
-				{'strategy_id': self.strategyId, 'item': item}, 
-				namespace='/admin'
-			)
+			try:
+				self.api.ctrl.sio.emit(
+					'ongui', 
+					{'strategy_id': self.strategyId, 'item': item}, 
+					namespace='/admin'
+				)
+			except Exception:
+				pass
 
 			# Handle to info queue
 			self.info_queue.append(item)

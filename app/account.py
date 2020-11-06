@@ -159,6 +159,37 @@ class Account(object):
 		return strategy.package
 
 
+	def _runStrategyScript(self, strategy_id, broker_id, accounts, auth_key):
+		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+
+		# Retrieve Input Variables
+		gui = self.getGui(strategy_id)
+		input_variables = gui.get('input_variables')
+
+		package = strategy_info['package']
+		script_id = package.split('.')[0]
+		version = package.split('.')[1]
+
+		payload = {
+			'user_id': self.userId,
+			'strategy_id': strategy_id,
+			'broker_id': broker_id,
+			'accounts': accounts,
+			'auth_key': auth_key,
+			'input_variables': {},
+			'script_id': script_id,
+			'version': version
+		}
+
+		self.ctrl.sio.emit(
+			'start', 
+			payload,
+			namespace='/admin'
+		)
+
+		return script_id
+
+
 	def stopStrategyScript(self, broker_id, accounts):
 		strategy = self.strategies.get(broker_id)
 		if strategy is not None:
@@ -166,6 +197,23 @@ class Account(object):
 			return strategy.package
 		else:
 			return None
+
+
+	def _stopStrategyScript(self, broker_id, accounts):
+
+		payload = {
+			'user_id': self.userId,
+			'broker_id': broker_id,
+			'accounts': accounts
+		}
+
+		self.ctrl.sio.emit(
+			'stop', 
+			payload,
+			namespace='/admin'
+		)
+
+		return broker_id
 
 
 	def updateStrategyPackage(self, strategy_id, new_package):

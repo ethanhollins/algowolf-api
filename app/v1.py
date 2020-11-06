@@ -288,7 +288,8 @@ def init_strategy_ept(strategy_id):
 def start_script_ept(strategy_id, broker_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.ADMIN)
 	account = ctrl.accounts.getAccount(user_id)
-
+	key = request.headers.get('Authorization').replace('Bearer ', '')
+	
 	# Make sure strategy is started
 	account.startStrategy(strategy_id)
 
@@ -308,7 +309,7 @@ def start_script_ept(strategy_id, broker_id):
 					content_type='application/json'
 				)
 
-		package = account.runStrategyScript(strategy_id, broker_id, accounts)
+		package = account.runStrategyScript(strategy_id, broker_id, accounts, key)
 
 		res = { 'starting': package }
 		return Response(
