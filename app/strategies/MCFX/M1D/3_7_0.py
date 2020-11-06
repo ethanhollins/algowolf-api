@@ -1136,11 +1136,11 @@ def onTrade(trade):
 	# On Stop Loss
 	if trade.type == STOP_LOSS:
 		if trade.item.direction == LONG:
-			long_trigger.requires_variation = True
+			# long_trigger.requires_variation = True
 			if long_trigger.is_stop_point:
 				long_trigger.is_re_entry = True
 		else:
-			short_trigger.requires_variation = True
+			# short_trigger.requires_variation = True
 			if short_trigger.is_stop_point:
 				short_trigger.is_re_entry = True
 
