@@ -413,10 +413,10 @@ class Oanda(Broker):
 		order_id = res.get('orderID') 
 		order = self.getOrderByID(order_id)
 
+		ts = tl.convertTimeToTimestamp(datetime.strptime(
+			res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
+		))
 		if order is not None:
-			ts = tl.convertTimeToTimestamp(datetime.strptime(
-				res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-			))
 			order.close_time = ts
 			del self.orders[self.orders.index(order)]
 			result[self.generateReference()] = {
@@ -429,6 +429,33 @@ class Oanda(Broker):
 			# Add update to handled
 			self._handled[oanda_id] = result
 
+		else:
+			for trade in self.positions:
+				if trade.sl_id == order_id:
+					trade.sl = None
+					trade.sl_id = None
+
+					result[self.generateReference()] = {
+						'timestamp': ts,
+						'type': tl.MODIFY,
+						'accepted': True,
+						'item': trade
+					}
+
+				elif trade.tp_id == order_id:
+					trade.tp = None
+					trade.tp_id = None
+
+					result[self.generateReference()] = {
+						'timestamp': ts,
+						'type': tl.MODIFY,
+						'accepted': True,
+						'item': trade
+					}
+
+			if result:
+				# Add update to handled
+				self._handled[oanda_id] = result
 
 		return result
 
@@ -446,6 +473,7 @@ class Oanda(Broker):
 			))
 
 			pos.sl = float(res.get('price'))
+			pos.sl_id = oanda_id
 
 			result[self.generateReference()] = {
 				'timestamp': ts,
@@ -472,6 +500,7 @@ class Oanda(Broker):
 			))
 
 			pos.tp = float(res.get('price'))
+			pos.tp_id = oanda_id
 
 			result[self.generateReference()] = {
 				'timestamp': ts,
@@ -496,6 +525,7 @@ class Oanda(Broker):
 		if res.status_code == 200:
 			result = {account_id: []}
 			res = res.json()
+			print(res)
 			for pos in res.get('trades'):
 				order_id = pos.get('id')
 				product = pos.get('instrument')
@@ -503,11 +533,15 @@ class Oanda(Broker):
 				lotsize = abs(float(pos.get('currentUnits')))
 				entry_price = float(pos.get('price'))
 				sl = None
+				sl_id = None
 				if pos.get('stopLossOrder'):
 					sl = float(pos['stopLossOrder'].get('price'))
+					sl_id = pos['stopLossOrder'].get('id')
 				tp = None
+				tp_id = None
 				if pos.get('takeProfitOrder'):
 					tp = float(pos['takeProfitOrder'].get('price'))
+					tp_id = pos['takeProfitOrder'].get('id')
 				open_time = datetime.strptime(pos.get('openTime').split('.')[0], '%Y-%m-%dT%H:%M:%S')
 
 				new_pos = tl.Position(
@@ -515,7 +549,8 @@ class Oanda(Broker):
 					order_id, account_id, product,
 					tl.MARKET_ENTRY, direction, lotsize,
 					entry_price, sl, tp, 
-					tl.utils.convertTimeToTimestamp(open_time)
+					tl.utils.convertTimeToTimestamp(open_time),
+					sl_id=sl_id, tp_id=tp_id
 				)
 
 				result[account_id].append(new_pos)
@@ -1453,7 +1488,6 @@ class Oanda(Broker):
 
 	def _on_account_update(self, update):
 		res = {}
-
 		if update.get('type') == 'HEARTBEAT':
 			self._last_update = time.time()
 

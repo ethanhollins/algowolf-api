@@ -399,17 +399,19 @@ class Database(object):
 		return True
 
 
-	def getStrategyGui(self, user_id, strategy_id):
+	def getStrategyGui(self, user_id, strategy_id, account_code):
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
-				Key=f'{user_id}/{strategy_id}/gui.json.gz'
+				Key=f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
 			)
 			if res.get('Body'):
 				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
 
 		except Exception:
-			return None
+			return {}
 
 
 	def getStrategyTrades(self, user_id, strategy_id):
@@ -418,10 +420,13 @@ class Database(object):
 				Bucket=self.strategyBucketName,
 				Key=f'{user_id}/{strategy_id}/trades.json.gz'
 			)
-			return json.loads(gzip.decompress(res['Body'].read()))
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
 		
 		except Exception:
-			return None
+			return {}
 
 
 	def getStrategyTransactions(self, user_id, strategy_id):
@@ -431,17 +436,49 @@ class Database(object):
 				Bucket=self.strategyBucketName,
 				Key=f'{user_id}/{strategy_id}/transactions.csv.gz'
 			)
-			f_obj = gzip.decompress(res['Body'].read())
-			return pd.read_csv(io.BytesIO(f_obj), sep=',').set_index('reference_id').sort_values(by=['timestamp'])
+			if res.get('Body'):
+				f_obj = gzip.decompress(res['Body'].read())
+				return pd.read_csv(io.BytesIO(f_obj), sep=',').set_index('reference_id').sort_values(by=['timestamp'])
+			else:
+				return None
 
 		except Exception:
 			return None
 
 
-	def updateStrategyGui(self, user_id, strategy_id, obj):
+	def getStrategyInputVariables(self, user_id, strategy_id, script_id):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/input_variables/{script_id}.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
+
+		except Exception:
+			return {}
+
+	def getAccountInputVariables(self, user_id, strategy_id, account_code, script_id):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/accounts/{account_code}/input_variables/{script_id}.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
+
+		except Exception:
+			return {}
+
+
+	def updateStrategyGui(self, user_id, strategy_id, account_code, obj):
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
-			f'{user_id}/{strategy_id}/gui.json.gz'
+			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
 		)
 		gui_object.put(
 			Body=gzip.compress(
@@ -478,6 +515,34 @@ class Database(object):
 			f'{user_id}/{strategy_id}/transactions.csv.gz'
 		)
 		transactions_object.put(Body=gzip.compress(f_obj))
+		return True
+
+
+	def updateStrategyInputVariables(self, user_id, strategy_id, script_id, obj):
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/input_variables/{script_id}.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				self._flat_dump(obj, indent=2).encode('utf8')
+			)
+		)
+
+		return True
+
+
+	def updateAccountInputVariables(self, user_id, strategy_id, account_code, script_id, obj):
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/accounts/{account_code}/input_variables/{script_id}.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				self._flat_dump(obj, indent=2).encode('utf8')
+			)
+		)
+
 		return True
 
 

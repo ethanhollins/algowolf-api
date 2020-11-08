@@ -67,10 +67,7 @@ class Account(object):
 				strategy = self._set_strategy(strategy_id, broker_id, broker, strategy_info.get('package'))
 
 
-	def getStrategyInfo(self, broker_id):
-		# while self.strategies.get(strategy_id) == 'working':
-		# 	pass
-		
+	def getStrategyInfo(self, broker_id):		
 		strategy = self.strategies.get(broker_id)
 		if strategy is None:
 			self.startStrategy(broker_id)
@@ -152,7 +149,7 @@ class Account(object):
 		strategy = self.getStrategyInfo(broker_id)
 
 		# Retrieve Input Variables
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		input_variables = gui.get('input_variables')
 
 		Thread(target=strategy.run, args=(accounts, input_variables)).start()
@@ -163,7 +160,7 @@ class Account(object):
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 
 		# Retrieve Input Variables
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		input_variables = gui.get('input_variables')
 
 		package = strategy_info['package']
@@ -330,14 +327,14 @@ class Account(object):
 		).start()
 		
 
-	def getGui(self, strategy_id):
-		return self.ctrl.getDb().getStrategyGui(self.userId, strategy_id)
+	def getGui(self, strategy_id, account_code):
+		return self.ctrl.getDb().getStrategyGui(self.userId, strategy_id, account_code)
 
-	def updateGui(self, strategy_id, new_gui):
-		self.ctrl.getDb().updateStrategyGui(self.userId, strategy_id, new_gui)
+	def updateGui(self, strategy_id, account_code, new_gui):
+		self.ctrl.getDb().updateStrategyGui(self.userId, strategy_id, account_code, new_gui)
 
-	def updateGuiItems(self, strategy_id, items):
-		gui = self.getGui(strategy_id)
+	def updateGuiItems(self, strategy_id, account_code, items):
+		gui = self.getGui(strategy_id, account_code)
 		item_ids = [i['id'] for i in gui['windows']]
 		result = []
 
@@ -353,11 +350,11 @@ class Account(object):
 		if items.get('account') != None:
 			gui['account'] = items.get('account')
 
-		self.updateGui(strategy_id, gui)
+		self.updateGui(strategy_id, account_code, gui)
 		return result
 
-	def createGuiItem(self, strategy_id, item):
-		gui = self.getGui(strategy_id)
+	def createGuiItem(self, strategy_id, account_code, item):
+		gui = self.getGui(strategy_id, account_code)
 		gui_ids = [i['id'] for i in gui['windows']]
 
 		# Make sure id is unique
@@ -366,11 +363,11 @@ class Account(object):
 			item['id'] = self.generateId()
 
 		gui['windows'].push(item)
-		self.updateGui(strategy_id, gui)
+		self.updateGui(strategy_id, account_code, gui)
 		return item['id']
 
 	def deleteGuiItems(self, strategy_id, items):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		item_ids = [i['id'] for i in gui['windows']]
 		result = []
 
@@ -380,8 +377,24 @@ class Account(object):
 					del gui['windows'][item_ids.index(i)]
 					result.append(i)
 
-		self.updateGui(strategy_id, gui)
+		self.updateGui(strategy_id, account_code, gui)
 		return result
+
+
+	def getStrategyInputVariables(strategy_id, script_id):
+		return self.ctrl.getDb().getStrategyInputVariables(self.userId, strategy_id, script_id)
+
+
+	def updateStrategyInputVariables(strategy_id, script_id, new_vars):		
+		return self.ctrl.getDb().updateStrategyInputVariables(self.userId, strategy_id, script_id, new_vars)
+
+
+	def getAccountInputVariables(strategy_id, account_code, script_id):
+		return self.ctrl.getDb().getAccountInputVariables(self.userId, strategy_id, account_code, script_id)
+
+
+	def updateAccountInputVariables(strategy_id, script_id, account_code, new_vars):		
+		return self.ctrl.getDb().updateAccountInputVariables(self.userId, strategy_id, script_id, account_code, new_vars)
 
 
 	def getBacktestInfo(self, strategy_id, backtest_id):
@@ -496,7 +509,7 @@ class Account(object):
 
 	# Drawing Functions
 	def createDrawings(self, strategy_id, layer, drawings):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		if gui is not None and layer in gui['drawings']:
 			# Validation
 
@@ -525,14 +538,14 @@ class Account(object):
 			)
 
 			# Update Gui Storage
-			self.updateGui(strategy_id, gui)
+			self.updateGui(strategy_id, account_code, gui)
 			return new_ids
 
 		return None
 
 
 	def deleteDrawingsById(self, strategy_id, layer, drawing_ids):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		if gui is not None and layer in gui['drawings']:
 			# Validation
 
@@ -556,14 +569,14 @@ class Account(object):
 			)
 
 			# Update Gui Storage
-			self.updateGui(strategy_id, gui)
+			self.updateGui(strategy_id, account_code, gui)
 			return deleted
 
 		return []
 
 
 	def deleteDrawingLayer(self, strategy_id, layer):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		if gui is not None and layer in gui['drawings']:
 			# Validation
 
@@ -581,13 +594,13 @@ class Account(object):
 			)
 
 			# Update Gui Storage
-			self.updateGui(strategy_id, gui)
+			self.updateGui(strategy_id, account_code, gui)
 			return layer
 
 		return None
 
 	def deleteAllDrawings(self, strategy_id):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		if gui is not None:
 			# Validation
 
@@ -605,7 +618,7 @@ class Account(object):
 			)
 
 			# Update Gui Storage
-			self.updateGui(strategy_id, gui)
+			self.updateGui(strategy_id, account_code, gui)
 			return deleted_layers
 
 		return None
@@ -631,14 +644,14 @@ class Account(object):
 
 
 	def replaceInputVariables(self, strategy_id, input_variables):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 		gui['input_variables'] = input_variables
-		self.updateGui(strategy_id, gui)
+		self.updateGui(strategy_id, account_code, gui)
 		return input_variables
 
 
 	def updateInputVariables(self, strategy_id, input_variables):
-		gui = self.getGui(strategy_id)
+		gui = self.getGui(strategy_id, account_code)
 
 		# Process input variable changes
 		if 'input_variables' in gui:
@@ -652,7 +665,7 @@ class Account(object):
 						input_variables[name]['value'] = gui['input_variables'][name]['value']
 
 		gui['input_variables'] = input_variables
-		self.updateGui(strategy_id, gui)
+		self.updateGui(strategy_id, account_code, gui)
 		return input_variables
 
 

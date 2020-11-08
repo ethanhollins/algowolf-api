@@ -6,7 +6,10 @@ from app.error import BrokerException
 
 class Position(dict):
 
-	def __init__(self, broker, order_id, account_id, product, order_type, direction, lotsize, entry_price=None, sl=None, tp=None, open_time=None):
+	def __init__(self, 
+		broker, order_id, account_id, product, order_type, direction, lotsize, 
+		entry_price=None, sl=None, tp=None, open_time=None, sl_id=None, tp_id=None
+	):
 		
 		# Hidden Variable
 		super().__setattr__('_broker', broker)
@@ -21,7 +24,9 @@ class Position(dict):
 		self.entry_price = entry_price
 		self.close_price = None
 		self.sl = sl
+		self.sl_id = sl_id
 		self.tp = tp
+		self.tp_id = tp_id
 
 		if open_time:
 			self.open_time = int(open_time)
