@@ -132,7 +132,7 @@ class Chart(object):
 					except Exception as e:
 						pass
 
-			self.ctrl.sio.emit(
+			self.ctrl.emit(
 				'ontick', 
 				{'broker': self.broker.name, 'item': res}, 
 				namespace='/admin'

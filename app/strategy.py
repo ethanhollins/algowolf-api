@@ -18,7 +18,7 @@ class Strategy(object):
 		# Check if already started
 		self.app.run(accounts, input_variables)
 		# Send completion message
-		self.api.ctrl.sio.emit(
+		self.api.ctrl.emit(
 			'ongui', 
 			{
 				'strategy_id': self.strategyId,

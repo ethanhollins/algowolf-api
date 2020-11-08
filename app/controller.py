@@ -4,6 +4,7 @@ import socketio
 import requests
 import shortuuid
 import time
+import traceback
 from copy import copy
 from urllib.request import urlopen
 from flask import abort
@@ -116,6 +117,13 @@ class Controller(object):
 				time.sleep(1)
 
 		return sio
+
+	def emit(self, event, data=None, namespace=None, callback=None):
+		try:
+			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
+		except Exception:
+			print(traceback.format_exc())
+
 
 	def getAccounts(self):
 		return self.accounts

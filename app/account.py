@@ -181,7 +181,7 @@ class Account(object):
 			'version': version
 		}
 
-		self.ctrl.sio.emit(
+		self.ctrl.emit(
 			'start', 
 			payload,
 			namespace='/admin'
@@ -207,7 +207,7 @@ class Account(object):
 			'accounts': accounts
 		}
 
-		self.ctrl.sio.emit(
+		self.ctrl.emit(
 			'stop', 
 			payload,
 			namespace='/admin'
@@ -514,7 +514,7 @@ class Account(object):
 			gui['drawings'][layer] += drawings
 
 			# Send Message to web clients
-			self.ctrl.sio.emit(
+			self.ctrl.emit(
 				'ongui', 
 				{
 					'type': 'create_drawings',
@@ -545,7 +545,7 @@ class Account(object):
 					del gui['drawings'][layer][i]
 
 			# Send Message to web clients
-			self.ctrl.sio.emit(
+			self.ctrl.emit(
 				'ongui', 
 				{
 					'type': 'delete_drawings',
@@ -571,7 +571,7 @@ class Account(object):
 			del gui['drawings'][layer]
 
 			# Send Message to web clients
-			self.ctrl.sio.emit(
+			self.ctrl.emit(
 				'ongui', 
 				{
 					'type': 'delete_drawing_layer',
@@ -596,7 +596,7 @@ class Account(object):
 			gui['drawings'] = {}
 
 			# Send Message to web clients
-			self.ctrl.sio.emit(
+			self.ctrl.emit(
 				'ongui', 
 				{
 					'type': 'delete_all_drawings'

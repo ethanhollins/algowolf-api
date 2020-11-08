@@ -239,6 +239,43 @@ def getPeriodHL(period, chart, bars, direction, reverse=False):
 			return min(ohlc[:bars])
 
 
+def getPositionDirection():
+	for pos in strategy.positions:
+		return pos.direction
+
+	return None
+
+
+def getOrderDirection():
+	for order in strategy.orders:
+		return order.direction
+
+	return None
+
+
+def getSessionTimes(now):
+	'''Calculate sessions times (assumes a less than 24 hour session)'''
+	converted_time = utils.convertTimezone(now, TZ)
+
+	# End Time
+	end_time = converted_time.replace(
+		hour=END_TIME[0], minute=END_TIME[1], second=0, microsecond=0
+	) - timedelta(minutes=1)
+
+	if time_state == TimeState.WAIT and end_time < converted_time:
+		end_time += timedelta(days=1)
+
+	# Start Time
+	start_time = converted_time.replace(
+		hour=START_TIME[0], minute=START_TIME[1], second=0, microsecond=0
+	) - timedelta(minutes=1)
+	if start_time > end_time:
+		start_time -= timedelta(days=1)
+	elif time_state == TimeState.WAIT and start_time < converted_time:
+		start_time += timedelta(days=1)
+
+	return start_time, end_time
+
 
 def addOffset(x, y, direction, reverse=False):
 	if reverse:
@@ -251,6 +288,10 @@ def addOffset(x, y, direction, reverse=False):
 			return y + x
 		else:
 			return y - x
+
+
+def resetTriggers():
+	return
 
 
 '''
@@ -306,15 +347,21 @@ def isRetestCancelConf(chart, trigger):
 	)
 
 
-def isRtvBarCancelConf(trigger):
+def isRetestBarCancelConf(trigger):
 	return (
-		trigger.bars_passed > 20
+		trigger.bars_passed > 5
 	)
 
 
-def isRtcBarCancelConf(trigger):
+def isDVCancel(trigger):
+	if trigger.direction == LONG:
+		dv_trigger = dv_short_trigger_a
+	else:
+		dv_trigger = dv_long_trigger_a
+
 	return (
-		trigger.bars_passed > 5
+		not isTrendingConfirmingEvidence(trigger.direction) and
+		dv_trigger.state == DVState.ACTIVE
 	)
 
 
@@ -362,7 +409,7 @@ def isTrendingWithPullbackIntraConf(period, chart, trigger):
 	)
 
 
-def isBollingWalkOneConf(period, chart, trigger):
+def isBollingerWalkOneConf(period, chart, trigger):
 	# Select Correct Chart Period
 	ohlc = chart.bids[period]
 	boll = chart.indicators[getIndName(period, chart, 'boll')]
@@ -440,8 +487,9 @@ def isDvEntryOneConf(period, chart, trigger):
 	hl = getHL(ohlc, trigger.direction)
 
 	return (
-		isTagged(hl, ema_slow_val, trigger.direction) or
-		isTagged(hl, ema_fast_val, trigger.direction)
+		(isTagged(hl, ema_slow_val, trigger.direction) or
+				isTagged(hl, ema_fast_val, trigger.direction)) and
+		isHammer(ohlc, trigger.direction)
 	)
 
 
@@ -483,13 +531,7 @@ def isBBConfirmingEvidence(direction):
 
 
 # Confirming Evidence Cancellations
-def isBollingerTouchBarCancelConf(trigger):
-	return (
-		trigger.bars_passed > 2
-	)
-
-
-def isTrendingWithPullbackCancelConf(trigger):
+def isConfirmingEvidenceBarCancelConf(trigger):
 	return (
 		trigger.bars_passed > 2
 	)
@@ -560,9 +602,8 @@ def isTrending(direction, reverse=False):
 				trend_short_trigger_c.state == TrendState.ACTIVE
 			)
 
-
-
 # Trend Cancellations
+
 
 # Bollinger Cancel Confirmation
 def isTrendBollingerCancelConf(period, chart, trigger):
@@ -659,23 +700,65 @@ def isNoTrendHighAndTightConf(period, chart, trigger, target):
 		not isCrossed(target, period_hl, trigger.direction)
 	)
 
+# Order Confirmations
+def isBetterEntryConf(pending_order, trigger):
+	return (
+		trigger.pending_order is None or
+		isCrossed(
+			pending_order.entry_price,
+			trigger.pending_order.entry_price,
+			trigger.direction, reverse=True
+		)
+	)
+
 
 '''
 Events
 '''
 
-def confirmation(trigger):
-	
-
-
+def confirmation(pending_order):
 	# Check current position conditions
+	if time_state == TimeState.TRADING:
+		if getPositionDirection() != pending_order.direction:
 
-	# Check current order conditions
+			# Check current order conditions
+			order_direction = getOrderDirection()
+			if order_direction == pending_order.direction:
+				# Modify existing order
+				for order in strategy.orders:
+					order.modify(
+						entry_price=pending_order.entry_price,
+						sl_price=pending_order.sl_price,
+						tp_price=pending_order.tp_price
+					)
 
-	# Place new order
+			else:
+				# Cancel opposite orders
+				if order_direction != pending_order.direction:
+					for order in strategy.orders:
+						order.cancel()
 
-	# Modify existing order
+				# Place new order
+				if pending_order.direction == LONG:
+					result = strategy.buy(
+						product.EURUSD, 1.0, order_type=STOP_ORDER,
+						entry_price=pending_order.entry_price,
+						sl_price=pending_order.sl_price,
+						tp_price=pending_order.tp_price
+					)
 
+				else:
+					result = strategy.sell(
+						product.EURUSD, 1.0, order_type=STOP_ORDER,
+						entry_price=pending_order.entry_price,
+						sl_price=pending_order.sl_price,
+						tp_price=pending_order.tp_price
+					)
+
+
+def cancelOrders():
+	for order in strategy.orders:
+		order.cancel()
 
 
 # RTV/RTC
@@ -705,37 +788,40 @@ def onRtvSetup(chart, trigger):
 
 	elif trigger.state == RtvState.FOUR:
 		# Calc order prices
-		entry_price = getRoundedPrice(ohlc[0, 3], trigger.direction)
+		entry_price = getRoundedPrice(getHL(chart.bids[CHART_A], trigger.direction), trigger.direction)
+		sl_price = trigger.swing
 		tp_price = getTargetPrice(entry_price, abs(entry_price - trigger.swing), trigger.direction)
+		pending_order = PendingOrder(trigger.direction, entry_price, sl_price, tp_price)
 
-		# Is Trending in Entry Direction
-		if isTrending(trigger.direction):
-			if isTrendingConfirmingEvidence(trigger.direction):
-				if isTrendingHighAndTightConf(period, chart, trigger, tp_price):
-					confirmation(trigger)
-					trigger.state = RtvState.COMPLETE
+		if isBetterEntryConf(pending_order, trigger):
+			if not isDVCancel(trigger):
+				trigger.pending_order = pending_order
+				# Is Trending in Entry Direction
+				if isTrending(trigger.direction):
+					if isTrendingConfirmingEvidence(trigger.direction):
+						if isTrendingHighAndTightConf(period, chart, trigger, tp_price):
+							confirmation(trigger.pending_order)
 
-		# Is Trending opposite to Entry Direction
-		elif isTrending(trigger.direction, reverse=True):
-			if isBBConfirmingEvidence(trigger.direction):
-				if isOppTrendingHighAndTightConf(period, chart, trigger, tp_price):
-					confirmation(trigger)
-					trigger.state = RtvState.COMPLETE
+				# Is Trending opposite to Entry Direction
+				elif isTrending(trigger.direction, reverse=True):
+					if isBBConfirmingEvidence(trigger.direction):
+						if isOppTrendingHighAndTightConf(period, chart, trigger, tp_price):
+							confirmation(trigger.pending_order)
 
-
-		# Is not Trending
-		else:
-			if isBBConfirmingEvidence(trigger.direction):
-				if isNoTrendHighAndTightConf(period, chart, trigger, tp_price):
-					confirmation(trigger)
-					trigger.state = RtvState.COMPLETE
+				# Is not Trending
+				else:
+					if isBBConfirmingEvidence(trigger.direction):
+						if isNoTrendHighAndTightConf(period, chart, trigger, tp_price):
+							confirmation(trigger.pending_order)
 
 
 def onRtcSetup(chart, trigger):
 
 	if trigger.state.value > RtcState.ONE:
 		trigger.bars_passed += 1
-		if isRtcBarCancelConf(trigger):
+		if isRetestBarCancelConf(trigger):
+			if trigger.pending_order is not None:
+				cancelOrders()
 			trigger.reset()
 
 	if trigger.state == RtcState.ONE:
@@ -749,13 +835,39 @@ def onRtcSetup(chart, trigger):
 			trigger.state = RtcState.THREE
 
 	elif trigger.state == RtcState.THREE:
-		if isConfirmingEvidence():
-			trigger.state = RtvState.COMPLETE
+		# Calc order prices
+		entry_price = getRoundedPrice(getHL(chart.bids[CHART_A], trigger.direction), trigger.direction)
+		sl_price = trigger.swing
+		tp_price = getTargetPrice(entry_price, abs(entry_price - trigger.swing), trigger.direction)
+		pending_order = PendingOrder(trigger.direction, entry_price, sl_price, tp_price)
+
+		if isBetterEntryConf(pending_order, trigger):
+			if not isDVCancel(trigger):
+				trigger.pending_order = pending_order
+				# Is Trending in Entry Direction
+				if isTrending(trigger.direction):
+					if isTrendingConfirmingEvidence(trigger.direction):
+						if isTrendingHighAndTightConf(period, chart, trigger, tp_price):
+							confirmation(trigger.pending_order)
+
+				# Is Trending opposite to Entry Direction
+				elif isTrending(trigger.direction, reverse=True):
+					if isBBConfirmingEvidence(trigger.direction):
+						if isOppTrendingHighAndTightConf(period, chart, trigger, tp_price):
+							confirmation(trigger.pending_order)
+
+				# Is not Trending
+				else:
+					if isBBConfirmingEvidence(trigger.direction):
+						if isNoTrendHighAndTightConf(period, chart, trigger, tp_price):
+							confirmation(trigger.pending_order)
 
 
 def onRetestCancelSetup(chart, trigger):
 	
 	if isRetestCancelConf(chart, trigger):
+		if trigger.pending_order is not None:
+			cancelOrders()
 		trigger.reset()
 
 
@@ -800,7 +912,6 @@ def trendBarEndSetup(period, chart, trigger):
 			trigger.state = TrendState.ACTIVE
 
 		else:
-			trigger.state = TrendState.TWO
 			trigger.setHL(getHL(ohlc, trigger.direction))
 			trigger.setClose(ohlc[0,3])
 
@@ -810,7 +921,7 @@ def bollingerTouchBarEndSetup(chart, trigger):
 	
 	if trigger.state == BollingerTouchState.ACTIVE:
 		trigger.bars_passed += 1
-		if isBollingerTouchBarCancelConf(trigger):
+		if isConfirmingEvidenceBarCancelConf(trigger):
 			trigger.reset()
 
 
@@ -839,7 +950,8 @@ def trendingWithPullbackBarEndSetup(period, chart, trigger, trend_trigger):
 				trigger.state = TrendingWithPullbackState.ACTIVE
 
 		elif trigger.state == TrendingWithPullbackState.ACTIVE:
-			if isTrendingWithPullbackOneConf(period, chart, trigger):
+			trigger.bars_passed += 1
+			if isConfirmingEvidenceBarCancelConf(period, chart, trigger):
 				trigger.state = TrendingWithPullbackState.ONE
 
 
@@ -850,7 +962,11 @@ def bollingerWalkSetup(period, chart, trigger):
 			trigger.state = BollingWalkState.ACTIVE
 
 	elif trigger.state == BollingerWalkState.ACTIVE:
+		trigger.bars_passed += 1
 		if isBollingerWalkCancelConf(period, chart, trigger):
+			trigger.state = BollingWalkState.ONE
+
+		elif isConfirmingEvidenceBarCancelConf(period, chart, trigger):
 			trigger.state = BollingWalkState.ONE
 
 
@@ -904,16 +1020,59 @@ def dvTrendingSetup(period, chart, trigger, trend_trigger):
 
 
 def dvTrendingEntrySetup(period, chart, trigger):
-	if trigger.state == DVState.ACTIVE:
-		if trigger.entry_state == DVEntryState.ONE:
-			if isDvEntryOneConf(period, chart, trigger):
-				# Calc order prices
+	ohlc = chart[period]
 
-				confirmation()
+	if trigger.state == DVState.ACTIVE:
+		entry_price = getRoundedPrice(ohlc[0, 3], trigger.direction)
+		sl_price = getRoundedPrice(getHL(ohlc, trigger.direction, reverse=True), trigger.direction)
+		tp_price = getTargetPrice(entry_price, abs(entry_price - sl_price), trigger.direction)
+		pending_order = PendingOrder(trigger.direction, entry_price, sl_price, tp_price)
+
+		if trigger.entry_state == DVEntryState.ONE:
+
+			if isDvEntryOneConf(period, chart, trigger):
+				if isTrendingConfirmingEvidence(trigger.direction):
+					trigger.pending_order = pending_order
+					# Calc order prices
+					confirmation(trigger.pending_order)
+
+			elif trigger.pending_order is not None:
+				if entry_price != trigger.pending_order.entry_price:
+					cancelOrders()
+					trigger.pending_order = None
+
+				elif isCrossed(
+					sl_price, trigger.pending_order.sl_price, 
+					trigger.direction, reverse=True
+				):
+					trigger.pending_order = pending_order
+					confirmation(trigger.pending_order)
 
 
 def onTime(timestamp, chart):
-	return
+	global time_state, session, bank
+	# Get session times
+	now = utils.convertTimezone(utils.convertTimestampToTime(timestamp), TZ)
+	start_time, end_time = getSessionTimes(now)
+
+	# Set time state
+	if time_state == TimeState.WAIT:
+		if now >= start_time:
+			# Reset globals
+			time_state = TimeState.TRADING
+			bank = strategy.getBalance()
+			session = []
+			resetTriggers()
+
+			# Draw session line
+			# drawSessionStartLine(chart)
+
+	elif time_state == TimeState.TRADING:
+		if now > end_time:
+			time_state = TimeState.WAIT
+			# Draw session line
+			# drawSessionEndLine(chart)
+
 
 '''
 TWO MINUTES
@@ -1035,6 +1194,15 @@ def setInputs():
 
 
 def setGlobals():
+	global session, time_state, bank
+	session = []
+	time_state = TimeState.WAIT
+	bank = 0
+
+	global START_TIME, END_TIME
+	START_TIME = [7, 0]
+	END_TIME = [13, 0]
+
 	globals rtv_long_trigger, rtv_short_trigger
 	rtv_long_trigger = RtvTrigger(LONG)
 	rtv_short_trigger = RtvTrigger(SHORT)
@@ -1088,8 +1256,6 @@ def setGlobals():
 	dv_short_trigger_c = DVTrigger(SHORT)
 
 
-
-
 def report(tick):
 	return
 
@@ -1133,7 +1299,10 @@ def onStart():
 
 
 def onTrade(trade):
-	return
+	
+	if trade.type in (MARKET_ENTRY, STOP_ENTRY, LIMIT_ENTRY):
+		global session
+		session.append(trade.item)
 
 
 def onTick(tick):
@@ -1171,6 +1340,15 @@ class BetterDict(dict):
 		self[key] = value
 
 
+class PendingOrder(BetterDict):
+
+	def __init__(self, direction, entry_price, sl_price, tp_price):
+		self.direction = direction
+		self.entry_price = entry_price
+		self.sl_price = sl_price
+		self.tp_price = tp_price
+
+
 class RtvState(Enum):
 	ONE = 1
 	TWO = 2
@@ -1184,6 +1362,7 @@ class RtvTrigger(BetterDict):
 	def __init__(self, direction):
 		self.direction = direction
 		self.state = RtvState.ONE
+		self.pending_order = None
 
 		# Cancel Vars
 		self.entry = None
@@ -1200,6 +1379,7 @@ class RtvTrigger(BetterDict):
 		self.state = RtvState.ONE
 		self.swing = None
 		self.bars_passed = 0
+		self.pending_order = None
 
 
 class RtcState(Enum):
@@ -1214,6 +1394,7 @@ class RtcTrigger(BetterDict):
 	def __init__(self, direction):
 		self.direction = direction
 		self.state = RtcState.ONE
+		self.pending_order = None
 
 		# Cancel Vars
 		self.entry = None
@@ -1230,6 +1411,7 @@ class RtcTrigger(BetterDict):
 		self.state = RtvState.ONE
 		self.swing = None
 		self.bars_passed = 0
+		self.pending_order = None
 
 
 class TrendState(Enum):
@@ -1353,6 +1535,13 @@ class BollingerWalkTrigger(BetterDict):
 		self.direction = direction
 		self.state = BollingerWalkState.ONE
 
+		# Cancel Vars 
+		self.bars_passed = 0
+
+	def reset(self):
+		self.state = BollingerWalkState.ONE
+		self.bars_passed = 0
+
 
 class DVState(Enum):
 	ONE = 1
@@ -1371,6 +1560,7 @@ class DVTrigger(BetterDict):
 		self.direction = direction
 		self.state = DVState.ONE
 		self.entry_state = DVEntryState.ONE
+		self.pending_order = None
 
 		# Setup Vars
 		self.close = None
@@ -1406,4 +1596,10 @@ class DVTrigger(BetterDict):
 
 		self.new_pivot = None
 		self.pivot_count = 0
+		self.pending_order = None
+
+
+class TimeState(Enum):
+	WAIT = 1
+	TRADING = 2
 
