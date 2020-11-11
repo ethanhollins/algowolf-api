@@ -374,66 +374,57 @@ class Strategy(object):
 
 	def handleDrawingsSave(self, gui):
 		if gui is None:
-			gui = self.api.userAccount.getGui(self.strategyId)
+			gui = self.api.userAccount.getGui(self.strategyId, self.getAccountCode())
 
 		if 'drawings' not in gui or not isinstance(gui['drawings'], dict):
 			gui['drawings'] = {}
 
-		if self.getAccountCode() not in gui['drawings']:
-			gui['drawings'][self.getAccountCode()] = {}
-
 		for i in self.drawing_queue:
 			if i['type'] == tl.CREATE_DRAWING:
-				if i['item']['layer'] not in gui['drawings'][self.getAccountCode()]:
-					gui['drawings'][self.getAccountCode()][i['item']['layer']] = []
-				gui['drawings'][self.getAccountCode()][i['item']['layer']].append(i['item'])
+				if i['item']['layer'] not in gui['drawings']:
+					gui['drawings'][i['item']['layer']] = []
+				gui['drawings'][i['item']['layer']].append(i['item'])
 
 			elif i['type'] == tl.CLEAR_DRAWING_LAYER:
-				if i['item'] in gui['drawings'][self.getAccountCode()]:
-					gui['drawings'][self.getAccountCode()][i['item']] = []
+				if i['item'] in gui['drawings']:
+					gui['drawings'][i['item']] = []
 
 			elif i['type'] == tl.CLEAR_ALL_DRAWINGS:
-				for layer in gui['drawings'][self.getAccountCode()]:
-					gui['drawings'][self.getAccountCode()][layer] = []
+				for layer in gui['drawings']:
+					gui['drawings'][layer] = []
 
-		for layer in gui['drawings'][self.getAccountCode()]:
-			gui['drawings'][self.getAccountCode()][layer] = gui['drawings'][self.getAccountCode()][layer][-MAX_GUI:]
+		for layer in gui['drawings']:
+			gui['drawings'][layer] = gui['drawings'][layer][-MAX_GUI:]
 
 		return gui
 
 	def handleLogsSave(self, gui):
 		if gui is None:
-			gui = self.api.userAccount.getGui(self.strategyId)
+			gui = self.api.userAccount.getGui(self.strategyId, self.getAccountCode())
 
 		if 'logs' not in gui or not isinstance(gui['logs'], dict):
 			gui['logs'] = {}
 
-		if self.getAccountCode() not in gui['logs']:
-			gui['logs'][self.getAccountCode()] = []
-
-		gui['logs'][self.getAccountCode()] += self.log_queue
-		gui['logs'][self.getAccountCode()] = gui['logs'][self.getAccountCode()][-MAX_GUI:]
+		gui['logs'] += self.log_queue
+		gui['logs'] = gui['logs'][-MAX_GUI:]
 
 		return gui
 
 	def handleInfoSave(self, gui):
 		if gui is None:
-			gui = self.api.userAccount.getGui(self.strategyId)
+			gui = self.api.userAccount.getAccountGui(self.strategyId, self.getAccountCode())
 
 		if 'info' not in gui or not isinstance(gui['info'], dict):
 			gui['info'] = {}
 
-		if self.getAccountCode() not in gui['info']:
-			gui['info'][self.getAccountCode()] = {}
-
 		for i in self.info_queue:
-			if i['timestamp'] not in gui['info'][self.getAccountCode()]:
-				gui['info'][self.getAccountCode()][i['timestamp']] = []
+			if i['timestamp'] not in gui['info']:
+				gui['info'][i['timestamp']] = []
 
-			gui['info'][self.getAccountCode()][i['timestamp']].append(i['item'])
+			gui['info'][i['timestamp']].append(i['item'])
 		
-		gui['info'][self.getAccountCode()] = dict(sorted(
-			gui['logs'][self.getAccountCode()].items(), key=lambda x: x[0]
+		gui['info'] = dict(sorted(
+			gui['logs'].items(), key=lambda x: x[0]
 		)[-MAX_GUI:])
 		
 		return gui
@@ -453,7 +444,7 @@ class Strategy(object):
 				gui = self.handleInfoSave(gui)
 
 			if gui is not None:
-				Thread(target=self.api.userAccount.updateGui, args=(self.strategyId, gui)).start()
+				Thread(target=self.api.userAccount.updateAccountGui, args=(self.strategyId, self.getAccountCode(), gui)).start()
 				self.resetGuiQueues()
 
 

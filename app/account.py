@@ -58,11 +58,12 @@ class Account(object):
 		for broker_id in brokers:
 			broker = self.brokers.get(broker_id)
 			if broker is not None:
-				self.updateTrades(
-					strategy_id,
-					broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
-					broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
-				)
+				if tl.broker.PAPERTRADER_NAME in broker.getAccounts():
+					self.updateTrades(
+						strategy_id,
+						broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
+						broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
+					)
 
 				strategy = self._set_strategy(strategy_id, broker_id, broker, strategy_info.get('package'))
 
@@ -145,27 +146,22 @@ class Account(object):
 		self.ctrl.getDb().updateStrategy(self.userId, strategy_id, strategy_info)
 
 
-	def runStrategyScript(self, strategy_id, broker_id, accounts):
+	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
 		strategy = self.getStrategyInfo(broker_id)
-
-		# Retrieve Input Variables
-		gui = self.getGui(strategy_id, account_code)
-		input_variables = gui.get('input_variables')
 
 		Thread(target=strategy.run, args=(accounts, input_variables)).start()
 		return strategy.package
 
 
-	def _runStrategyScript(self, strategy_id, broker_id, accounts, auth_key):
+	def _runStrategyScript(self, strategy_id, broker_id, accounts, auth_key, input_variables):
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
-
-		# Retrieve Input Variables
-		gui = self.getGui(strategy_id, account_code)
-		input_variables = gui.get('input_variables')
 
 		package = strategy_info['package']
 		script_id = package.split('.')[0]
 		version = package.split('.')[1]
+
+		if input_variables is None:
+			input_variables = {}
 
 		payload = {
 			'user_id': self.userId,
@@ -173,7 +169,7 @@ class Account(object):
 			'broker_id': broker_id,
 			'accounts': accounts,
 			'auth_key': auth_key,
-			'input_variables': {},
+			'input_variables': input_variables,
 			'script_id': script_id,
 			'version': version
 		}
@@ -270,6 +266,15 @@ class Account(object):
 		return result
 
 
+	def getAccountInfo(self, strategy_id, account_code):
+		script_id = self.getScriptId(strategy_id)
+
+		result = {}
+		result.update(self.getAccountGui(strategy_id, account_code))
+		result['input_variables'] = self.getAccountInputVariables(strategy_id, account_code, script_id)
+		return result
+
+
 	# API Key Functions
 	def getKeys(self, strategy_id):
 		keys = self.keys.get(strategy_id)
@@ -327,14 +332,24 @@ class Account(object):
 		).start()
 		
 
-	def getGui(self, strategy_id, account_code):
-		return self.ctrl.getDb().getStrategyGui(self.userId, strategy_id, account_code)
+	def getStrategyGui(self, strategy_id):
+		return self.ctrl.getDb().getStrategyGui(self.userId, strategy_id)
 
-	def updateGui(self, strategy_id, account_code, new_gui):
-		self.ctrl.getDb().updateStrategyGui(self.userId, strategy_id, account_code, new_gui)
 
-	def updateGuiItems(self, strategy_id, account_code, items):
-		gui = self.getGui(strategy_id, account_code)
+	def updateStrategyGui(self, strategy_id, new_gui):
+		self.ctrl.getDb().updateStrategyGui(self.userId, strategy_id, new_gui)
+
+
+	def getAccountGui(self, strategy_id, account_code):
+		return self.ctrl.getDb().getAccountGui(self.userId, strategy_id, account_code)
+
+
+	def updateAccountGui(self, strategy_id, account_code, new_gui):
+		self.ctrl.getDb().updateAccountGui(self.userId, strategy_id, account_code, new_gui)
+
+
+	def updateStrategyGuiItems(self, strategy_id, items):
+		gui = self.getStrategyGui(strategy_id)
 		item_ids = [i['id'] for i in gui['windows']]
 		result = []
 
@@ -350,11 +365,12 @@ class Account(object):
 		if items.get('account') != None:
 			gui['account'] = items.get('account')
 
-		self.updateGui(strategy_id, account_code, gui)
+		self.updateStrategyGui(strategy_id, gui)
 		return result
 
-	def createGuiItem(self, strategy_id, account_code, item):
-		gui = self.getGui(strategy_id, account_code)
+
+	def createStrategyGuiItem(self, strategy_id, item):
+		gui = self.getStrategyGui(strategy_id)
 		gui_ids = [i['id'] for i in gui['windows']]
 
 		# Make sure id is unique
@@ -363,11 +379,12 @@ class Account(object):
 			item['id'] = self.generateId()
 
 		gui['windows'].push(item)
-		self.updateGui(strategy_id, account_code, gui)
+		self.updateStrategyGui(strategy_id, gui)
 		return item['id']
 
-	def deleteGuiItems(self, strategy_id, items):
-		gui = self.getGui(strategy_id, account_code)
+
+	def deleteStrategyGuiItems(self, strategy_id, items):
+		gui = self.getStrategyGui(strategy_id)
 		item_ids = [i['id'] for i in gui['windows']]
 		result = []
 
@@ -377,23 +394,75 @@ class Account(object):
 					del gui['windows'][item_ids.index(i)]
 					result.append(i)
 
-		self.updateGui(strategy_id, account_code, gui)
+		self.updateStrategyGui(strategy_id, gui)
 		return result
 
 
-	def getStrategyInputVariables(strategy_id, script_id):
-		return self.ctrl.getDb().getStrategyInputVariables(self.userId, strategy_id, script_id)
+	def getScriptId(self, strategy_id):
+		# Get Script Id
+		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+		return strategy_info['package'].split('.')[0]
 
 
-	def updateStrategyInputVariables(strategy_id, script_id, new_vars):		
+	def getStrategyInputVariables(self, strategy_id, script_id, update=True):
+		default_vars = self.ctrl.getDb().getScriptInputVariables(script_id)
+		strategy_vars = self.ctrl.getDb().getStrategyInputVariables(self.userId, strategy_id, script_id)
+
+		if len(strategy_vars) == 0:
+			strategy_vars['Preset 1'] = {}
+
+		result = {}
+		for preset in strategy_vars:
+			result[preset] = {}
+			for k in default_vars:
+				if k in strategy_vars[preset]:
+					if (
+						default_vars[k].get('scope') == strategy_vars[preset][k].get('scope') and
+						default_vars[k].get('type') == strategy_vars[preset][k].get('type')
+					):
+						result[preset][k] = strategy_vars[preset][k]
+						continue
+
+				if default_vars[k].get('scope') == 'global':
+					result[preset][k] = default_vars[k]
+
+		if update:
+			self.updateStrategyInputVariables(strategy_id, script_id, result)
+		return result
+
+
+	def updateStrategyInputVariables(self, strategy_id, script_id, new_vars):		
 		return self.ctrl.getDb().updateStrategyInputVariables(self.userId, strategy_id, script_id, new_vars)
 
 
-	def getAccountInputVariables(strategy_id, account_code, script_id):
-		return self.ctrl.getDb().getAccountInputVariables(self.userId, strategy_id, account_code, script_id)
+	def getAccountInputVariables(self, strategy_id, account_code, script_id, update=True):
+		default_vars = self.ctrl.getDb().getScriptInputVariables(script_id)
+		account_vars = self.ctrl.getDb().getAccountInputVariables(self.userId, strategy_id, account_code, script_id)
+
+		if len(account_vars) == 0:
+			account_vars['Preset 1'] = {}
+
+		result = {}
+		for preset in account_vars:
+			result[preset] = {}
+			for k in default_vars:
+				if k in account_vars[preset]:
+					if (
+						default_vars[k].get('scope') == account_vars[preset][k].get('scope') and
+						default_vars[k].get('type') == account_vars[preset][k].get('type')
+					):
+						result[preset][k] = account_vars[preset][k]
+						continue
+
+				if default_vars[k].get('scope') == 'local':
+					result[preset][k] = default_vars[k]
+
+		if update:
+			self.updateAccountInputVariables(strategy_id, account_code, script_id, result)
+		return result
 
 
-	def updateAccountInputVariables(strategy_id, script_id, account_code, new_vars):		
+	def updateAccountInputVariables(self, strategy_id, script_id, account_code, new_vars):		
 		return self.ctrl.getDb().updateAccountInputVariables(self.userId, strategy_id, script_id, account_code, new_vars)
 
 
@@ -643,39 +712,71 @@ class Account(object):
 		return backtest_id
 
 
-	def replaceInputVariables(self, strategy_id, input_variables):
-		gui = self.getGui(strategy_id, account_code)
-		gui['input_variables'] = input_variables
-		self.updateGui(strategy_id, account_code, gui)
+	def replaceStrategyInputVariables(self, strategy_id, input_variables):
+		# Retrieve
+		script_id = self.getScriptId(strategy_id)
+		global_vars = self.getStrategyInputVariables(strategy_id, script_id, update=False)
+
+		for preset in input_variables:
+			global_vars[preset] = input_variables[preset]
+
+		# Update
+		self.updateStrategyInputVariables(strategy_id, script_id, global_vars)
+
 		return input_variables
 
 
-	def updateInputVariables(self, strategy_id, input_variables):
-		gui = self.getGui(strategy_id, account_code)
+	def replaceAccountInputVariables(self, strategy_id, account_code, input_variables):
+		# Retrieve
+		script_id = self.getScriptId(strategy_id)
+		local_vars = self.getAccountInputVariables(strategy_id, account_code, script_id, update=False)
 
-		# Process input variable changes
-		if 'input_variables' in gui:
-			for name in gui['input_variables']:
-				if name in input_variables:
-					if (
-						input_variables[name]['type'] != 'header' and
-						input_variables[name]['type'] == gui['input_variables'][name]['type'] and
-						gui['input_variables'][name]['value'] is not None
-					):
-						input_variables[name]['value'] = gui['input_variables'][name]['value']
+		for preset in input_variables:
+			local_vars[preset] = input_variables[preset]
 
-		gui['input_variables'] = input_variables
-		self.updateGui(strategy_id, account_code, gui)
+		# Update
+		self.updateAccountInputVariables(strategy_id, account_code, script_id, local_vars)
+
 		return input_variables
 
 
-	def compileStrategy(self, strategy_id):
-		strategy = self.getStrategyInfo(strategy_id)
+	# def updateInputVariables(self, strategy_id, account_code, script_id, input_variables):
+	# 	global_vars = self.getStrategyInputVariables(strategy_id, script_id)
+	# 	local_vars = self.getAccountInputVariables(strategy_id, account_code, script_id)
 
-		properties = strategy.compile()
-		self.updateInputVariables(strategy_id, properties['input_variables'])
+	# 	# Process input variable changes
+	# 	for name in global_vars:
+	# 		if name in input_variables['global']:
+	# 			if (
+	# 				input_variables['global'][name]['type'] != 'header' and
+	# 				input_variables['global'][name]['type'] == global_vars[name]['type'] and
+	# 				global_vars[name]['value'] is not None
+	# 			):
+	# 				input_variables['global'][name]['value'] = global_vars[name]['value']
 
-		return properties
+	# 	for name in local_vars:
+	# 		if name in input_variables['local']:
+	# 			if (
+	# 				input_variables['local'][name]['type'] != 'header' and
+	# 				input_variables['local'][name]['type'] == local_vars[name]['type'] and
+	# 				local_vars[name]['value'] is not None
+	# 			):
+	# 				input_variables['local'][name]['value'] = local_vars[name]['value']
+
+	# 	global_vars = input_variables['global']
+	# 	local_vars = input_variables['local']
+	# 	self.updateStrategyInputVariables(strategy_id, script_id, global_vars)
+	# 	self.updateAccountInputVariables(strategy_id, account_code, script_id, local_vars)
+	# 	return input_variables
+
+
+	# def compileStrategy(self, strategy_id):
+	# 	strategy = self.getStrategyInfo(strategy_id)
+
+	# 	properties = strategy.compile()
+	# 	self.updateInputVariables(strategy_id, account_code, script_id, properties['input_variables'])
+
+	# 	return properties
 
 
 	# Log Functions

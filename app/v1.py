@@ -258,13 +258,15 @@ def delete_key(strategy_id, key):
 
 
 @bp.route('/strategy/<strategy_id>', methods=('GET',))
-def get_strategy_ept(strategy_id):
+def get_strategy_info_ept(strategy_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
-	strategy = account.getGui(strategy_id)
-	strategy.update(account.getStrategy(strategy_id))
-	# strategy.update(account.getStrategyTransactions(strategy_id))
+	strategy = account.getStrategy(strategy_id)
+	strategy.update(account.getStrategyGui(strategy_id))
 
+	script_id = account.getScriptId(strategy_id)
+	strategy['input_variables'] = account.getStrategyInputVariables(strategy_id, script_id)
+	# strategy.update(account.getStrategyTransactions(strategy_id))
 
 	return Response(
 		json.dumps(strategy, indent=2), 
@@ -284,6 +286,35 @@ def init_strategy_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/<broker_id>/<account_id>', methods=('GET',))
+def get_strategy_account_info_ept(strategy_id, broker_id, account_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+	account.startStrategy(strategy_id)
+
+	account_code = '.'.join((broker_id, account_id))
+	result = account.getAccountInfo(strategy_id, account_code)
+	return Response(
+		json.dumps(result, indent=2), 
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/scripts/<script_id>', methods=('POST',))
+def update_script_ept(script_id):
+	body = getJson()
+	if body['properties'].get('input_variables') is not None:
+		ctrl.getDb().updateScriptInputVariables(script_id, body['properties']['input_variables'])
+
+	result = {
+		'script_id': script_id
+	}
+	return Response(
+		json.dumps(result, indent=2), 
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/strategy/<strategy_id>/start/<broker_id>', methods=('POST',))
 def start_script_ept(strategy_id, broker_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.ADMIN)
@@ -297,6 +328,7 @@ def start_script_ept(strategy_id, broker_id):
 	body = getJson()
 
 	accounts = body.get('accounts')
+	input_variables = body.get('input_variables')
 	if accounts is not None:
 		broker = account.getStrategyBroker(broker_id)
 		for account_id in accounts:
@@ -309,7 +341,8 @@ def start_script_ept(strategy_id, broker_id):
 					content_type='application/json'
 				)
 
-		package = account.runStrategyScript(strategy_id, broker_id, accounts, key)
+		# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
+		package = account._runStrategyScript(strategy_id, broker_id, accounts, key, input_variables)
 
 		res = { 'starting': package }
 		return Response(
@@ -331,7 +364,8 @@ def stop_script_ept(strategy_id, broker_id):
 
 	accounts = body.get('accounts')
 	if accounts is not None:
-		package = account.stopStrategyScript(broker_id, accounts)
+		# package = account.stopStrategyScript(broker_id, accounts)
+		package = account._stopStrategyScript(broker_id, accounts)
 
 		res = account.getStrategy(strategy_id)
 		return Response(
@@ -357,29 +391,76 @@ def compile_strategy_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/variables', methods=('GET',))
+@auth.login_required
+def get_strategy_input_variables_ept(strategy_id, script_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	script_id = account.getScriptId(strategy_id)
+	input_variables = account.getStrategyInputVariables(strategy_id, script_id)
+
+	body = getJson()
+	if body.get('preset'):
+		input_variables = input_variables.get(preset)
+
+	res = { 'input_variables': input_variables }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/strategy/<strategy_id>/variables', methods=('POST',))
 @auth.login_required
-def replace_input_variables_ept(strategy_id):
+def replace_strategy_input_variables_ept(strategy_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
 
 	body = getJson()
-	if body.get('input_variables'):
-		input_variables = account.replaceInputVariables(strategy_id, body.get('input_variables'))
-		res = { 'input_variables': input_variables }
-		return Response(
-			json.dumps(res, indent=2),
-			status=200, content_type='application/json'
-		)
-	else:
-		error = {
-			'error': 'ValueError',
-			'message': '`input_variables` not submitted.'
-		}
-		return Response(
-			json.dumps(error, indent=2),
-			status=400, content_type='application/json'
-		)
+	input_variables = account.replaceStrategyInputVariables(strategy_id, body)
+	res = { 'input_variables': input_variables }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/variables/<broker_id>/<account_id>', methods=('GET',))
+@auth.login_required
+def get_account_input_variables_ept(strategy_id, broker_id, account_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	script_id = account.getScriptId(strategy_id)
+	account_code = '.'.join((broker_id, account_id))
+	input_variables = account.getAccountInputVariables(strategy_id, account_code, script_id)
+
+	body = getJson()
+	if body.get('preset'):
+		input_variables = input_variables.get(preset)
+
+	res = { 'input_variables': input_variables }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/variables/<broker_id>/<account_id>', methods=('POST',))
+@auth.login_required
+def replace_account_input_variables_ept(strategy_id, broker_id, account_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	body = getJson()
+	account_code = '.'.join((broker_id, account_id))
+	input_variables = account.replaceAccountInputVariables(strategy_id, account_code, body)
+	res = { 'input_variables': input_variables }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
 
 
 # Order/Position Functions
@@ -828,11 +909,11 @@ def get_historical_prices_ept(broker, product, period):
 
 # `/gui` ept
 @bp.route('/strategy/<strategy_id>/gui', methods=('GET',))
-def get_gui_details_ept(strategy_id):
+def get_strategy_gui_details_ept(strategy_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
 
-	gui = account.getGui(strategy_id)
+	gui = account.getStrategyGui(strategy_id)
 	if gui is None:
 		error = {
 			'error': 'NotFound',
@@ -848,13 +929,14 @@ def get_gui_details_ept(strategy_id):
 		status=200, content_type='application/json'
 	)
 
+
 @bp.route('/strategy/<strategy_id>/gui', methods=('PUT',))
 @auth.login_required
-def update_gui_items_ept(strategy_id):
+def update_strategy_gui_items_ept(strategy_id):
 	account = g.user
 
 	body = getJson()
-	item_ids = account.updateGuiItems(strategy_id, body)
+	item_ids = account.updateStrategyGuiItems(strategy_id, body)
 
 	res = {
 		'item_ids': item_ids
@@ -864,13 +946,14 @@ def update_gui_items_ept(strategy_id):
 		status=200, content_type='application/json'
 	)
 
+
 @bp.route('/strategy/<strategy_id>/gui', methods=('POST',))
 @auth.login_required
-def create_gui_item_ept(strategy_id):
+def create_strategy_gui_item_ept(strategy_id):
 	account = g.user
 
 	body = getJson()
-	item_id = account.createGuiItem(strategy_id, body)
+	item_id = account.createStrategyGuiItem(strategy_id, body)
 
 	res = {
 		'item_id': item_id
@@ -880,13 +963,52 @@ def create_gui_item_ept(strategy_id):
 		status=200, content_type='application/json'
 	)
 
+
+@bp.route('/strategy/<strategy_id>/gui/<broker_id>/<account_id>', methods=('GET',))
+def get_account_gui_details_ept(strategy_id, broker_id, account_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	account_code = '.'.join((broker_id, account_id))
+	gui = account.getAccountGui(strategy_id, account_code)
+	if gui is None:
+		error = {
+			'error': 'NotFound',
+			'message': 'Strategy not found.'
+		}
+		return Response(
+			json.dumps(error, indent=2),
+			status=404, content_type='application/json'
+		)
+
+	return Response(
+		json.dumps(gui, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/gui/<broker_id>/<account_id>', methods=('PUT',))
+def update_account_gui_details_ept(strategy_id, broker_id, account_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	account_code = '.'.join((broker_id, account_id))
+	account.updateAccountGui(strategy_id, account_code)
+
+	res = { 'message': 'success' }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/strategy/<strategy_id>/gui', methods=('DELETE',))
 @auth.login_required
-def deletes_gui_items_ept(strategy_id):
+def delete_strategy_gui_items_ept(strategy_id):
 	account = g.user
 
 	body = getJson()
-	item_ids = account.deleteGuiItems(strategy_id, body)
+	item_ids = account.deleteStrategyGuiItems(strategy_id, body)
 
 	res = {
 		'item_ids': item_ids

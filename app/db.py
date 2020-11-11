@@ -18,10 +18,14 @@ class Database(object):
 		self._generate_s3()
 		if 'dev' in db_name:
 			self.userTable = self._generate_table('brokerlib-user-dev')
+			self.scriptTable = self._generate_table('algowolf-scripts-dev')
 			self.strategyBucketName = 'brokerlib-strategies-dev'
+			self.scriptBucketName = 'algowolf-scripts-dev'
 		else:
 			self.userTable = self._generate_table('brokerlib-user')
+			self.scriptTable = self._generate_table('algowolf-scripts')
 			self.strategyBucketName = 'brokerlib-strategies'
+			self.scriptBucketName = 'algowolf-scripts-dev'
 
 		self.priceDataBucketName = 'brokerlib-prices'
 
@@ -58,6 +62,7 @@ class Database(object):
 			for i in range(len(row)):
 				row[i] = self._convert_to_decimal(row[i])
 		elif isinstance(row, float):
+			print(row)
 			return Decimal(row)
 			
 		return row
@@ -399,7 +404,22 @@ class Database(object):
 		return True
 
 
-	def getStrategyGui(self, user_id, strategy_id, account_code):
+	def getStrategyGui(self, user_id, strategy_id):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/gui.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
+
+		except Exception:
+			return {}
+
+
+	def getAccountGui(self, user_id, strategy_id, account_code):
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -475,7 +495,36 @@ class Database(object):
 			return {}
 
 
-	def updateStrategyGui(self, user_id, strategy_id, account_code, obj):
+	def getScriptInputVariables(self, script_id):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.scriptBucketName,
+				Key=f'{script_id}/input_variables.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
+		
+		except Exception:
+			return {}
+
+
+	def updateStrategyGui(self, user_id, strategy_id, obj):
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/gui.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				self._flat_dump(obj, indent=2).encode('utf8')
+			)
+		)
+
+		return True
+
+
+	def updateAccountGui(self, user_id, strategy_id, account_code, obj):
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
@@ -564,6 +613,20 @@ class Database(object):
 			Bucket=self.strategyBucketName,
 			Delete=delete_keys
 		)
+
+
+	def updateScriptInputVariables(self, script_id, obj):
+		gui_object = self._s3_res.Object(
+			self.scriptBucketName,
+			f'{script_id}/input_variables.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				json.dumps(obj, indent=2).encode('utf8')
+			)
+		)
+
+		return True
 
 	'''
 	Backtest Storage Functions
