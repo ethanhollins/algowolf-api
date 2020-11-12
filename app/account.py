@@ -2,6 +2,7 @@ import json, jwt
 import math
 import time
 import string, random
+import requests
 from app.controller import DictQueue
 from app import tradelib as tl
 from threading import Thread
@@ -65,7 +66,7 @@ class Account(object):
 						broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 					)
 
-				strategy = self._set_strategy(strategy_id, broker_id, broker, strategy_info.get('package'))
+				# strategy = self._set_strategy(strategy_id, broker_id, broker, strategy_info.get('package'))
 
 
 	def getStrategyInfo(self, broker_id):		
@@ -93,8 +94,7 @@ class Account(object):
 				'accounts': {
 					acc: { 
 						'strategy_status': (
-							self.strategies.get(broker_id) is not None and 
-							self.strategies[broker_id].isRunning(acc)
+							self.isScriptRunning(broker_id, acc)
 						)
 					}
 					for acc in self.brokers.get(broker_id).getAccounts()
@@ -146,6 +146,23 @@ class Account(object):
 		self.ctrl.getDb().updateStrategy(self.userId, strategy_id, strategy_info)
 
 
+	def isScriptRunning(self, broker_id, account_id):
+		payload = {
+			'user_id': self.userId,
+			'broker_id': broker_id,
+			'account_id': account_id
+		}
+
+		url = self.ctrl.app.config.get('LOADER_URL')
+		endpoint = '/running'
+		res = requests.get(
+			url + endpoint,
+			data=json.dumps(payload)
+		)
+
+		return res.json().get('running')
+
+
 	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
 		strategy = self.getStrategyInfo(broker_id)
 
@@ -174,13 +191,21 @@ class Account(object):
 			'version': version
 		}
 
-		self.ctrl.emit(
-			'start', 
-			payload,
-			namespace='/admin'
+		# self.ctrl.emit(
+		# 	'start', 
+		# 	payload,
+		# 	namespace='/admin'
+		# )
+
+
+		url = self.ctrl.app.config.get('LOADER_URL')
+		endpoint = '/start'
+		res = requests.post(
+			url + endpoint,
+			data=json.dumps(payload)
 		)
 
-		return script_id
+		return res.status_code == 200
 
 
 	def stopStrategyScript(self, broker_id, accounts):
@@ -200,13 +225,20 @@ class Account(object):
 			'accounts': accounts
 		}
 
-		self.ctrl.emit(
-			'stop', 
-			payload,
-			namespace='/admin'
+		# self.ctrl.emit(
+		# 	'stop', 
+		# 	payload,
+		# 	namespace='/admin'
+		# )
+
+		url = self.ctrl.app.config.get('LOADER_URL')
+		endpoint = '/stop'
+		res = requests.post(
+			url + endpoint,
+			data=json.dumps(payload)
 		)
 
-		return broker_id
+		return res.status_code == 200
 
 
 	def updateStrategyPackage(self, strategy_id, new_package):

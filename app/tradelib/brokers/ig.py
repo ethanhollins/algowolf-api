@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import json
 import time
@@ -9,6 +9,8 @@ import io
 import pandas as pd
 import traceback
 import numpy as np
+from copy import copy
+from urllib.parse import quote
 
 from threading import Thread
 from app.controller import DictQueue
@@ -26,7 +28,7 @@ class Working(list):
 
 	def append(self, item):
 		super().append(item)
-		self.sort(key=lambda x: x[0])
+		# self.sort(key=lambda x: x[0] if x[0] != None else '')
 
 	def run(self, broker, account_id, target, args, kwargs):
 		_id = ''.join(random.choice(string.ascii_lowercase) for i in range(4))
@@ -34,7 +36,7 @@ class Working(list):
 		item = (account_id, _id)
 		self.append(item)
 		# Wait for account id to be at top of list
-		while self[0][0] != account_id:
+		while self[0][1] != _id:
 			time.sleep(0.1)
 
 		if account_id is not None:
@@ -52,7 +54,7 @@ class IG(Broker):
 	__slots__ = (
 		'dl', '_c_account', '_last_token_update', 'is_demo', '_headers', '_url', 
 		'_creds', '_ls_endpoint', '_working', '_hist_download_queue', '_ls_client', 
-		'_subscriptions', '_temp_data', '_last_refresh'
+		'_subscriptions', '_temp_data', '_last_refresh', '_last_transaction_ts'
 	)
 	def __init__(self, 
 		ctrl, username, password, key, is_demo, 
@@ -64,6 +66,7 @@ class IG(Broker):
 
 		self._c_account = None
 		self._last_refresh = time.time()
+		self._last_transaction_ts = time.time()
 		self.is_demo = is_demo
 
 		self._headers = {
@@ -137,7 +140,7 @@ class IG(Broker):
 		try:
 			self._get_tokens(account_id=self._c_account)
 			self._last_refresh = time.time()
-			Thread(target=self._reconnect()).start()
+			self._reconnect()
 			return True
 		except requests.exceptions.ConnectionError as e:
 			print(e)
@@ -603,7 +606,7 @@ class IG(Broker):
 			)
 
 		# Switch Account
-		self._switch_account(account_id)
+		# self._switch_account(account_id)
 
 		product = self._convert_to_ig_product(product)
 		direction = self._convert_to_ig_direction(direction)
@@ -696,7 +699,7 @@ class IG(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		# Switch Account
-		self._switch_account(pos.account_id)
+		# self._switch_account(pos.account_id)
 
 		endpoint = 'positions/otc/{}'.format(pos.order_id)
 		payload = {
@@ -783,7 +786,7 @@ class IG(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		# Switch Account
-		self._switch_account(pos.account_id)
+		# self._switch_account(pos.account_id)
 
 		endpoint = 'positions/otc'
 		payload = {
@@ -872,17 +875,18 @@ class IG(Broker):
 
 
 	def _get_all_orders(self, account_id):
-		self._switch_account(account_id)
 
 		endpoint = 'workingorders'
 		self._headers['Version'] = '2'
-		res = requests.get(
-			self._url + endpoint, 
-			headers=self._headers
+
+		res = self._working.run(
+			self, account_id,
+			requests.get,
+			(self._url + endpoint,),
+			{ 'headers': self._headers }
 		)
 
 		if res.status_code == 200:
-			print(res.json())
 			return {account_id: []}
 		else:
 			raise BrokerException('({}) Unable to get all orders.\n{}'.format(
@@ -901,6 +905,117 @@ class IG(Broker):
 	def deleteOrder(self):
 		return
 
+
+	def _handle_transaction(self, account_id, trans):
+
+		order_id = trans.get('dealId')
+		ts = datetime.strptime(trans.get('date'), '%Y-%m-%dT%H:%M:%S').timestamp()
+		product = self._convert_to_standard_product(trans.get('epic'))
+
+		for i in trans['details']['actions']:
+
+			direction = trans['details'].get('direction')
+			lotsize = trans['details'].get('size')
+			price = trans['details'].get('level')
+			sl = trans['details'].get('stopLevel')
+			tp = trans['details'].get('limitLevel')
+
+			affected_order_id = i.get('affectedDealId')
+
+			if i.get('actionType') == 'POSITION_OPENED':
+				if not order_id in [pos.order_id for pos in self.getAllPositions()]:
+					pos = tl.Position(
+						self, order_id, account_id, product, tl.MARKET_ENTRY,
+						direction, lotsize, entry_price=price, sl=sl, tp=tp, open_time=ts
+					)
+					self.positions.append(pos)
+					print(self.positions)
+					ref = self.generateReference()
+					res = {
+						ref: {
+							'timestamp': pos.open_time,
+							'type': tl.MARKET_ENTRY,
+							'accepted': True,
+							'item': pos
+						}
+					}
+
+					self.handleOnTrade(res)
+					self._handled[ref] = res
+
+			elif i.get('actionType') == 'POSITION_CLOSED':
+				for pos in copy(self.positions):
+					if pos.order_id == affected_order_id:
+						pos.close_price = price
+						pos.close_time = ts
+
+						del self.positions[self.positions.index(pos)]
+
+						order_type = self._check_sl_tp_hit(pos)
+
+						ref = self.generateReference()
+						res = {
+							ref: {
+								'timestamp': pos.close_time,
+								'type': order_type,
+								'accepted': True,
+								'item': pos
+							}
+						}
+
+						self.handleOnTrade(res)
+						self._handled[ref] = res
+
+			elif i.get('actionType') == 'STOP_LIMIT_AMENDED':
+				for pos in copy(self.positions):
+					if pos.order_id == order_id:
+						pos.sl = sl
+						pos.tp = tp
+
+						ref = self.generateReference()
+						res = {
+							ref: {
+								'timestamp': ts,
+								'type': tl.MODIFY,
+								'accepted': True,
+								'item': pos
+							}
+						}
+
+						self.handleOnTrade(res)
+						self._handled[ref] = res
+
+
+
+	def _handle_transactions(self, account_id):
+		self._switch_account(account_id)
+
+		start = tl.utils.convertTimestampToTime(self._last_transaction_ts)
+		end = datetime.now()
+
+		endpoint = 'history/activity'
+
+		res = requests.get(
+			self._url + endpoint,
+			headers={**self._headers, **{ 'Version': '3' }},
+			params={
+				'from': start.strftime("%Y-%m-%dT%H:%M:%S"),
+				'to': end.strftime("%Y-%m-%dT%H:%M:%S"),
+				'detailed': True
+			}
+		)
+
+		status_code = res.status_code
+		if status_code == 200:
+			data = res.json()
+			if 'activities' in data:
+				ts = self._last_transaction_ts
+				for i in data['activities'][::-1]:
+					ts = datetime.strptime(i.get('date'), '%Y-%m-%dT%H:%M:%S').timestamp()
+					if i.get('status') == 'ACCEPTED' and ts > self._last_transaction_ts:
+						self._handle_transaction(account_id, i)
+				self._last_transaction_ts = ts
+
 	'''
 	Live Utilities
 	'''
@@ -918,12 +1033,12 @@ class IG(Broker):
 				self._ls_endpoint
 			)
 
-			# try:
-			ls_client.connect()
-			return ls_client
-			# except Exception as e:
-			# 	time.sleep(1)
-			# 	pass
+			try:
+				ls_client.connect()
+				return ls_client
+			except Exception as e:
+				time.sleep(1)
+
 
 	def _reconnect(self):
 		print('RECONNECTING')
@@ -955,15 +1070,11 @@ class IG(Broker):
 
 		for sub in self._subscriptions:
 			self._subscribe(*sub)
-
-		# try:
-		# 	old_ls_client.disconnect()
-		# except Exception:
-		# 	print(traceback.format_exc())
-
-		# Turn off wait
-		self._ls_client.wait = False
 		
+		# Check any missed transactions
+		for acc in self.getAccounts():
+			self._handle_transactions(acc)
+
 
 	def _subscribe(self, mode, items, fields, listener):
 		subscription = Subscription(
@@ -1084,6 +1195,7 @@ class IG(Broker):
 						self.handleOnTrade(res)
 
 						self._handled[ref] = res
+						self._last_transaction_ts = open_time
 				
 				# POSITION
 				else:					
@@ -1154,6 +1266,7 @@ class IG(Broker):
 						}
 						self.handleOnTrade(res)
 						self._handled[ref] = res
+						self._last_transaction_ts = open_time
 
 
 			# On Position/Order Deleted
@@ -1185,6 +1298,7 @@ class IG(Broker):
 
 							self.handleOnTrade(res)
 							self._handled[ref] = res
+							self._last_transaction_ts = order.close_time
 
 							return
 
@@ -1216,6 +1330,7 @@ class IG(Broker):
 
 							self.handleOnTrade(res)
 							self._handled[ref] = res
+							self._last_transaction_ts = pos.close_time
 
 							return
 
@@ -1268,6 +1383,7 @@ class IG(Broker):
 
 							self.handleOnTrade(res)
 							self._handled[ref] = res
+							self._last_transaction_ts = math.floor(time.time())
 
 							return
 
@@ -1290,7 +1406,7 @@ class IG(Broker):
 
 								res = {
 									self.generateReference(): {
-										'reference_ids': cpy.close_time,
+										'timestamp': cpy.close_time,
 										'type': tl.POSITION_CLOSE,
 										'accepted': True,
 										'item': cpy
@@ -1299,6 +1415,7 @@ class IG(Broker):
 
 								self.handleOnTrade(res)
 								self._handled[ref] = res
+								self._last_transaction_ts = cpy.close_time
 
 							else:
 								# Calculate Stop Loss
@@ -1339,6 +1456,7 @@ class IG(Broker):
 
 								self.handleOnTrade(res)
 								self._handled[ref] = res
+								self._last_transaction_ts = math.floor(time.time())
 
 							return
 

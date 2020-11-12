@@ -342,13 +342,14 @@ def start_script_ept(strategy_id, broker_id):
 				)
 
 		# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
-		package = account._runStrategyScript(strategy_id, broker_id, accounts, key, input_variables)
+		success = account._runStrategyScript(strategy_id, broker_id, accounts, key, input_variables)
 
-		res = { 'starting': package }
+		res = account.getStrategy(strategy_id)
 		return Response(
 			json.dumps(res, indent=2),
 			status=200, content_type='application/json'
 		)
+
 
 	else:
 		raise AccountException('Body does not contain `accounts`.')
@@ -365,7 +366,7 @@ def stop_script_ept(strategy_id, broker_id):
 	accounts = body.get('accounts')
 	if accounts is not None:
 		# package = account.stopStrategyScript(broker_id, accounts)
-		package = account._stopStrategyScript(broker_id, accounts)
+		success = account._stopStrategyScript(broker_id, accounts)
 
 		res = account.getStrategy(strategy_id)
 		return Response(
@@ -992,8 +993,9 @@ def update_account_gui_details_ept(strategy_id, broker_id, account_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
 
+	body = getJson()
 	account_code = '.'.join((broker_id, account_id))
-	account.updateAccountGui(strategy_id, account_code)
+	account.updateAccountGui(strategy_id, account_code, body)
 
 	res = { 'message': 'success' }
 	return Response(
