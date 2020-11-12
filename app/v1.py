@@ -706,7 +706,6 @@ def get_account_info(broker_id, account_id):
 	res = broker.getAccountInfo(account_id)
 	return res, 200
 
-
 # Order/Position epts
 
 # `/orders` ept

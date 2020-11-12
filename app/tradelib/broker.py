@@ -278,8 +278,8 @@ class Broker(object):
 	'''
 
 	# Public
-	def getAccountInfo(self, accounts, override=False):
-		return self._get_account_details(accounts, override=override)
+	def getAccountInfo(self, account_id, override=False):
+		return self._get_account_details(account_id, override=override)
 
 	'''
 	Dealing Utilities

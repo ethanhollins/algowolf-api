@@ -462,7 +462,7 @@ class IG(Broker):
 	Account Utilities
 	'''
 
-	def _get_account_details(self, accounts, override=False):
+	def _get_account_details(self, account_id, override=False):
 		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
@@ -478,7 +478,7 @@ class IG(Broker):
 		if res.status_code == 200:
 			result = {}
 			for account in res.json()['accounts']:
-				if account['accountId'] in accounts:
+				if account['accountId'] == account_id:
 					result[account['accountId']] = {
 						'currency': account.get('currency'),
 						'balance': account['balance'].get('balance'),
@@ -486,6 +486,7 @@ class IG(Broker):
 						'margin': account['balance'].get('deposit'),
 						'available': account['balance'].get('available')
 					}
+					break
 			return result 
 		else:
 			raise BrokerException('({}) Unable to get account details.\n{}'.format(
