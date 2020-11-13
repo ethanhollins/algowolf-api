@@ -465,9 +465,10 @@ def replace_account_input_variables_ept(strategy_id, broker_id, account_id):
 
 
 # Order/Position Functions
-def create_order(broker_id, data):
+def create_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	# Validation
@@ -506,9 +507,10 @@ def create_order(broker_id, data):
 	return res, 200
 
 
-def get_all_orders(broker_id, accounts):
+def get_all_orders(strategy_id, broker_id, accounts):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -525,9 +527,10 @@ def get_all_orders(broker_id, accounts):
 	return res, 200
 
 
-def get_orders(broker_id, order_ids):
+def get_orders(strategy_id, broker_id, order_ids):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -541,9 +544,10 @@ def get_orders(broker_id, order_ids):
 	return res, 200
 
 
-def update_order(broker_id, data):
+def update_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -574,9 +578,10 @@ def update_order(broker_id, data):
 	return res, 200
 
 
-def delete_order(broker_id, data):
+def delete_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -603,9 +608,10 @@ def delete_order(broker_id, data):
 	return res, 200
 
 
-def get_all_positions(broker_id, accounts):
+def get_all_positions(strategy_id, broker_id, accounts):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -622,9 +628,10 @@ def get_all_positions(broker_id, accounts):
 	return res, 200
 
 
-def get_positions(broker_id, order_ids):
+def get_positions(strategy_id, broker_id, order_ids):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -638,9 +645,10 @@ def get_positions(broker_id, order_ids):
 	return res, 200
 
 
-def update_position(broker_id, data):
+def update_position(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -670,9 +678,10 @@ def update_position(broker_id, data):
 	return res, 200
 
 
-def delete_position(broker_id, data):
+def delete_position(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -698,9 +707,10 @@ def delete_position(broker_id, data):
 
 	return res, 200
 
-def get_account_info(broker_id, account_id):
+def get_account_info(strategy_id, broker_id, account_id):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = broker.getAccountInfo(account_id)
@@ -709,11 +719,11 @@ def get_account_info(broker_id, account_id):
 # Order/Position epts
 
 # `/orders` ept
-@bp.route('/brokers/<broker_id>/orders', methods=('POST',))
-def create_orders_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/orders', methods=('POST',))
+def create_orders_ept(strategy_id, broker_id):
 	# Order Data
 	body = getJson()
-	res, status = create_order(broker_id, body)
+	res, status = create_order(strategy_id, broker_id, body)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -721,10 +731,10 @@ def create_orders_ept(broker_id):
 	)
 
 
-@bp.route('/brokers/<broker_id>/orders', methods=('GET',))
-def get_all_orders_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/orders', methods=('GET',))
+def get_all_orders_ept(strategy_id, broker_id):
 	accounts = request.args.get('accounts')
-	res, status = get_all_orders(broker_id, accounts)
+	res, status = get_all_orders(strategy_id, broker_id, accounts)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -732,10 +742,10 @@ def get_all_orders_ept(broker_id):
 	)
 
 
-@bp.route('/brokers/<broker_id>/orders/<order_ids>', methods=('GET',))
-def get_orders_ept(broker_id, order_ids):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/orders/<order_ids>', methods=('GET',))
+def get_orders_ept(strategy_id, broker_id, order_ids):
 	order_ids = re.split(', |,', order_ids)
-	res, status = get_orders(broker_id, order_ids)
+	res, status = get_orders(strategy_id, broker_id, order_ids)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -743,11 +753,11 @@ def get_orders_ept(broker_id, order_ids):
 	)
 
 
-@bp.route('/brokers/<broker_id>/orders', methods=('PUT',))
-def update_orders_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/orders', methods=('PUT',))
+def update_orders_ept(strategy_id, broker_id):
 	# Request Data
 	body = getJson()
-	res, status = update_order(broker_id, body)
+	res, status = update_order(strategy_id, broker_id, body)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -755,11 +765,11 @@ def update_orders_ept(broker_id):
 	)
 
 
-@bp.route('/brokers/<broker_id>/orders', methods=('DELETE',))
-def delete_orders_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/orders', methods=('DELETE',))
+def delete_orders_ept(strategy_id, broker_id):
 	# Request Data
 	body = getJson()
-	res, status = delete_order(broker_id, body)
+	res, status = delete_order(strategy_id, broker_id, body)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -768,10 +778,10 @@ def delete_orders_ept(broker_id):
 
 
 # `/positions` ept
-@bp.route('/brokers/<broker_id>/positions', methods=('GET',))
-def get_all_positions_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/positions', methods=('GET',))
+def get_all_positions_ept(strategy_id, broker_id):
 	accounts = request.args.get('accounts')
-	res, status = get_all_positions(broker_id, accounts)
+	res, status = get_all_positions(strategy_id, broker_id, accounts)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -779,10 +789,10 @@ def get_all_positions_ept(broker_id):
 	)
 
 
-@bp.route('/brokers/<broker_id>/positions/<order_ids>', methods=('GET',))
-def get_positions_ept(broker_id, order_ids):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/positions/<order_ids>', methods=('GET',))
+def get_positions_ept(strategy_id, broker_id, order_ids):
 	order_ids = re.split(', |,', order_ids)
-	res, status = get_positions(broker_id, order_ids)
+	res, status = get_positions(strategy_id, broker_id, order_ids)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -790,11 +800,11 @@ def get_positions_ept(broker_id, order_ids):
 	)
 
 
-@bp.route('/brokers/<broker_id>/positions', methods=('PUT',))
-def update_position_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/positions', methods=('PUT',))
+def update_position_ept(strategy_id, broker_id):
 	# Request Data
 	body = getJson()
-	res, status = update_position(broker_id, body)
+	res, status = update_position(strategy_id, broker_id, body)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -802,11 +812,11 @@ def update_position_ept(broker_id):
 	)
 
 
-@bp.route('/brokers/<broker_id>/positions', methods=('DELETE',))
-def delete_position_ept(broker_id):
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/positions', methods=('DELETE',))
+def delete_position_ept(strategy_id, broker_id):
 	# Request Data
 	body = getJson()
-	res, status = delete_position(broker_id, body)
+	res, status = delete_position(strategy_id, broker_id, body)
 
 	return Response(
 		json.dumps(res, indent=2), 
@@ -815,9 +825,9 @@ def delete_position_ept(broker_id):
 
 
 # `/account` ept
-@bp.route('/brokers/<broker_id>/accounts/<account_id>', methods=('GET',))
-def get_account_info_ept(broker_id, account_id):
-	res, status = get_account_info(broker_id, account_id)
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/accounts/<account_id>', methods=('GET',))
+def get_account_info_ept(strategy_id, broker_id, account_id):
+	res, status = get_account_info(strategy_id, broker_id, account_id)
 
 	return Response(
 		json.dumps(res, indent=2), 
