@@ -956,9 +956,6 @@ class Oanda(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
-		if (account_id == tl.broker.PAPERTRADER_NAME):
-			return super().getAccountInfo(account_id, override=override)
-
 		endpoint = f'/v3/accounts/{account_id}'
 		res = self._session.get(
 			self._url + endpoint,
@@ -969,12 +966,13 @@ class Oanda(Broker):
 		status_code = res.status_code
 		res = res.json()
 		if 200 <= status_code < 300:
-			result.update({
+			result[account_id] = {
 				'currency': res['account'].get('currency'),
 				'balance': float(res['account'].get('balance')),
 				'pl': float(res['account'].get('pl')),
-				'margin': float(res['account'].get('marginUsed'))
-			})
+				'margin': float(res['account'].get('marginUsed')),
+				'available': float(res['account'].get('balance')) + float(res['account'].get('pl'))
+			}
 			
 		elif 400 <= status_code < 500:
 			# Response error
@@ -1304,6 +1302,7 @@ class Oanda(Broker):
 
 		return result
 
+
 	# Live utilities
 	def _reconnect(self):
 		for sub in self._subscriptions:
@@ -1325,8 +1324,8 @@ class Oanda(Broker):
 		return urlencode(dict([(k, v) for (k, v) in iter(params.items()) if v]))
 
 
-	def _subscribe_chart_updates(self, listener, products):
-		sub = Subscription(Subscription.CHART, listener, [products])
+	def _subscribe_chart_updates(self, product, listener):
+		sub = Subscription(Subscription.CHART, listener, [product])
 		self._subscriptions.append(sub)
 		self._perform_chart_connection(sub)	
 

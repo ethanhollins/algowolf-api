@@ -462,7 +462,7 @@ class IG(Broker):
 	Account Utilities
 	'''
 
-	def _get_account_details(self, account_id, override=False):
+	def getAccountInfo(self, account_id, override=False):
 		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)

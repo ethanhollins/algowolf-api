@@ -288,7 +288,15 @@ class Broker(object):
 
 	# Public
 	def getAccountInfo(self, account_id, override=False):
-		return self._get_account_details(account_id, override=override)
+		return {
+			account_id: {
+				'currency': 'AUD',
+				'balance': 10000,
+				'pl': 0,
+				'margin': 0,
+				'available': 10000
+			}
+		}
 
 	'''
 	Dealing Utilities
