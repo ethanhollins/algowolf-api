@@ -737,11 +737,40 @@ class Account(object):
 		return self.ctrl.getDb().createStrategyBacktest(self.userId, strategy_id, backtest)
 
 
-	def performBacktest(self, strategy_id, start, end, mode, input_variables={}):
-		strategy = self.getStrategyInfo(strategy_id)
+	def performBacktest(self, strategy_id, broker, start, end, auth_key, input_variables):
+		# strategy = self.getStrategyInfo(strategy_id)
+		# backtest_id = strategy.backtest(start, end, mode, input_variables=input_variables)
 
-		backtest_id = strategy.backtest(start, end, mode, input_variables=input_variables)
-		return backtest_id
+		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+
+		package = strategy_info['package']
+		script_id = package.split('.')[0]
+		version = package.split('.')[1]
+
+		if input_variables is None:
+			input_variables = {}
+
+		payload = {
+			'user_id': self.userId,
+			'strategy_id': strategy_id,
+			'auth_key': auth_key,
+			'input_variables': input_variables,
+			'script_id': script_id,
+			'version': version,
+			'broker': broker,
+			'start': start,
+			'end': end
+		}
+
+		url = self.ctrl.app.config.get('LOADER_URL')
+		endpoint = '/backtest'
+		res = requests.post(
+			url + endpoint,
+			data=json.dumps(payload)
+		)
+
+
+		return
 
 
 	def replaceStrategyInputVariables(self, strategy_id, input_variables):

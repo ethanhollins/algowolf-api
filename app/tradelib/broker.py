@@ -176,9 +176,18 @@ class Broker(object):
 	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=5):
 		start = time.time()
 		while not ref in self._handled:
-			if time.time() - start >= timeout: 
-				if func and res: return func(res)
-				else: return None
+			if time.time() - start >= timeout:
+				print(f"[{ref}] TIMED OUT")
+				if func and res: 
+					return func(res)
+				else: 
+					item = None
+					# Search Transaction History for reference
+					for acc in self.getAccounts():
+						trans_match = self._handle_transactions(acc, ref)
+						if trans_match is not None:
+							item is trans_match
+					return item
 			time.sleep(polling)
 		item = self._handled[ref]
 		del self._handled[ref]

@@ -1391,6 +1391,7 @@ class Oanda(Broker):
 								next_ts = chart.getNextTimestamp(period, chart.lastTs[period])
 								chart.lastTs[period] = next_ts
 								result.append({
+									'broker': self.name,
 									'product': chart.product,
 									'period': period,
 									'bar_end': True,
@@ -1417,6 +1418,7 @@ class Oanda(Broker):
 
 						# Handle period bar info
 						result.append({
+							'broker': self.name,
 							'product': chart.product,
 							'period': period,
 							'bar_end': False,
@@ -1434,6 +1436,7 @@ class Oanda(Broker):
 							chart.bid[period] = bid
 
 						result.append({
+							'broker': self.name,
 							'product': chart.product,
 							'period': period,
 							'bar_end': False,

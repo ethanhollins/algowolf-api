@@ -107,6 +107,7 @@ class Chart(object):
 			time.sleep(10)
 			if self.lastTs.get(period):
 				result =[{
+					'broker': 'ig',
 					'product': self.product,
 					'period': period,
 					'bar_end': False,
@@ -133,8 +134,7 @@ class Chart(object):
 						pass
 
 			self.ctrl.emit(
-				'ontick', 
-				{'broker': self.broker.name, 'item': res}, 
+				'ontick', res, 
 				namespace='/admin'
 			)
 

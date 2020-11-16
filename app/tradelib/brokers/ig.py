@@ -907,14 +907,17 @@ class IG(Broker):
 		return
 
 
-	def _handle_transaction(self, account_id, trans):
+	def _handle_transaction(self, account_id, trans, ref=None):
 
 		order_id = trans.get('dealId')
 		ts = datetime.strptime(trans.get('date'), '%Y-%m-%dT%H:%M:%S').timestamp()
 		product = self._convert_to_standard_product(trans.get('epic'))
 
+		trans_match = None
+
 		for i in trans['details']['actions']:
 
+			deal_reference = trans['details'].get('dealReference')
 			direction = trans['details'].get('direction')
 			lotsize = trans['details'].get('size')
 			price = trans['details'].get('level')
@@ -986,9 +989,13 @@ class IG(Broker):
 						self.handleOnTrade(res)
 						self._handled[ref] = res
 
+			if ref is not None and deal_reference == ref:
+				trans_match = res
+
+		return trans_match
 
 
-	def _handle_transactions(self, account_id):
+	def _handle_transactions(self, account_id, ref=None):
 		self._switch_account(account_id)
 
 		start = tl.utils.convertTimestampToTime(self._last_transaction_ts)
@@ -1006,6 +1013,7 @@ class IG(Broker):
 			}
 		)
 
+		trans_match = None
 		status_code = res.status_code
 		if status_code == 200:
 			data = res.json()
@@ -1014,8 +1022,13 @@ class IG(Broker):
 				for i in data['activities'][::-1]:
 					ts = datetime.strptime(i.get('date'), '%Y-%m-%dT%H:%M:%S').timestamp()
 					if i.get('status') == 'ACCEPTED' and ts > self._last_transaction_ts:
-						self._handle_transaction(account_id, i)
+						trans_search = self._handle_transaction(account_id, i, ref=ref)
+						if trans_search is not None:
+							trans_match = trans_search
+
 				self._last_transaction_ts = ts
+
+		return trans_match
 
 	'''
 	Live Utilities
@@ -1131,6 +1144,8 @@ class IG(Broker):
 	def _handle_opu(self, opu):
 		item = opu['values']['OPU']
 		account_id = opu['name'].split(':')[1]
+
+		print(f'IG: {item}')
 		
 		if item['dealStatus'] == 'ACCEPTED':
 			ref = item['dealReference']
@@ -1533,6 +1548,7 @@ class IG(Broker):
 					chart.ask[tl.period.TICK] = ask[3]
 					chart.bid[tl.period.TICK] = bid[3]
 					result.append({
+						'broker': self.name,
 						'product': chart.product,
 						'period': tl.period.TICK,
 						'timestamp': new_ts,
@@ -1582,6 +1598,7 @@ class IG(Broker):
 
 					# Add period result
 					result.append({
+						'broker': self.name,
 						'product': chart.product,
 						'period': period,
 						'bar_end': is_new_bar,

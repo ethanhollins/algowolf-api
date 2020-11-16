@@ -10,6 +10,8 @@ from app.error import (
 	OrderException
 )
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 def create_app(test_config=None):
 
 	# Create and configure app
@@ -28,9 +30,16 @@ def create_app(test_config=None):
 		# load the test config if passed in
 		app.config.from_mapping(test_config)
 
+	app.config['DATA_DIR'] = os.path.join(ROOT_DIR, 'data')
+
 	# Ensure the instance folder exists
 	try:
 		os.makedirs(app.instance_path)
+	except OSError:
+		pass
+		
+	try:
+		os.makedirs(app.config['DATA_DIR'])
 	except OSError:
 		pass
 

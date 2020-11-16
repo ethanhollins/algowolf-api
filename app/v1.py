@@ -1,3 +1,4 @@
+import os
 import time
 import math
 import json, jwt
@@ -6,10 +7,12 @@ from datetime import datetime
 from enum import Enum
 from flask import (
 	Blueprint, Response, flash, abort, current_app, 
-	g, redirect, request, url_for, stream_with_context
+	g, redirect, request, url_for, stream_with_context,
+	make_response
 )
 from app import auth, tradelib as tl
 from app.error import OrderException, AccountException
+from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
 
 bp = Blueprint('v1', __name__, url_prefix='/v1')
@@ -35,6 +38,43 @@ def getJson():
 		))
 
 	return body
+
+
+def upload():
+	file = request.data
+	save_path = os.path.join(current_app.config['DATA_DIR'], secure_filename(request.headers.get('Filename')))
+	current_chunk = int(request.headers.get('Chunkindex'))
+
+	# If the file already exists it's ok if e are appending to it,
+	# but not if it's a new file that would overwrite an existing one
+	if os.path.exists(save_path) and current_chunk == 0:
+		res = { 'error': 'IOError', 'message': 'File already exists.' }
+		return abort(
+			Response(
+				json.dumps(res, indent=2),
+				status=400, content_type='application/json'
+			)
+		)
+
+	try:
+		with open(save_path, 'ab') as f:
+			f.seek(int(request.headers.get('Chunkbyteoffset')))
+			f.write(file)
+	except OSError:
+		raise Exception('Could not write to file')
+
+	total_chunks = int(request.headers.get('Totalchunkcount'))
+
+	if current_chunk + 1 == total_chunks:
+		# This was the last chunk, the file should be complete and the size we expect
+		if os.path.getsize(save_path) != int(request.headers.get('Totalfilesize')):
+			raise Exception('Size mismatch')
+		else:
+			print('Successfully uploaded')
+			return True
+	else:
+		# print(f"Chunk {current_chunk + 1} of {total_chunks} for file {request.headers.get('Filename')} complete")
+		return False
 
 
 @bp.route('/account', methods=('GET',))
@@ -1123,24 +1163,24 @@ def get_backtest_info_ept(strategy_id, backtest_id):
 
 
 @bp.route('/strategy/<strategy_id>/backtest', methods=('POST',))
-@auth.login_required
+# @auth.login_required
 def upload_backtest_ept(strategy_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
-	account = ctrl.accounts.getAccount(user_id)
 
-	body = getJson()
-	if body.get('backtest') is None:
-		error = {
-			'error': 'ValueError',
-			'message': '`backtest` not submitted.'
-		}
-		return Response(
-			json.dumps(error, indent=2),
-			status=400, content_type='application/json'
-		)
+	if upload():
+		account = ctrl.accounts.getAccount(user_id)
 
-	backtest_id = account.uploadBacktest(strategy_id, body.get('backtest'))
-	res = { 'backtest': backtest_id }
+		filename = request.headers.get('Filename')
+		path = os.path.join(current_app.config['DATA_DIR'], filename)
+		with open(path, 'r') as f:
+			backtest = json.loads(f.read())
+
+		backtest_id = account.uploadBacktest(strategy_id, backtest)
+		res = { 'backtest_id': backtest_id }
+		os.remove(path)
+	else:
+		res = {'message': 'Chunk upload successful.'}
+
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
@@ -1165,20 +1205,21 @@ def get_backtest_transactions_ept(strategy_id, backtest_id):
 def perform_backtest_ept(strategy_id, start, end):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
+	key = request.headers.get('Authorization').replace('Bearer ', '')
 
-	start = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ')
-	end = datetime.strptime(end, '%Y-%m-%dT%H:%M:%SZ')
+	start = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ').timestamp()
+	end = datetime.strptime(end, '%Y-%m-%dT%H:%M:%SZ').timestamp()
 	
 	body = getJson()
-	if body.get('mode'):
-		mode = body.get('mode')
+	if body.get('broker'):
+		broker = body.get('broker')
 	else:
-		mode = 'run'
+		broker = 'ig'
 	
 	input_variables = body.get('input_variables')
 
-	backtest_id = account.performBacktest(strategy_id, start, end, mode, input_variables=input_variables)
-	res = { 'backtest': backtest_id }
+	account.performBacktest(strategy_id, broker, start, end, key, input_variables)
+	res = { 'message': 'started' }
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
