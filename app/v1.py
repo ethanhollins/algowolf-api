@@ -101,26 +101,17 @@ def create_strategy_ept():
 			json.dumps(error, indent=2),
 			status=400, content_type='application/json'
 		)
-	elif body.get('broker') is None:
+	elif body.get('brokers') is None:
 		error = {
 			'error': 'ValueError',
-			'message': '`broker` not submitted.'
-		}
-		return Response(
-			json.dumps(error, indent=2),
-			status=400, content_type='application/json'
-		)
-	elif body.get('accounts') is None:
-		error = {
-			'error': 'ValueError',
-			'message': '`accounts` not submitted.'
+			'message': '`brokers` not submitted.'
 		}
 		return Response(
 			json.dumps(error, indent=2),
 			status=400, content_type='application/json'
 		)
 
-	strategy_id = g.user.createStrategy(body.get('name'), body.get('broker'), body.get('accounts'))
+	strategy_id = g.user.createStrategy(body)
 
 	res = {
 		'strategy_id': strategy_id

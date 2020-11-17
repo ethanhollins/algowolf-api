@@ -110,13 +110,12 @@ class Account(object):
 		}
 
 
-	def createStrategy(self, name, broker, accounts):
+	def createStrategy(self, info):
 		strategy = {
-			'name': name,
-			'accounts': accounts + [tl.broker.PAPERTRADER_NAME],
-			'broker': broker,
+			'name': info.get('name'),
+			'brokers': info.get('brokers'),
 			'keys': [],
-			'package': ''
+			'package': info.get('package')
 		}
 		strategy_id = self.ctrl.getDb().createStrategy(self.userId, strategy)
 		return strategy_id
@@ -576,7 +575,7 @@ class Account(object):
 			if broker_id == strategy_id:
 				broker_name = tl.broker.PAPERTRADER_NAME
 				broker_args.update({
-					'name': tl.broker.IG_NAME,
+					'name': tl.broker.OANDA_NAME,
 					'display_name': None
 				})
 				self._init_broker(broker_name, broker_args)
