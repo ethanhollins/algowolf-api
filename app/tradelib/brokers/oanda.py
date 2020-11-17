@@ -1372,8 +1372,10 @@ class Oanda(Broker):
 
 		elif update.get('type') == 'PRICE':
 			update_time = update.get('time')
-			ask = float(update.get('asks')[2].get('price'))
-			bid = float(update.get('bids')[2].get('price'))
+			if len(update.get('asks')) == 0 or len(update.get('bids')) == 0:
+				return
+			ask = float(update.get('asks')[:3][-1].get('price'))
+			bid = float(update.get('bids')[:3][-1].get('price'))
 			if update_time is not None:
 				# Convert time to datetime
 				c_ts = tl.convertTimeToTimestamp(datetime.strptime(update_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
