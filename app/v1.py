@@ -1028,16 +1028,28 @@ def get_account_gui_details_ept(strategy_id, broker_id, account_id):
 	)
 
 
-@bp.route('/strategy/<strategy_id>/gui/<broker_id>/<account_id>', methods=('PUT',))
+@bp.route('/strategy/<strategy_id>/gui/<broker_id>/<account_id>', methods=('POST',))
 def update_account_gui_details_ept(strategy_id, broker_id, account_id):
-	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
-	account = ctrl.accounts.getAccount(user_id)
 
-	body = getJson()
-	account_code = '.'.join((broker_id, account_id))
-	account.updateAccountGui(strategy_id, account_code, body)
+	if upload():
+		user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+		account = ctrl.accounts.getAccount(user_id)
 
-	res = { 'message': 'success' }
+		filename = request.headers.get('Filename')
+		path = os.path.join(current_app.config['DATA_DIR'], filename)
+		with open(path, 'r') as f:
+			body = json.loads(f.read())
+
+		account_code = '.'.join((broker_id, account_id))
+		account.updateAccountGui(strategy_id, account_code, body)
+		account = ctrl.accounts.getAccount(user_id)
+
+		os.remove(path)
+
+		res = { 'message': 'success' }
+	else:
+		res = {'message': 'Chunk upload successful.'}
+
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
