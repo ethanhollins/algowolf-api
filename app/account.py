@@ -501,13 +501,7 @@ class Account(object):
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 		# broker_info = self.ctrl.getDb().getBroker(self.userId, strategy_info['brokers'][strategy_id].get('broker'))
 		gui = self.getBacktestGui(strategy_id, backtest_id)
-		return {
-			**{ 
-				# 'broker_id': strategy_info.get('broker'),
-				'broker': tl.broker.IG_NAME
-			},
-			**gui
-		}
+		return gui
 
 
 	def getBacktestGui(self, strategy_id, backtest_id):
