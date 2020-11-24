@@ -485,12 +485,23 @@ class IG(Broker):
 			for account in res.json()['accounts']:
 				if account['accountId'] == account_id:
 					result[account['accountId']] = {
-						'currency': account.get('currency'),
-						'balance': account['balance'].get('balance'),
-						'pl': account['balance'].get('profitLoss'),
-						'margin': account['balance'].get('deposit'),
-						'available': account['balance'].get('available')
+						'currency': account.get('currency')
 					}
+
+					if account.get('balance') != None:
+						result[account['accountId']].update({
+							'balance': account['balance'].get('balance'),
+							'pl': account['balance'].get('profitLoss'),
+							'margin': account['balance'].get('deposit'),
+							'available': account['balance'].get('available')
+						})
+					else:
+						result[account['accountId']].update({
+							'balance': 0,
+							'pl': 0,
+							'margin': 0,
+							'available': 0
+						})
 					break
 			return result 
 		else:
