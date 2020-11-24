@@ -248,6 +248,11 @@ class IG(Broker):
 		ig_period = self._convert_to_ig_period(period)
 		while True:
 			if start and end:
+				now = tl.utils.convertTimezone(
+					tl.utils.setTimezone(datetime.utcnow(), 'UTC'), 
+					'Australia/Melbourne'
+				)
+
 				start = tl.utils.convertTimezone(start, 'Australia/Melbourne')
 				end = tl.utils.convertTimezone(end, 'Australia/Melbourne')
 				if not force_download:
@@ -257,8 +262,8 @@ class IG(Broker):
 							tl.convertTimestampToTime(df.index.values[-1]),
 							'Australia/Melbourne'
 						)
-						print(start)
 
+				end = now if end > now else end
 				endpoint = 'prices/{}?resolution={}&from={}&to={}&pageSize=5000&pageNumber={}'.format(
 					ig_product, ig_period,
 					start.strftime("%Y-%m-%dT%H:%M:%S"),
