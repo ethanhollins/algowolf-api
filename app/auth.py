@@ -221,18 +221,39 @@ def get_all_brokers():
 @login_required
 def create_broker():
 	body = request.get_json(force=True)
+	broker_id = body.get('broker_id')
 	name = body.get('name')
 	broker_name = body.get('broker')
 
-	if name is None:
-		raise BrokerException('Invalid data submitted.')
-	if broker_name is None:
+	if broker_id is None or name is None or broker_name is None:
 		raise BrokerException('Invalid data submitted.')
 
+	del body['broker_id']
 	del body['name']
 	del body['broker']
 
-	res = g.user.createBroker(name, broker_name, **body)
+	res = g.user.createBroker(broker_id, name, broker_name, **body)
+	if res is None:
+		raise BrokerException('Invalid data submitted.')
+
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/broker', methods=('PUT',))
+@login_required
+def update_broker():
+	body = request.get_json(force=True)
+	broker_id = body.get('broker_id')
+
+	if broker_id is None:
+		raise BrokerException('Invalid data submitted.')
+
+	del body['broker_id']
+
+	res = g.user.updateBroker(broker_id, body)
 	if res is None:
 		raise BrokerException('Invalid data submitted.')
 

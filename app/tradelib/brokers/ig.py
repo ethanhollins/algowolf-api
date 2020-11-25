@@ -58,7 +58,8 @@ class IG(Broker):
 	)
 	def __init__(self, 
 		ctrl, username, password, key, is_demo, 
-		user_account=None, broker_id=None, accounts={}, display_name=None
+		user_account=None, broker_id=None, accounts={}, 
+		display_name=None, is_dummy=False
 	):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.IG_NAME, accounts, display_name)
 
@@ -99,25 +100,27 @@ class IG(Broker):
 
 		self._get_tokens()
 
-		# Handle strategy
-		if self.userAccount and self.brokerId:
-			self._handle_live_strategy_setup()
+		if not is_dummy:
+			# Handle strategy
+			if self.userAccount and self.brokerId:
+				self._handle_live_strategy_setup()
 
-		# Live Updates
-		self._ls_client = self._connect()
-		self._subscriptions = []
+			# Live Updates
+			self._ls_client = self._connect()
+			self._subscriptions = []
 
-		for acc in self.getAccounts():
-			self._subscribe_account_updates(acc)
+			for acc in self.getAccounts():
+				self._subscribe_account_updates(acc)
 
-		self._temp_data = pd.DataFrame(columns=[
-			'timestamp', 
-			'ask_open', 'ask_high', 'ask_low', 'ask_close', 
-			'bid_open', 'bid_high', 'bid_low', 'bid_close'
-		]).set_index('timestamp')
+			self._temp_data = pd.DataFrame(columns=[
+				'timestamp', 
+				'ask_open', 'ask_high', 'ask_low', 'ask_close', 
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			]).set_index('timestamp')
 
-		# Start refresh thread
-		Thread(target=self._periodic_refresh).start()
+			# Start refresh thread
+			Thread(target=self._periodic_refresh).start()
+
 
 	def _periodic_refresh(self):
 		while self.is_running:
@@ -466,6 +469,27 @@ class IG(Broker):
 	'''
 	Account Utilities
 	'''
+
+	def getAllAccounts(self):
+		endpoint = 'accounts'
+		version = { 'Version': '1' }
+		# Add command to working queue
+		res = requests.get(
+			self._url + endpoint, 
+			headers={ **self._headers, **version }
+		)
+
+		result = []
+		status_code = res.status_code
+		data = res.json()
+		if 200 <= status_code < 300:
+			for account in res.json()['accounts']:
+				result.append(account.get('accountId'))
+				
+			return result
+		else:
+			return None
+
 
 	def getAccountInfo(self, account_id, override=False):
 		# Check auth

@@ -6,6 +6,7 @@ import string, random
 import jwt
 import pandas as pd
 from app import tradelib as tl
+from app.error import BrokerException
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
@@ -288,17 +289,15 @@ class Database(object):
 
 		return jwt.decode(broker_key, self.ctrl.app.config['SECRET_KEY'], algorithms=['HS256'])
 
-	def createBroker(self, user_id, name, broker_name, **props):
+	def createBroker(self, user_id, broker_id, name, broker_name, props):
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
-			return None
-		elif user['brokers'].get(name) is not None:
-			return None
+			raise BrokerException('User not found.')
 
 		# Validation
 		if props.get('key') is None:
-			return None
+			raise BrokerException('Invalid data submitted.')
 
 		# Check if key in use
 		for v in user['brokers'].values():
@@ -310,10 +309,6 @@ class Database(object):
 					v.get('key') == props.get('key')):
 				return None
 
-		broker_id = self.generateId()
-		while broker_id in user['brokers']:
-			broker_id = self.generateId()
-
 		props.update({
 			'name': name,
 			'broker': broker_name
@@ -322,20 +317,46 @@ class Database(object):
 		if broker_name == tl.broker.IG_NAME:
 			# IG Validation
 			if props.get('username') is None:
-				return None
+				raise BrokerException('Invalid data submitted.')
 			elif props.get('password') is None:
-				return None
+				raise BrokerException('Invalid data submitted.')
 			elif props.get('is_demo') is None:
-				return None
+				raise BrokerException('Invalid data submitted.')
 
 			# Run broker API call check
+			dummy_broker = tl.broker.IG(
+				self.ctrl, props.get('username'), props.get('password'),
+				props.get('key'), props.get('is_demo'), is_dummy=True
+			)
+			accounts = dummy_broker.getAllAccounts()
 
+			if accounts is None:
+				raise BrokerException('Unable to connect to broker.')
+
+			# Set Accounts Information
+			props['accounts'] = {
+				account_id: { 'active': False, 'nickname': '' }
+				for account_id in accounts
+			}
 		
 		elif broker_name == tl.broker.OANDA_NAME:
 			if props.get('is_demo') is None:
-				return None
+				raise BrokerException('Invalid data submitted.')
 
 			# Run broker API call check
+			dummy_broker = tl.broker.Oanda(
+				self.ctrl, props.get('key'), props.get('is_demo'), is_dummy=True
+			)
+			accounts = dummy_broker.getAllAccounts()
+
+			if accounts is None:
+				raise BrokerException('Unable to connect to broker.')
+
+			# Set Accounts Information
+			props['accounts'] = {
+				account_id: { 'active': False, 'nickname': '' }
+				for account_id in accounts
+			}
 
 
 		# Upload new broker info
@@ -346,6 +367,24 @@ class Database(object):
 		update = { 'brokers': user.get('brokers') }
 		result = self.updateUser(user_id, update)
 		return props
+
+
+	def updateBroker(self, user_id, broker_id, props):
+		# Retrieve user and make changes
+		user = self.getUser(user_id)
+		if user is None:
+			raise BrokerException('User not found.')
+
+
+		# Upload new broker info
+		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+		user['brokers'][broker_id] = key
+
+		# Update changes
+		update = { 'brokers': user.get('brokers') }
+		result = self.updateUser(user_id, update)
+		return props
+
 
 	def updateBrokerName(self, user_id, old_name, new_name):
 		# Retrieve user and make changes

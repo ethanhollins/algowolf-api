@@ -41,7 +41,8 @@ class Oanda(Broker):
 	def __init__(self, 
 		ctrl, key, is_demo, 
 		user_account=None, broker_id=None, 
-		accounts={}, display_name=None
+		accounts={}, display_name=None,
+		is_dummy=False
 	):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
 
@@ -72,16 +73,14 @@ class Oanda(Broker):
 		self._last_update = time.time()
 		self._subscriptions = []
 
-		for account_id in self.getAccounts():
-			if account_id != tl.broker.PAPERTRADER_NAME:
-				self._subscribe_account_updates(account_id)
+		if not is_dummy:
+			for account_id in self.getAccounts():
+				if account_id != tl.broker.PAPERTRADER_NAME:
+					self._subscribe_account_updates(account_id)
 
-		# Handle strategy
-		if self.userAccount and self.brokerId:
-			self._handle_live_strategy_setup()
-
-		# Start periodic check
-		# DynamicThread(self.ctrl, self._periodic_check)
+			# Handle strategy
+			if self.userAccount and self.brokerId:
+				self._handle_live_strategy_setup()
 
 
 	def _periodic_check(self):
@@ -945,6 +944,25 @@ class Oanda(Broker):
 					)
 
 					result[account_id].append(new_order)
+
+			return result
+		else:
+			return None
+
+
+	def getAllAccounts(self):
+		endpoint = f'/v3/accounts'
+		res = self._session.get(
+			self._url + endpoint,
+			headers=self._headers
+		)
+
+		result = []
+		status_code = res.status_code
+		data = res.json()
+		if 200 <= status_code < 300:
+			for account in data['accounts']:
+				result.append(data.get('id'))
 
 			return result
 		else:

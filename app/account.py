@@ -280,17 +280,24 @@ class Account(object):
 			)
 		return result
 
+
 	def getBroker(self, name):
 		result = self.ctrl.getDb().getBroker(self.userId, name)
 		return result
 
-	def createBroker(self, name, broker_name, **props):
-		result = self.ctrl.getDb().createBroker(self.userId, name, broker_name, **props)
-		return result
+
+	def createBroker(self, broker_id, name, broker_name, **props):
+		return self.ctrl.getDb().createBroker(self.userId, broker_id, name, broker_name, props)
+
+
+	def updateBroker(self, broker_id, props):
+		return self.ctrl.getDb().updateBroker(self.userId, broker_id, props);
+
 
 	def updateBrokerName(self, old_name, new_name):
 		result = self.ctrl.getDb().updateBrokerName(self.userId, old_name, new_name)
 		return result
+
 
 	def deleteBroker(self, name):
 		result = self.ctrl.getDb().deleteBroker(self.userId, name)
