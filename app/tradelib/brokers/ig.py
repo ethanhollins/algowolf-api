@@ -399,10 +399,11 @@ class IG(Broker):
 		# Loop through each year
 		if tl.period.getPeriodOffsetSeconds(period) >= tl.period.getPeriodOffsetSeconds(tl.period.DAILY):
 			for y in range(start.year, end.year+1):
+				dt = datetime(year=y, month=1, day=1)
 				if y == start.year:
 					ts_start = tl.utils.convertTimeToTimestamp(start)
 				else:
-					ts_start = tl.utils.convertTimeToTimestamp(datetime(year=y, month=1, day=1))
+					ts_start = tl.utils.convertTimeToTimestamp(dt)
 
 				if y == end.year:
 					ts_end = tl.utils.convertTimeToTimestamp(start)
@@ -464,7 +465,11 @@ class IG(Broker):
 			df.drop(df.tail(1).index, inplace=True)
 			if df.size == 0: return
 
-		prev_dates_l = self.ctrl.getDb().getPriceDateList(self.name, product, period)
+		if period == tl.period.DAILY:
+			prev_dates_l = self.ctrl.getDb().getPriceYearlyDateList(self.name, product, period)
+		else:
+			prev_dates_l = self.ctrl.getDb().getPriceDailyDateList(self.name, product, period)
+
 		if len(prev_dates_l):
 			last_dt = max(prev_dates_l)
 		else:
@@ -498,7 +503,8 @@ class IG(Broker):
 		# Loop through each year
 		if tl.period.getPeriodOffsetSeconds(period) >= tl.period.getPeriodOffsetSeconds(tl.period.DAILY):
 			for y in range(start.year, end.year+1):
-				ts_start = tl.utils.convertTimeToTimestamp(datetime(year=y, month=1, day=1))
+				dt = datetime(year=y, month=1, day=1)
+				ts_start = tl.utils.convertTimeToTimestamp(dt)
 				ts_end = tl.utils.convertTimeToTimestamp(datetime(year=y+1, month=1, day=1))
 
 				# Get correct time range

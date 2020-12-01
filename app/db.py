@@ -767,7 +767,16 @@ class Database(object):
 	Prices Storage Functions
 	'''
 
-	def getPriceDateList(self, broker, product, period):
+	def getPriceYearlyDateList(self, broker, product, period):
+		bucket = self._s3_res.Bucket(self.priceDataBucketName)
+		result = []
+		for i in bucket.objects.filter(Prefix=f'{broker}/{product}/{period}'):
+			result.append(datetime.strptime(
+				i.key.split('/')[-1].split('-')[0], '%Y'
+			))
+		return result
+
+	def getPriceDailyDateList(self, broker, product, period):
 		bucket = self._s3_res.Bucket(self.priceDataBucketName)
 		result = []
 		for i in bucket.objects.filter(Prefix=f'{broker}/{product}/{period}'):
