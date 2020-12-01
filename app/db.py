@@ -5,6 +5,7 @@ import json, csv, gzip, collections
 import string, random
 import jwt
 import pandas as pd
+from datetime import datetime
 from app import tradelib as tl
 from app.error import BrokerException
 from decimal import Decimal
@@ -765,12 +766,22 @@ class Database(object):
 	'''
 	Prices Storage Functions
 	'''
-	
-	def getPrices(self, broker, product, period, year):
+
+	def getPriceDateList(self, broker, product, period):
+		bucket = self._s3_res.Bucket(self.priceDataBucketName)
+		result = []
+		for i in bucket.objects.filter(Prefix=f'{broker}/{product}/{period}'):
+			result.append(datetime.strptime(
+				i.key.split('/')[-1].replace('.csv.gz', ''), '%Y-%m-%d'
+			))
+		return result
+
+
+	def getYearlyPrices(self, broekr, product, period, dt):
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.priceDataBucketName,
-				Key=f'{broker}/{product}/{period}/{year}-{year+1}.csv.gz'
+				Key=f'{broker}/{product}/{period}/{dt.year}-{dt.year+1}.csv.gz'
 			)
 			f_obj = gzip.decompress(res['Body'].read())
 			return pd.read_csv(io.BytesIO(f_obj), sep=' ').set_index('timestamp')
@@ -778,7 +789,21 @@ class Database(object):
 		except Exception:
 			return None
 
-	def updatePrices(self, broker, product, period, year, df):
+	
+	def getDailyPrices(self, broker, product, period, dt):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.priceDataBucketName,
+				Key=f'{broker}/{product}/{period}/{dt.strftime("%Y-%m-%d")}.csv.gz'
+			)
+			f_obj = gzip.decompress(res['Body'].read())
+			return pd.read_csv(io.BytesIO(f_obj), sep=' ').set_index('timestamp')
+
+		except Exception:
+			return None
+
+
+	def updateYearlyPrices(self, broker, product, period, dt, df):
 		# df to csv in memory
 		s_buf = io.StringIO()
 		df.to_csv(s_buf, sep=' ', header=True)
@@ -787,7 +812,22 @@ class Database(object):
 
 		prices_object = self._s3_res.Object(
 			self.priceDataBucketName,
-			f'{broker}/{product}/{period}/{year}-{year+1}.csv.gz'
+			f'{broker}/{product}/{period}/{dt.year}-{dt.year+1}.csv.gz'
+		)
+		prices_object.put(Body=gzip.compress(f_obj))
+		return True
+
+
+	def updateDailyPrices(self, broker, product, period, dt, df):
+		# df to csv in memory
+		s_buf = io.StringIO()
+		df.to_csv(s_buf, sep=' ', header=True)
+		s_buf.seek(0)
+		f_obj = s_buf.read().encode('utf8')
+
+		prices_object = self._s3_res.Object(
+			self.priceDataBucketName,
+			f'{broker}/{product}/{period}/{dt.strftime("%Y-%m-%d")}.csv.gz'
 		)
 		prices_object.put(Body=gzip.compress(f_obj))
 		return True

@@ -932,14 +932,16 @@ def get_historical_prices_ept(broker, product, period):
 	# Get historical prices 
 	ts = prices.index.values[:page_count]
 	asks = prices.values[:page_count, :4]
-	bids = prices.values[:page_count, 4:]
+	mids = prices.values[:page_count, 4:8]
+	bids = prices.values[:page_count, 8:]
 	res = {
 		'product': product,
 		'period': period,
 		'ohlc': {
 			'timestamps': ts.tolist(),
 			'asks': asks.tolist(),
-			'bids': bids.tolist(),
+			'mids': mids.tolist(),
+			'bids': bids.tolist()
 		}
 	}
 	return Response(

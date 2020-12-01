@@ -121,12 +121,12 @@ class Oanda(Broker):
 					start = tl.utils.convertTimezone(start, 'UTC')
 
 					start_str = start.strftime('%Y-%m-%dT%H:%M:%S.000000000Z')
-					endpoint = '/v3/instruments/{}/candles?price=BA' \
+					endpoint = '/v3/instruments/{}/candles?price=BAM' \
 								'&from={}&count={}&granularity={}&smooth=True'.format(
 									product, start_str, count, period
 								)
 				else:
-					endpoint = '/v3/instruments/{}/candles?price=BA' \
+					endpoint = '/v3/instruments/{}/candles?price=BAM' \
 								'&count={}&granularity={}&smooth=True'.format(
 									product, count, period
 								)
@@ -136,7 +136,7 @@ class Oanda(Broker):
 
 				start_str = start.strftime('%Y-%m-%dT%H:%M:%S.000000000Z')
 				end_str = end.strftime('%Y-%m-%dT%H:%M:%S.000000000Z')
-				endpoint = '/v3/instruments/{}/candles?price=BA' \
+				endpoint = '/v3/instruments/{}/candles?price=BAM' \
 							'&from={}&to={}&granularity={}&smooth=True'.format(
 								product, start_str, end_str, period
 							)
@@ -153,6 +153,10 @@ class Oanda(Broker):
 					result['ask_high'] = []
 					result['ask_low'] = []
 					result['ask_close'] = []
+					result['mid_open'] = []
+					result['mid_high'] = []
+					result['mid_low'] = []
+					result['mid_close'] = []
 					result['bid_open'] = []
 					result['bid_high'] = []
 					result['bid_low'] = []
@@ -172,11 +176,16 @@ class Oanda(Broker):
 					
 						result['timestamp'].append(ts)
 						asks = list(map(float, i['ask'].values()))
+						mids = list(map(float, i['mid'].values()))
 						bids = list(map(float, i['bid'].values()))
 						result['ask_open'].append(asks[0])
 						result['ask_high'].append(asks[1])
 						result['ask_low'].append(asks[2])
 						result['ask_close'].append(asks[3])
+						result['mid_open'].append(mids[0])
+						result['mid_high'].append(mids[1])
+						result['mid_low'].append(mids[2])
+						result['mid_close'].append(mids[3])
 						result['bid_open'].append(bids[0])
 						result['bid_high'].append(bids[1])
 						result['bid_low'].append(bids[2])
@@ -1417,11 +1426,18 @@ class Oanda(Broker):
 									'timestamp': chart.lastTs[period],
 									'item': {
 										'ask': chart.ask[period].tolist(),
+										'mid': chart.mid[period].tolist(),
 										'bid': chart.bid[period].tolist()
 									}
 								})
 								chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
 								chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
+								chart.mid[period] = np.array(
+									[np.around(
+										(chart.ask[period][3] + chart.bid[period][3])/2,
+										decimals=5
+									)]*4, 
+								dtype=np.float64)
 
 						# Ask
 						if ask is not None:
@@ -1435,6 +1451,16 @@ class Oanda(Broker):
 							chart.bid[period][2] = bid if bid < chart.bid[period][2] else chart.bid[period][2]
 							chart.bid[period][3] = bid
 
+						# Mid
+						if ask is not None and bid is not None:
+							new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
+							new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
+							new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
+
+							chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
+							chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
+							chart.mid[period][3] = new_close
+
 						# Handle period bar info
 						result.append({
 							'broker': self.name,
@@ -1444,6 +1470,7 @@ class Oanda(Broker):
 							'timestamp': c_ts,
 							'item': {
 								'ask': chart.ask[period].tolist(),
+								'mid': chart.mid[period].tolist(),
 								'bid': chart.bid[period].tolist()
 							}
 						})
@@ -1453,6 +1480,8 @@ class Oanda(Broker):
 							chart.ask[period] = ask
 						if bid is not None:
 							chart.bid[period] = bid
+						if bid is not None and ask is not None:
+							chart.mid[period] = np.around((ask + bid)/2, decimals=5)
 
 						result.append({
 							'broker': self.name,
@@ -1462,6 +1491,7 @@ class Oanda(Broker):
 							'timestamp': c_ts,
 							'item': {
 								'ask': chart.ask[period],
+								'mid': chart.mid[period],
 								'bid': chart.bid[period]
 							}
 						})

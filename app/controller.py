@@ -92,6 +92,7 @@ class Controller(object):
 		self.brokers = Brokers(self)
 		self.charts = Charts(self)
 		self.db = Database(self, app.config['DATABASE'])
+		
 
 	def closeApp(self):
 		# Discontinue any threads

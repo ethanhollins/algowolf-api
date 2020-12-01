@@ -261,10 +261,13 @@ class IG(Broker):
 				if not force_download:
 					df = self._load_data(product, period, start, end)
 					if df.size > 0:
+
 						start = tl.utils.convertTimezone(
 							tl.convertTimestampToTime(df.index.values[-1]),
 							'Australia/Melbourne'
 						)
+						if start >= end:
+							return self._process_df(df)
 
 				end = now if end > now else end
 				endpoint = 'prices/{}?resolution={}&from={}&to={}&pageSize=5000&pageNumber={}'.format(
@@ -295,6 +298,10 @@ class IG(Broker):
 					result['ask_high'] = []
 					result['ask_low'] = []
 					result['ask_close'] = []
+					result['mid_open'] = []
+					result['mid_high'] = []
+					result['mid_low'] = []
+					result['mid_close'] = []
 					result['bid_open'] = []
 					result['bid_high'] = []
 					result['bid_low'] = []
@@ -312,20 +319,24 @@ class IG(Broker):
 						dt = tl.utils.setTimezone(dt, 'Australia/Melbourne')
 						ts = tl.utils.convertTimeToTimestamp(dt)
 
-					result['timestamp'].append(int(ts))
 
 					price_keys = ['openPrice', 'highPrice', 'lowPrice', 'closePrice']
 					asks = [price[i]['ask'] for i in price_keys]
 					bids = [price[i]['bid'] for i in price_keys]
-
-					result['ask_open'].append(asks[0])
-					result['ask_high'].append(asks[1])
-					result['ask_low'].append(asks[2])
-					result['ask_close'].append(asks[3])
-					result['bid_open'].append(bids[0])
-					result['bid_high'].append(bids[1])
-					result['bid_low'].append(bids[2])
-					result['bid_close'].append(bids[3])
+					if all(asks) and all(bids):
+						result['timestamp'].append(int(ts))
+						result['ask_open'].append(asks[0])
+						result['ask_high'].append(asks[1])
+						result['ask_low'].append(asks[2])
+						result['ask_close'].append(asks[3])
+						result['mid_open'].append(np.around((asks[0] + bids[0])/2, decimals=5))
+						result['mid_high'].append(np.around((asks[1] + bids[1])/2, decimals=5))
+						result['mid_low'].append(np.around((asks[2] + bids[2])/2, decimals=5))
+						result['mid_close'].append(np.around((asks[3] + bids[3])/2, decimals=5))
+						result['bid_open'].append(bids[0])
+						result['bid_high'].append(bids[1])
+						result['bid_low'].append(bids[2])
+						result['bid_close'].append(bids[3])
 
 				if 'metadata' in data:
 					page_number = data['metadata']['pageData']['pageNumber']
@@ -362,6 +373,7 @@ class IG(Broker):
 		columns = [
 			'timestamp', 
 			'ask_open', 'ask_high', 'ask_low', 'ask_close', 
+			'mid_open', 'mid_high', 'mid_low', 'mid_close',
 			'bid_open', 'bid_high', 'bid_low', 'bid_close'
 		]
 		return pd.DataFrame(columns=columns).set_index('timestamp')
@@ -370,40 +382,74 @@ class IG(Broker):
 		# Remove duplicates
 		df = df[~df.index.duplicated(keep='first')]
 		# Replace NaN with None
-		# df = df.where(pd.notnull(df), None)
 		df = df.dropna()
 		# Round to 5 decimal places
-		df = df.round(pd.Series([5]*8, index=df.columns))
+		df = df.round(5)
 		return df
 
 	def _load_data(self, product, period, start, end):
 		frags = []
+
+		start = tl.utils.convertTimezone(start, 'UTC')
+		end = tl.utils.convertTimezone(end, 'UTC')
+
+		rounded_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+		rounded_end = end.replace(hour=0, minute=0, second=0, microsecond=0)
+
 		# Loop through each year
-		for y in range(start.year, end.year+1):
-			if y == start.year:
-				ts_start = tl.utils.convertTimeToTimestamp(start)
-			else:
-				ts_start = tl.utils.convertTimeToTimestamp(datetime(year=y, month=1, day=1))
+		if tl.period.getPeriodOffsetSeconds(period) >= tl.period.getPeriodOffsetSeconds(tl.period.DAILY):
+			for y in range(start.year, end.year+1):
+				if y == start.year:
+					ts_start = tl.utils.convertTimeToTimestamp(start)
+				else:
+					ts_start = tl.utils.convertTimeToTimestamp(datetime(year=y, month=1, day=1))
 
-			if y == end.year:
-				ts_end = tl.utils.convertTimeToTimestamp(end)
-			else:
-				ts_end = tl.utils.convertTimeToTimestamp(datetime(year=y+1, month=1, day=1))
+				if y == end.year:
+					ts_end = tl.utils.convertTimeToTimestamp(start)
+				else:
+					ts_end = tl.utils.convertTimeToTimestamp(datetime(year=y+1, month=1, day=1))
 
-			df = self.ctrl.getDb().getPrices(self.name, product, period, y)
-			if isinstance(df, pd.DataFrame):
-				# Get correct time range
-				df = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
-				if df.size == 0: continue
+				df = self.ctrl.getDb().getYearlyPrices(self.name, product, period, dt)
+				if isinstance(df, pd.DataFrame):
+					# Get correct time range
+					df = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
+					if df.size == 0: continue
 
-				frags.append(df)
+					frags.append(df)
+
+		# Loop through each day
+		else:
+			ONE_DAY = 60 * 60 * 24
+			days = math.ceil((rounded_end - rounded_start).total_seconds() / ONE_DAY)
+			for i in range(days+1):
+				dt = rounded_start + timedelta(days=i)
+				if i == 0:
+					ts_start = tl.utils.convertTimeToTimestamp(start)
+				else:
+					ts_start = tl.utils.convertTimeToTimestamp(dt)
+
+				if i == days:
+					ts_end = tl.utils.convertTimeToTimestamp(end)
+				else:
+					ts_end = tl.utils.convertTimeToTimestamp(
+						rounded_start + timedelta(days=i+1)
+					)
+
+				df = self.ctrl.getDb().getDailyPrices(self.name, product, period, dt)
+				if isinstance(df, pd.DataFrame):
+					# Get correct time range
+					t_data = df.loc[(ts_start <= df.index) & (df.index <= ts_end)]
+					if t_data.size == 0: continue
+
+					frags.append(t_data)
 
 		if len(frags):
 			# Concatenate loaded data
 			result = pd.concat(frags).sort_index()
-			return self._process_df(df)
+			return self._process_df(result)
 		else:
 			return self._create_empty_df()
+
 
 	def save_data(self, df, product, period):
 		if df.size == 0: return
@@ -418,11 +464,19 @@ class IG(Broker):
 			df.drop(df.tail(1).index, inplace=True)
 			if df.size == 0: return
 
-		end = tl.utils.convertTimestampToTime(df.index.values[-1])
+		prev_dates_l = self.ctrl.getDb().getPriceDateList(self.name, product, period)
+		if len(prev_dates_l):
+			last_dt = max(prev_dates_l)
+		else:
+			last_dt = start.replace(hour=0, minute=0, second=0, microsecond=0)
 
 		# Load saved prices
-		old_df = self.ctrl.getDb().getPrices(self.name, product, period, start.year)
-		if isinstance(old_df, pd.DataFrame):
+		if period == tl.period.DAILY:
+			old_df = self.ctrl.getDb().getYearlyPrices(self.name, product, period, last_dt)
+		else:
+			old_df = self.ctrl.getDb().getDailyPrices(self.name, product, period, last_dt)
+		
+		if isinstance(old_df, pd.DataFrame) and old_df.size > 0:
 			old_df_end = tl.utils.convertTimestampToTime(old_df.index.values[-1])
 	
 			# Check if missing data doesn't exceed MAX_DOWNLOAD
@@ -434,23 +488,48 @@ class IG(Broker):
 
 			# Concatenate new data with old data
 			df = pd.concat((old_df, missing_df, df)).sort_index()
+
+
 		# Process DataFrame
 		df = self._process_df(df)
+		start = tl.utils.convertTimestampToTime(df.index.values[0]).replace(hour=0, minute=0, second=0, microsecond=0)
+		end = tl.utils.convertTimestampToTime(df.index.values[-1]).replace(hour=0, minute=0, second=0, microsecond=0)
 
 		# Loop through each year
-		for y in range(start.year, end.year+1):
-			ts_start = tl.utils.convertTimeToTimestamp(datetime(year=y, month=1, day=1))
-			ts_end = tl.utils.convertTimeToTimestamp(datetime(year=y+1, month=1, day=1))
+		if tl.period.getPeriodOffsetSeconds(period) >= tl.period.getPeriodOffsetSeconds(tl.period.DAILY):
+			for y in range(start.year, end.year+1):
+				ts_start = tl.utils.convertTimeToTimestamp(datetime(year=y, month=1, day=1))
+				ts_end = tl.utils.convertTimeToTimestamp(datetime(year=y+1, month=1, day=1))
 
-			# Get correct time range
-			t_data = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
-			if t_data.size == 0: continue
+				# Get correct time range
+				t_data = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
+				if t_data.size == 0: continue
 
-			# Set data types
-			t_data.index = t_data.index.map(int)
-			
-			# Upload prices
-			self.ctrl.getDb().updatePrices(self.name, product, period, y, t_data)
+				# Set data types
+				t_data.index = t_data.index.map(int)
+				
+				# Upload prices
+				self.ctrl.getDb().updateYearlyPrices(self.name, product, period, dt, t_data)
+
+		# Loop through each day
+		else:
+			ONE_DAY = 60*60*24
+			days = math.ceil((end - start).total_seconds() / ONE_DAY)
+			for i in range(days+1):
+				dt = start.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=i)
+				ts_start = tl.utils.convertTimeToTimestamp(dt)
+				ts_end = tl.utils.convertTimeToTimestamp(dt + timedelta(days=1))
+
+				# Get correct time range
+				t_data = df.loc[(ts_start <= df.index) & (df.index < ts_end)]
+				if t_data.size == 0: continue
+
+				# Set data types
+				t_data.index = t_data.index.map(int)
+				
+				# Upload prices
+				self.ctrl.getDb().updateDailyPrices(self.name, product, period, dt, t_data)
+
 
 	def handle_live_data_save(self, res):
 		SAVE_AT = 60
@@ -1569,7 +1648,9 @@ class IG(Broker):
 			]
 
 			# Cancel update if no useful information
-			if not all(ask) and not all(bid): return
+			if not all(ask) and not all(bid): 
+				return
+
 			try:
 				ask = list(map(float, ask))
 				bid = list(map(float, bid))
@@ -1587,6 +1668,7 @@ class IG(Broker):
 				if period == tl.period.TICK:
 					chart.ask[tl.period.TICK] = ask[3]
 					chart.bid[tl.period.TICK] = bid[3]
+					chart.mid[tl.period.TICK] = np.around((ask[3] + bid[3])/2, decimals=5)
 					result.append({
 						'broker': self.name,
 						'product': chart.product,
@@ -1594,6 +1676,7 @@ class IG(Broker):
 						'timestamp': new_ts,
 						'item': {
 							'ask': chart.ask[tl.period.TICK],
+							'mid': chart.mid[tl.period.TICK],
 							'bid': chart.bid[tl.period.TICK]
 						}
 					})
@@ -1629,6 +1712,15 @@ class IG(Broker):
 						chart.bid[period][2] = bid[2] if bid[2] < chart.bid[period][2] else chart.bid[period][2]
 						chart.bid[period][3] = bid[3]
 
+					# Mid
+					mid = np.around((ask + bid)/2, decimals=5)
+					if chart.barReset[period]:
+						chart.mid[period] = mid
+					else:
+						chart.mid[period][1] = mid[1] if mid[1] > chart.mid[period][1] else chart.mid[period][1]
+						chart.mid[period][2] = mid[2] if mid[2] < chart.mid[period][2] else chart.mid[period][2]
+						chart.mid[period][3] = mid[3]
+
 					if chart.barReset[period]:
 						chart.barReset[period] = False
 
@@ -1645,6 +1737,7 @@ class IG(Broker):
 						'timestamp': chart.lastTs[period],
 						'item': {
 							'ask': chart.ask[period].tolist(),
+							'mid': chart.mid[period].tolist(),
 							'bid': chart.bid[period].tolist()
 						}
 					})

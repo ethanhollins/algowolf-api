@@ -9,7 +9,7 @@ from app import tradelib as tl
 class Chart(object):
 
 	__slots__ = (
-		'ctrl', 'broker', 'product', 'ask', 'bid', 'barReset',
+		'ctrl', 'broker', 'product', 'ask', 'mid', 'bid', 'barReset',
 		'lastTs', '_subscriptions', '_unsubscriptions'
 	)
 	def __init__(self, ctrl, broker, product):
@@ -18,6 +18,7 @@ class Chart(object):
 		self.product = product
 
 		self.ask = self._generate_period_dict()
+		self.mid = self._generate_period_dict()
 		self.bid = self._generate_period_dict()
 		self.barReset = self._generate_period_dict()
 		self.lastTs = self._generate_period_dict()
@@ -37,6 +38,10 @@ class Chart(object):
 		# Generate Tick
 		self.ask[tl.period.TICK] = self.ask[tl.period.ONE_MINUTE][3]
 		self.bid[tl.period.TICK] = self.bid[tl.period.ONE_MINUTE][3]
+		self.mid[tl.period.TICK] = np.around(
+			(self.ask[tl.period.TICK] + self.bid[tl.period.TICK])/2,
+			decimals=5
+		)
 		self._subscriptions[tl.period.TICK] = {}
 
 		# Finish other bars
@@ -79,7 +84,8 @@ class Chart(object):
 				self.lastTs[period] = int(df.index.values[-2])
 				self.barReset[period] = False
 				self.ask[period] = df.values[-1][:4]
-				self.bid[period] = df.values[-1][4:]
+				self.mid[period] = df.values[-1][4:8]
+				self.bid[period] = df.values[-1][8:]
 
 				self._subscriptions[period] = {}
 
