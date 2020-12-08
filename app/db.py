@@ -565,6 +565,13 @@ class Database(object):
 
 
 	def updateAccountGui(self, user_id, strategy_id, account_code, obj):
+
+		if 'reports' in obj:
+			reports = obj.pop('reports')
+			for name in reports:
+				report_obj = obj['reports'][name]
+				self.updateStrategyAccountReport(user_id, strategy_id, account_code, name, report_obj)
+
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
@@ -708,6 +715,11 @@ class Database(object):
 		transactions = { 'transactions': backtest.get('transactions') }
 		self.updateStrategyBacktestTransactions(user_id, strategy_id, backtest_id, transactions)
 
+		if 'reports' in backtest:
+			for name in backtest.get('reports'):
+				report_obj = backtest['reports'][name]
+				self.updateStrategyBacktestReport(user_id, strategy_id, backtest_id, name, report_obj)
+
 		return backtest_id
 
 
@@ -760,6 +772,70 @@ class Database(object):
 				self._flat_dump(obj, indent=2).encode('utf8')
 			)
 		)
+		return True
+
+
+	# Reports
+	def getStrategyAccountReport(self, user_id, strategy_id, account_code, name):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/accounts/{account_code}/reports/{name}.csv.gz'
+			)
+			if res.get('Body'):
+				f_obj = gzip.decompress(res['Body'].read())
+				return pd.read_csv(io.BytesIO(f_obj), sep=',')
+
+		except Exception:
+			return None
+
+
+	def updateStrategyAccountReport(self, user_id, strategy_id, account_code, name, obj):
+		if isinstance(obj, dict):
+			obj = pd.DataFrame(data=obj)
+
+		s_buf = io.StringIO()
+		obj.to_csv(s_buf, sep=',', header=True, index=False)
+		s_buf.seek(0)
+		f_obj = s_buf.read().encode('utf8')
+
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/accounts/{account_code}/reports/{name}.csv.gz'
+		)
+		gui_object.put(Body=gzip.compress(f_obj))
+		return True
+
+
+	def getStrategyBacktestReport(self, user_id, strategy_id, backtest_id, name):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/backtests/{backtest_id}/reports/{name}.csv.gz'
+			)
+			if res.get('Body'):
+				f_obj = gzip.decompress(res['Body'].read())
+				return pd.read_csv(io.BytesIO(f_obj), sep=',')
+
+		except Exception:
+			return None
+
+
+	def updateStrategyBacktestReport(self, user_id, strategy_id, backtest_id, name, obj):
+		if isinstance(obj, dict):
+			obj = pd.DataFrame(data=obj)
+
+		s_buf = io.StringIO()
+		obj.to_csv(s_buf, sep=',', header=True, index=False)
+		s_buf.seek(0)
+		f_obj = s_buf.read().encode('utf8')
+		
+
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/backtests/{backtest_id}/reports/{name}.csv.gz'
+		)
+		gui_object.put(Body=gzip.compress(f_obj))
 		return True
 
 

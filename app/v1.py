@@ -1075,6 +1075,29 @@ def delete_strategy_gui_items_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/<broker_id>/<account_id>/reports/<name>', methods=('GET',))
+def get_account_report_ept(strategy_id, broker_id, account_id, name):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	account_code = '.'.join((broker_id, account_id))
+	gui = account.getAccountReport(strategy_id, account_code, name)
+	if gui is None:
+		error = {
+			'error': 'NotFound',
+			'message': 'Report not found.'
+		}
+		return Response(
+			json.dumps(error, indent=2),
+			status=404, content_type='application/json'
+		)
+
+	return Response(
+		json.dumps(gui.to_dict(), indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/strategy/<strategy_id>/backtest/<backtest_id>/gui', methods=('PUT',))
 @auth.login_required
 def update_backtest_gui_items_ept(strategy_id, backtest_id):
@@ -1201,6 +1224,19 @@ def get_backtest_transactions_ept(strategy_id, backtest_id):
 	transactions = account.getBacktestTransactions(strategy_id, backtest_id)
 	return Response(
 		json.dumps(transactions, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/backtest/<backtest_id>/reports/<name>', methods=('GET',))
+@auth.login_required
+def get_backtest_report_ept(strategy_id, backtest_id, name):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+
+	report = account.getBacktestReport(strategy_id, backtest_id, name)
+	return Response(
+		json.dumps(report.to_dict('list'), indent=2),
 		status=200, content_type='application/json'
 	)
 

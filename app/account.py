@@ -382,6 +382,10 @@ class Account(object):
 		return self.ctrl.getDb().getAccountGui(self.userId, strategy_id, account_code)
 
 
+	def getAccountReport(self, strategy_id, account_code, name):
+		return self.ctrl.getDb().getStrategyAccountReport(self.userId, strategy_id, account_code, name)
+
+
 	def updateAccountGui(self, strategy_id, account_code, new_gui):
 		self.ctrl.getDb().updateAccountGui(self.userId, strategy_id, account_code, new_gui)
 
@@ -537,6 +541,15 @@ class Account(object):
 			return result
 		else:
 			raise AccountException('Unrecognisable body format.')
+
+
+	def getBacktestReport(self, strategy_id, backtest_id, name):
+		return self.ctrl.getDb().getStrategyBacktestReport(self.userId, strategy_id, backtest_id, name)
+
+
+	def updateBacktestReport(self, strategy_id, backtest_id, name, obj):
+		return self.ctrl.getDb().updateStrategyBacktestReport(self.userId, strategy_id, backtest_id, name, obj)
+
 
 
 	# Private
