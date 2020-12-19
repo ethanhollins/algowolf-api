@@ -750,7 +750,7 @@ class Account(object):
 		return self.ctrl.getDb().createStrategyBacktest(self.userId, strategy_id, backtest)
 
 
-	def performBacktest(self, strategy_id, broker, start, end, auth_key, input_variables):
+	def performBacktest(self, strategy_id, broker, start, end, auth_key, input_variables, spread):
 		# strategy = self.getStrategyInfo(strategy_id)
 		# backtest_id = strategy.backtest(start, end, mode, input_variables=input_variables)
 
@@ -772,7 +772,8 @@ class Account(object):
 			'version': version,
 			'broker': broker,
 			'start': start,
-			'end': end
+			'end': end,
+			'spread': spread
 		}
 
 		url = self.ctrl.app.config.get('LOADER_URL')

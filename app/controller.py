@@ -114,7 +114,8 @@ class Controller(object):
 				sio = socketio.Client()
 				sio.connect(self.app.config['STREAM_URL'], namespaces=['/admin'])
 				break
-			except socketio.exceptions.ConnectionError:
+			except socketio.exceptions.ConnectionError as e:
+				print(e)
 				time.sleep(1)
 
 		return sio

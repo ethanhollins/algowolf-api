@@ -709,6 +709,7 @@ class Database(object):
 		if 'drawings' in gui:
 			del gui['drawings']
 		gui['properties'] = backtest.get('properties')
+		gui['info'] = backtest.get('info')
 		self.updateStrategyBacktestGui(user_id, strategy_id, backtest_id, gui)
 
 		# Init Backtest Transactions

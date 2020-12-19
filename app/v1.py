@@ -1256,10 +1256,12 @@ def perform_backtest_ept(strategy_id, start, end):
 		broker = body.get('broker')
 	else:
 		broker = 'ig'
+
+	spread = body.get('spread')
 	
 	input_variables = body.get('input_variables')
 
-	account.performBacktest(strategy_id, broker, start, end, key, input_variables)
+	account.performBacktest(strategy_id, broker, start, end, key, input_variables, spread)
 	res = { 'message': 'started' }
 	return Response(
 		json.dumps(res, indent=2),
