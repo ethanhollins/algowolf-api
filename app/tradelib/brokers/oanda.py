@@ -971,7 +971,7 @@ class Oanda(Broker):
 		data = res.json()
 		if 200 <= status_code < 300:
 			for account in data['accounts']:
-				result.append(data.get('id'))
+				result.append(account.get('id'))
 
 			return result
 		else:

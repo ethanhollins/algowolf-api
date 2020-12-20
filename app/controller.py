@@ -91,7 +91,7 @@ class Controller(object):
 		self.accounts = Accounts(self)
 		self.brokers = Brokers(self)
 		self.charts = Charts(self)
-		self.db = Database(self, app.config['DATABASE'])
+		self.db = Database(self, app.config['ENV'])
 		
 
 	def closeApp(self):

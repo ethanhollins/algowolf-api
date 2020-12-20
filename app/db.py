@@ -14,23 +14,22 @@ from botocore.exceptions import ClientError
 
 class Database(object):
 
-	def __init__(self, ctrl, db_name):
+	def __init__(self, ctrl, env):
 		self.ctrl = ctrl
 		self._generate_db()
 		self._generate_s3()
-		if 'dev' in db_name:
+		if env == 'development':
 			self.userTable = self._generate_table('brokerlib-user-dev')
 			self.scriptTable = self._generate_table('algowolf-scripts-dev')
 			self.strategyBucketName = 'brokerlib-strategies-dev'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 		else:
-			self.userTable = self._generate_table('brokerlib-user')
+			self.userTable = self._generate_table('algowolf-users')
 			self.scriptTable = self._generate_table('algowolf-scripts')
-			self.strategyBucketName = 'brokerlib-strategies'
+			self.strategyBucketName = 'algowolf-strategies'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 
 		self.analyticsTable = self._generate_table('algowolf-analytics')
-
 		self.priceDataBucketName = 'brokerlib-prices'
 
 	'''
