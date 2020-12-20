@@ -1365,10 +1365,21 @@ def ontrade_ept(strategy_id):
 
 # `/analytics` ept
 @bp.route("/analytics/visitors/daily", methods=("POST",))
-def count_daily_visitor():
+def count_daily_visitor_ept():
 	daily_visitors = ctrl.getDb().countDailyVisitor()
 
 	res = { 'daily': daily_visitors }
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/analytics/subscribe/<email>", methods=("POST",))
+def subscribe_email_ept(email):
+	daily_visitors = ctrl.getDb().subscribeEmail(email)
+
+	res = { 'subscribed': email }
 	return Response(
 		json.dumps(res, indent=2), status=200,
 		content_type='application/json'

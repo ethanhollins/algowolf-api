@@ -30,6 +30,7 @@ class Database(object):
 			self.scriptBucketName = 'algowolf-scripts-dev'
 
 		self.analyticsTable = self._generate_table('algowolf-analytics')
+		self.emailsTable = self._generate_table('algowolf-emails')
 		self.priceDataBucketName = 'brokerlib-prices'
 
 	'''
@@ -216,6 +217,15 @@ class Database(object):
 			)
 
 			return 1
+
+	def subscribeEmail(self, email):
+		self.emailsTable.put_item(
+			Item={
+				'email': email
+			}
+		)
+
+		return email
 
 
 	'''
