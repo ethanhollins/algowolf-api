@@ -1363,6 +1363,14 @@ def ontrade_ept(strategy_id):
 	)
 
 
+# `/analytics` ept
+@bp.route("/analytics/visitors/daily", methods=("POST",))
+def count_daily_visitor():
+	daily_visitors = ctrl.getDb().countDailyVisitor()
 
-
+	res = { 'daily': daily_visitors }
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
 

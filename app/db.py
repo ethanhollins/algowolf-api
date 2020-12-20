@@ -29,6 +29,8 @@ class Database(object):
 			self.strategyBucketName = 'brokerlib-strategies'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 
+		self.analyticsTable = self._generate_table('algowolf-analytics')
+
 		self.priceDataBucketName = 'brokerlib-prices'
 
 	'''
@@ -170,6 +172,52 @@ class Database(object):
 			}
 		)
 		return True
+
+	'''
+	Analytics
+	'''
+
+	def getVisitors(self):
+		res = self.analyticsTable.get_item(
+			Key={ 'subject': 'visitors' }
+		)
+		if res.get('Item'):
+			return self._convert_to_float(res['Item'])
+		else:
+			return None
+
+
+	def countDailyVisitor(self):
+		visitors = self.getVisitors()
+
+		if visitors is not None and 'daily' in visitors:
+			res = self.analyticsTable.update_item(
+				Key={
+					'subject': 'visitors'
+				},
+				UpdateExpression='set daily = :d',
+				ExpressionAttributeValues={
+					':d': self._convert_to_decimal(visitors['daily'] + 1)
+				},
+				ReturnValues="UPDATED_NEW"
+			)
+
+			return visitors['daily'] + 1
+
+		else:
+			res = self.analyticsTable.update_item(
+				Key={
+					'subject': 'visitors'
+				},
+				UpdateExpression='set daily = :d',
+				ExpressionAttributeValues={
+					':d': self._convert_to_decimal(1)
+				},
+				ReturnValues="UPDATED_NEW"
+			)
+
+			return 1
+
 
 	'''
 	Strategy DB Functions
