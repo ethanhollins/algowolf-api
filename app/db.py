@@ -5,6 +5,7 @@ import json, csv, gzip, collections
 import string, random
 import jwt
 import pandas as pd
+import dateutil.parser
 from datetime import datetime
 from app import tradelib as tl
 from app.error import BrokerException
@@ -190,42 +191,71 @@ class Database(object):
 	def countDailyVisitor(self):
 		visitors = self.getVisitors()
 
-		if visitors is not None and 'daily' in visitors:
-			res = self.analyticsTable.update_item(
-				Key={
-					'subject': 'visitors'
-				},
-				UpdateExpression='set daily = :d',
-				ExpressionAttributeValues={
-					':d': self._convert_to_decimal(visitors['daily'] + 1)
-				},
-				ReturnValues="UPDATED_NEW"
-			)
+		if visitors is None:
+			visitors = {}
 
-			return visitors['daily'] + 1
+		if not 'daily' in visitors:
+			visitors['daily'] = 0
 
+		if not 'total_daily' in visitors:
+			visitors['total_daily'] = 0
+
+		if 'current_date' in visitors:
+			date = dateutil.parser.isoparse(visitors['current_date'])
+			if date.day != datetime.utcnow().day:
+				visitors['daily'] = 0
+				visitors['current_date'] = datetime.utcnow().isoformat()
 		else:
-			res = self.analyticsTable.update_item(
-				Key={
-					'subject': 'visitors'
-				},
-				UpdateExpression='set daily = :d',
-				ExpressionAttributeValues={
-					':d': self._convert_to_decimal(1)
-				},
-				ReturnValues="UPDATED_NEW"
-			)
+			visitors['current_date'] = datetime.utcnow().isoformat()
 
-			return 1
+		res = self.analyticsTable.update_item(
+			Key={
+				'subject': 'visitors'
+			},
+			UpdateExpression='set daily = :d, total_daily = :r, current_date = :t',
+			ExpressionAttributeValues={
+				':d': self._convert_to_decimal(visitors['daily'] + 1),
+				':r': self._convert_to_decimal(visitors['total_daily'] + 1),
+				':t': visitors['current_date']
+			},
+			ReturnValues="UPDATED_NEW"
+		)
 
-	def subscribeEmail(self, email):
+		return visitors['daily'] + 1
+
+
+	def countUniqueVisitor(self):
+		visitors = self.getVisitors()
+
+		if visitors is None:
+			visitors = {}
+
+		if not 'unique_visitors' in visitors:
+			visitors['unique_visitors'] = 0
+
+		res = self.analyticsTable.update_item(
+			Key={
+				'subject': 'visitors'
+			},
+			UpdateExpression='set unique_visitors = :u',
+			ExpressionAttributeValues={
+				':u': self._convert_to_decimal(visitors['unique_visitors'] + 1)
+			},
+			ReturnValues="UPDATED_NEW"
+		)
+
+		return visitors['unique_visitors'] + 1
+
+
+	def subscribeEmail(self, item):
 		self.emailsTable.put_item(
 			Item={
-				'email': email
+				'email': str(item.get('email')),
+				'name': str(item.get('name'))
 			}
 		)
 
-		return email
+		return item.get('email')
 
 
 	'''

@@ -341,8 +341,9 @@ class Account(object):
 
 	# Login Token Functions
 	def generateToken(self):
+		EXP_TIME = 60 * 60 * 24
 		payload = { 
-			'sub': self.userId, 'iat': math.floor(time.time()), 
+			'sub': self.userId, 'iat': math.floor(time.time()), 'exp': time.time() + EXP_TIME
 		}
 		return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 

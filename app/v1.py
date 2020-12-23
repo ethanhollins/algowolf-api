@@ -1375,9 +1375,21 @@ def count_daily_visitor_ept():
 	)
 
 
-@bp.route("/analytics/subscribe/<email>", methods=("POST",))
-def subscribe_email_ept(email):
-	daily_visitors = ctrl.getDb().subscribeEmail(email)
+@bp.route("/analytics/visitors/first", methods=("POST",))
+def count_unique_visitor_ept():
+	unique_visitors = ctrl.getDb().countUniqueVisitor()
+
+	res = { 'unique': unique_visitors }
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/analytics/subscribe", methods=("POST",))
+def subscribe_email_ept():
+	body = getJson()
+	email = ctrl.getDb().subscribeEmail(body)
 
 	res = { 'subscribed': email }
 	return Response(
