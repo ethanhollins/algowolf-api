@@ -872,7 +872,7 @@ class Database(object):
 			)
 			if res.get('Body'):
 				f_obj = gzip.decompress(res['Body'].read())
-				return pd.read_csv(io.BytesIO(f_obj), sep=',')
+				return pd.read_csv(io.BytesIO(f_obj), sep=',', dtype=str)
 
 		except Exception:
 			return None
@@ -903,7 +903,7 @@ class Database(object):
 			)
 			if res.get('Body'):
 				f_obj = gzip.decompress(res['Body'].read())
-				return pd.read_csv(io.BytesIO(f_obj), sep=',')
+				return pd.read_csv(io.BytesIO(f_obj), sep=',', dtype=str)
 
 		except Exception:
 			return None
