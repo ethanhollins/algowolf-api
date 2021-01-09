@@ -747,6 +747,16 @@ def get_account_info(strategy_id, broker_id, account_id):
 	res = broker.getAccountInfo(account_id)
 	return res, 200
 
+def get_transaction_info(strategy_id, broker_id, account_id):
+	user_id = get_user_id()
+	account = ctrl.accounts.getAccount(user_id)
+	account.getStrategy(strategy_id)
+	broker = account.getStrategyBroker(broker_id)
+
+	res = broker.getTransactionInfo(account_id)
+	return res, 200
+
+
 # Order/Position epts
 
 # `/orders` ept
@@ -855,7 +865,7 @@ def delete_position_ept(strategy_id, broker_id):
 	)
 
 
-# `/account` ept
+# `/accounts` ept
 @bp.route('/strategy/<strategy_id>/brokers/<broker_id>/accounts/<account_id>', methods=('GET',))
 def get_account_info_ept(strategy_id, broker_id, account_id):
 	res, status = get_account_info(strategy_id, broker_id, account_id)
@@ -864,6 +874,12 @@ def get_account_info_ept(strategy_id, broker_id, account_id):
 		json.dumps(res, indent=2), 
 		status=status, content_type='application/json'
 	)
+
+
+# `/transactions` ept
+@bp.route('/strategy/<strategy_id>/brokers/<broker_id>/transactions/<account_id>', methods=('GET',))
+def get_transaction_info_ept(strategy_id, broker_id, account_id):
+	res, status = get_transaction_info(strategy_id, broker_id, account_id)
 
 
 # `/prices` ept

@@ -300,6 +300,11 @@ class Broker(object):
 			}
 		}
 
+
+	def getTransactionInfo(self, account_id, override=False):
+		return {}
+
+
 	'''
 	Dealing Utilities
 		- All functions access brokerage directly
