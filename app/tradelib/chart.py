@@ -58,22 +58,18 @@ class Chart(object):
 
 
 	def _generate_period_dict(self):
-		return {
-			tl.period.ONE_MINUTE: None,
-			tl.period.TWO_MINUTES: None,
-			tl.period.THREE_MINUTES: None,
-			tl.period.FIVE_MINUTES: None,
-			tl.period.TEN_MINUTES: None,
-			tl.period.FIFTEEN_MINUTES: None,
-			tl.period.THIRTY_MINUTES: None,
-			tl.period.ONE_HOUR: None,
-			tl.period.TWO_HOURS: None,
-			tl.period.THREE_HOURS: None,
-			tl.period.FOUR_HOURS: None,
-			tl.period.DAILY: None,
-			tl.period.WEEKLY: None,
-			tl.period.MONTHLY: None,
-		}
+		PERIODS = [
+			tl.period.ONE_MINUTE,
+			tl.period.TWO_MINUTES, tl.period.THREE_MINUTES,
+			tl.period.FIVE_MINUTES, tl.period.TEN_MINUTES,
+			tl.period.FIFTEEN_MINUTES, tl.period.THIRTY_MINUTES,
+			tl.period.ONE_HOUR, tl.period.TWO_HOURS, 
+			tl.period.THREE_HOURS, tl.period.FOUR_HOURS, 
+			tl.period.DAILY, tl.period.WEEKLY, 
+			tl.period.MONTHLY
+		]
+
+		return {period: None for period in PERIODS if self.broker.isPeriodCompatible(period)}
 
 
 	def _load_current_bars(self, periods):

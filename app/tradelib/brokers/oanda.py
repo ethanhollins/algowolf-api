@@ -114,7 +114,7 @@ class Oanda(Broker):
 			dl_end = tl.utils.convertTimeToTimestamp(end)
 
 		while True:
-			time.sleep(0.5)
+			# time.sleep(0.5)
 
 			if count:
 				if start:
@@ -1167,6 +1167,7 @@ class Oanda(Broker):
 			return super().modifyOrder(
 				order, lotsize, entry_price, sl_price, tp_price, override=override
 			)
+
 		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
@@ -1581,3 +1582,15 @@ class Oanda(Broker):
 		if len(res):
 			self.handleOnTrade(res)
 
+
+	def isPeriodCompatible(self, period):
+		return period in [
+			tl.period.ONE_MINUTE, tl.period.TWO_MINUTES,
+			tl.period.FOUR_MINUTES,
+			tl.period.FIVE_MINUTES, tl.period.TEN_MINUTES,
+			tl.period.FIFTEEN_MINUTES, tl.period.THIRTY_MINUTES, 
+			tl.period.ONE_HOUR, tl.period.TWO_HOURS, 
+			tl.period.THREE_HOURS, tl.period.FOUR_HOURS, 
+			tl.period.TWELVE_HOURS, tl.period.DAILY, 
+			tl.period.WEEKLY, tl.period.MONTHLY
+		]

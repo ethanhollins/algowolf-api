@@ -23,6 +23,7 @@ from app.tradelib.brokers.lightstreamer_client import LightstreamerSubscription 
 
 TWO_HOURS = 60*60*2
 
+
 # Priority queue that groups by account id
 class Working(list):
 
@@ -1793,6 +1794,18 @@ class IG(Broker):
 			return tl.product.GBPUSD
 		elif product == 'CS.D.AUDUSD.MINI.IP':
 			return tl.product.AUDUSD
+
+	def isPeriodCompatible(self, period):
+		return period in [
+			tl.period.ONE_MINUTE, tl.period.TWO_MINUTES,
+			tl.period.THREE_MINUTES, tl.period.FIVE_MINUTES, 
+			tl.period.TEN_MINUTES, tl.period.FIFTEEN_MINUTES, 
+			tl.period.THIRTY_MINUTES, tl.period.ONE_HOUR, 
+			tl.period.TWO_HOURS, tl.period.THREE_HOURS, 
+			tl.period.FOUR_HOURS, tl.period.DAILY, 
+			tl.period.WEEKLY, tl.period.MONTHLY
+		]
+
 
 	def _convert_to_ig_live_period(self, period):
 		if period == tl.period.ONE_MINUTE:

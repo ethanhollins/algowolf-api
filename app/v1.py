@@ -1276,21 +1276,33 @@ def create_chart_ept(strategy_id):
 	account = g.user
 
 	body = getJson()
-	broker = account.getStrategyBroker(strategy_id)
+	broker = ctrl.brokers.getBroker(body.get('broker'))
+	# broker = account.getStrategyBroker(strategy_id)
 
-	result = []
-	for product in body.get('items'):
-		broker.getChart(product)
-		result.append(product)
+	if not broker is None:
+		result = []
+		for product in body.get('items'):
+			broker.getChart(product)
+			result.append(product)
 
-	res = {
-		'broker': broker.name,
-		'products': result
-	}
-	return Response(
-		json.dumps(res, indent=2),
-		status=200, content_type='application/json'
-	)
+		res = {
+			'broker': broker.name,
+			'products': result
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+
+	else:
+		res = {
+			'error': 'NotFound',
+			'message': 'Broker not found.'
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=404, content_type='application/json'
+		)
 
 
 # `/stream` ept

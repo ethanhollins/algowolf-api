@@ -18,6 +18,7 @@ Broker Names
 BACKTEST_NAME = 'backtest'
 IG_NAME = 'ig'
 OANDA_NAME = 'oanda'
+SPOTWARE_NAME = 'spotware'
 PAPERTRADER_NAME = 'papertrader'
 
 '''
@@ -32,6 +33,7 @@ def get_list():
 	return [
 		OANDA_NAME,
 		IG_NAME,
+		SPOTWARE_NAME
 	]
 
 class BrokerStatus(Enum):
@@ -578,6 +580,5 @@ class Broker(object):
 			del self.ontrade_subs[sub_id]
 
 from .brokers import (
-	Oanda,
-	IG
+	Oanda, IG, Spotware
 )

@@ -167,6 +167,9 @@ class Brokers(dict):
 			username = options.get('username')
 			password = options.get('password')
 			return tl.broker.IG(self.ctrl, username, password, key, is_demo)
+		elif name == tl.broker.SPOTWARE_NAME:
+			accounts = options.get('accounts')
+			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True)
 
 	def getBroker(self, name):
 		return self.get(name)

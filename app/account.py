@@ -619,6 +619,8 @@ class Account(object):
 				self.brokers[broker_args['broker_id']] = tl.broker.IG(**broker_args)
 			elif broker_name == tl.broker.OANDA_NAME:
 				self.brokers[broker_args['broker_id']] = tl.broker.Oanda(**broker_args)
+			elif broker_name == tl.broker.SPOTWARE_NAME:
+				self.brokers[broker_args['broker_id']] = tl.broker.Spotware(**broker_args)
 
 		return self.brokers[broker_args['broker_id']]
 

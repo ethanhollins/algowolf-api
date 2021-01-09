@@ -383,10 +383,6 @@ class Database(object):
 		if user is None:
 			raise BrokerException('User not found.')
 
-		# Validation
-		if props.get('key') is None:
-			raise BrokerException('Invalid data submitted.')
-
 		# Check if key in use
 		for v in user['brokers'].values():
 			v = jwt.decode(
@@ -404,6 +400,8 @@ class Database(object):
 
 		if broker_name == tl.broker.IG_NAME:
 			# IG Validation
+			if props.get('key') is None:
+				raise BrokerException('Invalid data submitted.')
 			if props.get('username') is None:
 				raise BrokerException('Invalid data submitted.')
 			elif props.get('password') is None:
@@ -428,12 +426,35 @@ class Database(object):
 			}
 		
 		elif broker_name == tl.broker.OANDA_NAME:
+			if props.get('key') is None:
+				raise BrokerException('Invalid data submitted.')
 			if props.get('is_demo') is None:
 				raise BrokerException('Invalid data submitted.')
 
 			# Run broker API call check
 			dummy_broker = tl.broker.Oanda(
 				self.ctrl, props.get('key'), props.get('is_demo'), is_dummy=True
+			)
+			accounts = dummy_broker.getAllAccounts()
+
+			if accounts is None:
+				raise BrokerException('Unable to connect to broker.')
+
+			# Set Accounts Information
+			props['accounts'] = {
+				account_id: { 'active': False, 'nickname': '' }
+				for account_id in accounts
+			}
+
+		elif broker_name == tl.broker.SPOTWARE_NAME:
+			if props.get('access_token') is None:
+				raise BrokerException('Invalid data submitted.')
+			if props.get('is_demo') is None:
+				raise BrokerException('Invalid data submitted.')
+
+			# Run broker API call check
+			dummy_broker = tl.broker.Spotware(
+				self.ctrl, props.get('is_demo'), props.get('access_token'), is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
 

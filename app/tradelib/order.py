@@ -139,3 +139,9 @@ class Order(dict):
 
 	def modifyTP(self, tp_range=None, tp_price=None):
 		return self.modify(tp_range=tp_range, tp_price=tp_price)
+
+	def update(self, order):
+		self.lotsize = order.lotsize
+		self.entry_price = order.entry_price
+		self.sl = order.sl
+		self.tp = order.tp
