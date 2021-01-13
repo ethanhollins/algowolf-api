@@ -256,56 +256,120 @@ class FXCM(Broker):
 			return data
 
 		else:
-			result = self._create_empty_df()
-
 			first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
 				hour=0, minute=0, second=0, microsecond=0
 			).timestamp()
 			first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
-			if first_ts != data.index.values[0]:
-				first_ts = tl.utils.getNextTimestamp(period, first_ts, now=data.index.values[0])
-
 			data = data.loc[data.index >= first_ts]
-			c_ts = first_ts
-			next_ts = tl.utils.getNextTimestamp(period, c_ts, now=c_ts)
-			ohlc = data.values[0]
-			for i in range(1, data.shape[0]):
-				c_ohlc = data.values[i]
-				ts = data.index.values[i]
 
-				if ts >= next_ts:
-					result.loc[c_ts] = ohlc
-					new_ohlc = c_ohlc
+			bar_ends = data.index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
+			indicies = np.arange(data.shape[0])[bar_ends.values.astype(bool)]
+			result = np.zeros((indicies.shape[0], 12), dtype=float)
+			print(indicies.shape)
+			print(indicies[:10])
 
-					if smooth:
-						new_ohlc[0] = ohlc[3]
-						new_ohlc[4] = ohlc[7]
-						new_ohlc[8] = ohlc[11]
+			for i in range(1, indicies.shape[0]):
+				idx = indicies[i]
+				passed_count = indicies[i] - indicies[i-1]
 
-					ohlc = new_ohlc
-					c_ts = next_ts
-					next_ts = tl.utils.getNextTimestamp(period, next_ts, now=ts)
-
+				if idx - passed_count == 0:
+					result[i] = [
+						data.values[idx-passed_count, 0], np.amax(data.values[idx-passed_count:idx, 1]), 
+						np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
+						data.values[idx-passed_count, 4], np.amax(data.values[idx-passed_count:idx, 5]), 
+						np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
+						data.values[idx-passed_count, 8], np.amax(data.values[idx-passed_count:idx, 9]), 
+						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+					]
 				else:
-					if c_ohlc[1] > ohlc[1]:
-						ohlc[1] = c_ohlc[1]
-					if c_ohlc[5] > ohlc[5]:
-						ohlc[5] = c_ohlc[5]
-					if c_ohlc[9] > ohlc[9]:
-						ohlc[9] = c_ohlc[9]
-					if c_ohlc[2] < ohlc[2]:
-						ohlc[2] = c_ohlc[2]
-					if c_ohlc[6] < ohlc[6]:
-						ohlc[6] = c_ohlc[6]
-					if c_ohlc[10] < ohlc[10]:
-						ohlc[10] = c_ohlc[10]
+					result[i] = [
+						data.values[idx-passed_count-1, 3], np.amax(data.values[idx-passed_count:idx, 1]), 
+						np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
+						data.values[idx-passed_count-1, 7], np.amax(data.values[idx-passed_count:idx, 5]), 
+						np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
+						data.values[idx-passed_count-1, 11], np.amax(data.values[idx-passed_count:idx, 9]), 
+						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+					]
 
-					ohlc[3] = c_ohlc[3]
-					ohlc[7] = c_ohlc[7]
-					ohlc[11] = c_ohlc[11]
+				# print(data.values[idx-passed_count, 0])
+				# print(data.values[idx-passed_count:idx, 1])
+				# print(data.values[idx-passed_count:idx, 2])
+				# print(data.values[idx, 3])
+				# print(result[i])
+				# print('---------')
+
+			return pd.DataFrame(
+				index=data[bar_ends].index, data=result, 
+				columns=[ 
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				]
+			)
 
 
-			return result
+	# def _construct_bars(self, period, data, smooth=True):
+
+	# 	if not self._convert_period(period) is None:
+	# 		for i in range(1, data.shape[0]):
+	# 			data.values[i, 0] = data.values[i-1, 3]
+	# 			data.values[i, 4] = data.values[i-1, 7]
+	# 			data.values[i, 8] = data.values[i-1, 11]
+
+	# 		return data
+
+	# 	else:
+	# 		result = self._create_empty_df()
+
+	# 		first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
+	# 			hour=0, minute=0, second=0, microsecond=0
+	# 		).timestamp()
+	# 		first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
+
+	# 		if first_ts != data.index.values[0]:
+	# 			first_ts = tl.utils.getNextTimestamp(period, first_ts, now=data.index.values[0])
+
+	# 		data = data.loc[data.index >= first_ts]
+	# 		c_ts = first_ts
+	# 		next_ts = tl.utils.getNextTimestamp(period, c_ts, now=c_ts)
+	# 		ohlc = data.values[0]
+	# 		for i in range(1, data.shape[0]):
+	# 			c_ohlc = data.values[i]
+	# 			ts = data.index.values[i]
+
+	# 			if ts >= next_ts:
+	# 				result.loc[c_ts] = ohlc
+	# 				new_ohlc = c_ohlc
+
+	# 				if smooth:
+	# 					new_ohlc[0] = ohlc[3]
+	# 					new_ohlc[4] = ohlc[7]
+	# 					new_ohlc[8] = ohlc[11]
+
+	# 				ohlc = new_ohlc
+	# 				c_ts = next_ts
+	# 				next_ts = tl.utils.getNextTimestamp(period, next_ts, now=ts)
+
+	# 			else:
+	# 				if c_ohlc[1] > ohlc[1]:
+	# 					ohlc[1] = c_ohlc[1]
+	# 				if c_ohlc[5] > ohlc[5]:
+	# 					ohlc[5] = c_ohlc[5]
+	# 				if c_ohlc[9] > ohlc[9]:
+	# 					ohlc[9] = c_ohlc[9]
+	# 				if c_ohlc[2] < ohlc[2]:
+	# 					ohlc[2] = c_ohlc[2]
+	# 				if c_ohlc[6] < ohlc[6]:
+	# 					ohlc[6] = c_ohlc[6]
+	# 				if c_ohlc[10] < ohlc[10]:
+	# 					ohlc[10] = c_ohlc[10]
+
+	# 				ohlc[3] = c_ohlc[3]
+	# 				ohlc[7] = c_ohlc[7]
+	# 				ohlc[11] = c_ohlc[11]
+
+
+	# 		return result
 
 
 	def _convert_product(self, product):
