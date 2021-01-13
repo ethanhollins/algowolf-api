@@ -220,11 +220,11 @@ class Spotware(Broker):
 
 		if count:
 			if start:
-				dl_end = tl.utils.getCountDate(period, count, start=start).timestamp()
+				dl_end = tl.utils.getCountDate(period, count+1, start=start).timestamp()
 			elif end:
-				dl_start = tl.utils.getCountDate(period, count, end=end).timestamp()
+				dl_start = tl.utils.getCountDate(period, count+1, end=end).timestamp()
 			else:
-				dl_start = tl.utils.getCountDate(period, count).timestamp()
+				dl_start = tl.utils.getCountDate(period, count+1).timestamp()
 				dl_end = datetime.utcnow().timestamp()
 
 
@@ -362,7 +362,6 @@ class Spotware(Broker):
 			for pos in res.position:
 				new_pos = self.convert_sw_position(account_id, pos)
 
-				# print(f'{order_id}, {product}, {direction}, {lotsize}, {entry_price}, {sl}, {tp}, {open_time}')
 				result[account_id].append(new_pos)
 
 		return result
@@ -419,8 +418,6 @@ class Spotware(Broker):
 		
 		sw_product = self._convert_product(product)
 		direction = 1 if direction == tl.LONG else 2
-
-		print(sl_tp_ranges)
 
 		# Execute Market Order
 		self.client.emit(
@@ -590,7 +587,6 @@ class Spotware(Broker):
 			for order in res.order:
 				new_order = self.convert_sw_order(account_id, order)
 
-				# print(f'{order_id}, {product}, {direction}, {lotsize}, {entry_price}, {sl}, {tp}, {open_time}')
 				result[account_id].append(new_order)
 
 		return result
@@ -632,8 +628,17 @@ class Spotware(Broker):
 
 		# Handle account info result
 
-		print(f'Account Info: {res.payloadType}')
-		print(res)
+		result = {}
+		if res.payloadType == 2122:
+			result[account_id] = {
+				'currency': 'USD',
+				'balance': res.trader.balance,
+				'pl': None,
+				'margin': None,
+				'available': None
+			}
+		
+		return result
 
 
 	def createOrder(self, 
@@ -1121,11 +1126,15 @@ class Spotware(Broker):
 	def _convert_product(self, product):
 		if product == tl.product.GBPUSD:
 			return 2
+		elif product == tl.product.EURUSD:
+			return 1
 
 
 	def _convert_sw_product(self, product):
 		if product == 2:
 			return tl.product.GBPUSD
+		elif product == 1:
+			return tl.product.EURUSD
 
 
 	def isPeriodCompatible(self, period):

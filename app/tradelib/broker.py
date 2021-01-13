@@ -18,6 +18,7 @@ Broker Names
 BACKTEST_NAME = 'backtest'
 IG_NAME = 'ig'
 OANDA_NAME = 'oanda'
+FXCM_NAME = 'fxcm'
 SPOTWARE_NAME = 'spotware'
 PAPERTRADER_NAME = 'papertrader'
 
@@ -585,5 +586,5 @@ class Broker(object):
 			del self.ontrade_subs[sub_id]
 
 from .brokers import (
-	Oanda, IG, Spotware
+	Oanda, FXCM, IG, Spotware
 )
