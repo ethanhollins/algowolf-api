@@ -2,7 +2,8 @@ import time
 import traceback
 import numpy as np
 import pandas as pd
-import fxcmpy
+import dateutil.parser
+from forexconnect import ForexConnect, fxcorepy
 from datetime import datetime
 from copy import copy
 from threading import Thread
@@ -14,22 +15,21 @@ from app.error import OrderException, BrokerException
 class FXCM(Broker):
 
 	def __init__(self,
-		ctrl, key, is_demo,
+		ctrl, username, password, is_demo,
 		user_account=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False
 	):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.FXCM_NAME, accounts, display_name)
 
-		self._key = key
 		self.is_demo = is_demo
 		self._spotware_connected = False
 		self._last_update = time.time()
 		self._subscriptions = {}
 
-		self.con = fxcmpy.fxcmpy(
-			access_token=self._key,
-			server='demo' if self.is_demo else 'real'
-		)
+		self.fx = ForexConnect()
+		self._login(username, password)
+
+		self.job_queue = []
 
 		if not is_dummy:
 			# for account_id in self.getAccounts():
@@ -39,6 +39,24 @@ class FXCM(Broker):
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
+
+
+	def _login(self, username, password):
+		print('[FXCM] Attempting login...')
+		self.session = self.fx.login(
+			user_id=username, password=password, 
+			connection='demo' if self.is_demo else 'real'
+		)
+		print('[FXCM] Logged in.')
+
+
+	def _handle_job(self, func, *args, **kwargs):
+		ref_id = self.generateReference()
+		self.job_queue.append(ref_id)
+		while self.job_queue.index(ref_id) > 0: pass
+		result = func(*args, **kwargs)
+		del self.job_queue[0]
+		return result
 
 
 	'''
@@ -55,47 +73,40 @@ class FXCM(Broker):
 		
 		# Count
 		if not count is None:
-			self.con.get_candles(
+			res = self._handle_job(
+				self.fx.get_history,
 				self._convert_product(product), 
 				self._convert_period(period), 
-				number=count
+				quotes_count=count
 			)
 
 		# Start -> End
 		else:
-			if self._convert_period(period) is None:
-				res = self.con.get_candles(
-					self._convert_product(product), 
-					period=self._convert_period(tl.period.ONE_MINUTE), 
-					start=start, stop=end
-				)
-			else:
-				res = self.con.get_candles(
-					self._convert_product(product), 
-					period=self._convert_period(period), 
-					start=start, stop=end
-				)
-
-		res_asks = res[['askopen', 'askhigh', 'asklow', 'askclose']]
-		res_bids = res[['bidopen', 'bidhigh', 'bidlow', 'bidclose']]
+			res = self._handle_job(
+				self.fx.get_history,
+				self._convert_product(product), 
+				self._convert_period(period), 
+				start, end
+			)
 
 		# Convert to result DF
-		result = self._create_empty_df()
-		mid_values = np.around((res_asks.values[:] + res_bids.values[:])/2, decimals=5)
+		res = np.array(list(map(lambda x: list(x), res)))
+
+		mid_prices = np.around((res[:, 1:5].astype(float) + res[:, 5:9].astype(float))/2, decimals=5)
+		res = np.concatenate((res[:, :1], res[:, 5:9].astype(float), mid_prices.astype(float), res[:, 1:5].astype(float)), axis=1)
 
 		result = pd.DataFrame(
-			index=res.index.map(lambda x: x.timestamp()).rename('timestamp'),
+			index=pd.Index(res[:,0]).map(
+				lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
+			).rename('timestamp'),
 			columns=[
 				'ask_open', 'ask_high', 'ask_low', 'ask_close',
 				'mid_open', 'mid_high', 'mid_low', 'mid_close',
 				'bid_open', 'bid_high', 'bid_low', 'bid_close'
 			],
-			data=np.concatenate((
-				res_asks.values[:], mid_values[:], res_bids.values[:]
-			), axis=1)
+			data=res[:,1:]
 		)
 
-		result = self._construct_bars(period, result)
 		return result
 
 
@@ -379,6 +390,12 @@ class FXCM(Broker):
 	def _convert_period(self, period):
 		if period == tl.period.ONE_MINUTE:
 			return 'm1'
+		elif period == tl.period.TWO_MINUTES:
+			return 'm2'
+		elif period == tl.period.THREE_MINUTES:
+			return 'm3'
 		elif period == tl.period.FIVE_MINUTES:
 			return 'm5'
+		elif period == tl.period.TEN_MINUTES:
+			return 'm10'
 

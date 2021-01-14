@@ -12,7 +12,7 @@ constantly==15.1.0
 cryptography==3.3.1
 Flask==1.1.2
 Flask-Cors==3.0.9
-fxcmpy==1.2.6
+forexconnect==1.6.3
 hyperlink==20.0.1
 idna==2.10
 incremental==17.5.0
@@ -31,8 +31,8 @@ PyHamcrest==2.0.2
 PyJWT==1.7.1
 pyOpenSSL==20.0.1
 python-dateutil==2.8.1
-python-socketio==4.5.1
-python-engineio==3.9.0
+python-engineio==3.14.2
+python-socketio==5.0.0
 pytz==2020.4
 pytzdata==2020.1
 requests==2.25.0

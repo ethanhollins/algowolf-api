@@ -164,7 +164,9 @@ class Brokers(dict):
 			accounts = options.get('accounts')
 			return tl.broker.Oanda(self.ctrl, key, is_demo, accounts=accounts)
 		elif name == tl.broker.FXCM_NAME:
-			return tl.broker.FXCM(self.ctrl, key, is_demo)
+			username = options.get('username')
+			password = options.get('password')
+			return tl.broker.FXCM(self.ctrl, username, password, is_demo)
 		elif name == tl.broker.IG_NAME:
 			username = options.get('username')
 			password = options.get('password')
