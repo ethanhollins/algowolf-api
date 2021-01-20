@@ -22,12 +22,15 @@ class FXCM(Broker):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.FXCM_NAME, accounts, display_name)
 
 		self.is_demo = is_demo
+		self.username = username
+		self.password = password
 		self._spotware_connected = False
 		self._last_update = time.time()
 		self._subscriptions = {}
+		self.session = None
 
 		self.fx = ForexConnect()
-		self._login(username, password)
+		self._login()
 
 		self.job_queue = []
 
@@ -41,13 +44,24 @@ class FXCM(Broker):
 				self._handle_live_strategy_setup()
 
 
-	def _login(self, username, password):
-		print('[FXCM] Attempting login...')
-		self.session = self.fx.login(
-			user_id=username, password=password, 
-			connection='demo' if self.is_demo else 'real'
-		)
-		print('[FXCM] Logged in.')
+	def _is_logged_in(self):
+		if not self.session is None:
+			return self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED
+		return False
+
+
+	def _login(self):
+		if not self._is_logged_in():
+			try:
+				print('[FXCM] Attempting login...')
+				self.session = self.fx.login(
+					user_id=self.username, password=self.password, 
+					connection='demo' if self.is_demo else 'real',
+					session_status_callback=self._on_status_change
+				)
+
+			except Exception:
+				pass
 
 
 	def _handle_job(self, func, *args, **kwargs):
@@ -59,6 +73,18 @@ class FXCM(Broker):
 		return result
 
 
+	def _on_status_change(self, session, status):
+		print(f"Trading session status: {status}")
+		if status in (
+			fxcorepy.AO2GSessionStatus.O2GSessionStatus.DISCONNECTED,
+			fxcorepy.AO2GSessionStatus.O2GSessionStatus.SESSION_LOST
+		):
+			print('[FXCM] Disconnected.')
+			self._login()
+
+		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
+			print('[FXCM] Logged in.')
+
 	'''
 	Broker functions
 	'''
@@ -68,6 +94,8 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		force_download=False
 	):
+		self._login()
+
 		start = start.replace(tzinfo=None)
 		end = end.replace(tzinfo=None)
 		

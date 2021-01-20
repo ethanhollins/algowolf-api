@@ -5,6 +5,7 @@ import time
 import traceback
 from threading import Thread
 from app import tradelib as tl
+from copy import copy
 
 class Chart(object):
 
@@ -77,7 +78,7 @@ class Chart(object):
 		for period in periods:
 			df = self._load_data(period, count=2, force_download=True)
 			if not self.lastTs.get(period):
-				self.lastTs[period] = int(df.index.values[-2])
+				self.lastTs[period] = int(df.index.values[-1])
 				self.barReset[period] = False
 				self.ask[period] = df.values[-1][:4]
 				self.mid[period] = df.values[-1][4:8]
@@ -127,9 +128,9 @@ class Chart(object):
 			period = res.get('period')
 
 			if self._subscriptions.get(period) is not None:
-				for s in self._subscriptions[period].keys():
+				for s in copy(list(self._subscriptions[period].keys())):
 					try:
-						for sub_id in self._subscriptions[period][s]:
+						for sub_id in copy(self._subscriptions[period][s]):
 							func = self._subscriptions[period][s][sub_id]
 							Thread(target=func, args=(res,)).start()
 					except Exception as e:
@@ -153,10 +154,11 @@ class Chart(object):
 
 	def isNewBar(self, period, ts):
 		# TODO: Add special cases for WEEK and MONTH periods
-		return ts >= self.getNextTimestamp(
-			period, 
-			self.lastTs[period] + tl.period.getPeriodOffsetSeconds(period)
-		)
+		return ts >= self.lastTs[period] + tl.period.getPeriodOffsetSeconds(period)
+		# return ts >= self.getNextTimestamp(
+		# 	period, 
+		# 	self.lastTs[period] + tl.period.getPeriodOffsetSeconds(period)
+		# )
 
 
 	def getLatestTimestamp(self, period):

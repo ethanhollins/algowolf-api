@@ -1,5 +1,6 @@
 import functools
 import json, jwt
+import requests
 
 from flask import (
 	Blueprint, Response, abort, current_app, g, request, session, url_for
@@ -295,3 +296,36 @@ def delete_broker(name):
 	)
 
 
+@bp.route('/broker/auth/<broker>', methods=('GET',))
+def broker_auth(broker):
+	code = request.args.get('code')
+	print(request.args)
+	if not code is None:
+		res = requests.get(
+			'https://connect.spotware.com/apps/token',
+			params={
+				'grant_type': 'authorization_code',
+				'code': code,
+				'redirect_uri': 'http://127.0.0.1:3000/broker/auth/spotware',
+				'client_id': '2096_sEzU1jyvCjvNMo2ViU8YnZha8UQmuHokkaXJDVD7fVEoIc1wx3',
+				'client_secret': '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
+			}
+		)
+
+		if res.status_code == 200:
+			result = res.json()
+			
+			if result.get('errorCode') is None:
+				access_token = result.get('accessToken')
+				refresh_token = result.get('refreshToken')
+				token_type = result.get('tokenType')
+				expires_in = result.get('expiresIn')
+
+
+		print(res.text)
+		print(res.status_code)
+
+	return Response(
+		json.dumps({'message': 'Hello Auth!'}, indent=2),
+		status=200, content_type='application/json'
+	)

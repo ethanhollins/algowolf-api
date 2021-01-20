@@ -28,6 +28,10 @@ class Spotware(Broker):
 		self._spotware_connected = False
 		self._last_update = time.time()
 		self._subscriptions = {}
+		self._handled_position_events = {
+			tl.MARKET_ENTRY: {},
+			tl.POSITION_CLOSE: {}
+		}
 
 		self.access_token = access_token
 
@@ -93,6 +97,7 @@ class Spotware(Broker):
 		while not ref_id in self._handled:
 			if time.time() - start >= timeout:
 				return None
+			time.sleep(polling)
 
 		item = self._handled[ref_id]
 		del self._handled[ref_id]
@@ -101,24 +106,23 @@ class Spotware(Broker):
 
 	def _wait_for_position(self, order_id, polling=0.1, timeout=30):
 		start = time.time()
-		while time.time() - start < 30:
-			for pos in self.positions:
-				if pos.order_id == order_id:
-					return pos
+		while not order_id in self._handled_position_events[tl.MARKET_ENTRY]:
+			if time.time() - start >= timeout:
+				return None
 			time.sleep(polling)
 
-		return None
+		return self._handled_position_events[tl.MARKET_ENTRY][order_id]
 
 
-	def _wait_for_close(self, pos, polling=0.1, timeout=30):
+	def _wait_for_close(self, order_id, polling=0.1, timeout=30):
 		start = time.time()
-		while time.time() - start < 30:
-			if not pos.close_price is None:
-				return pos
+		while not order_id in self._handled_position_events[tl.POSITION_CLOSE]:
+			if time.time() - start >= timeout:
+				return None
 			time.sleep(polling)
 
-		return None
-			
+		return self._handled_position_events[tl.POSITION_CLOSE][order_id]
+
 
 	def _run(self):
 		self.client.start()		
@@ -156,6 +160,15 @@ class Spotware(Broker):
 				for child in self.children:
 					if account_id in map(int, child.accounts.keys()):
 						result = child._on_account_update(account_id, payload, kwargs.get('msgid'))
+
+						if isinstance(result, dict): 
+							for k, v in result.items():
+								if v['accepted']:
+									if v['type'] == tl.MARKET_ENTRY:
+										self._handled_position_events[tl.MARKET_ENTRY][v['item'].order_id] = {k: v}
+									elif v['type'] == tl.POSITION_CLOSE:
+										self._handled_position_events[tl.POSITION_CLOSE][v['item'].order_id] = {k: v}
+
 						break
 
 			if kwargs.get('msgid'):
@@ -306,7 +319,7 @@ class Spotware(Broker):
 
 
 	def convert_sw_position(self, account_id, pos):
-		order_id = pos.positionId
+		order_id = str(pos.positionId)
 		product = self._convert_sw_product(pos.tradeData.symbolId)
 		direction = tl.LONG if pos.tradeData.tradeSide == 1 else tl.SHORT
 		lotsize = pos.tradeData.volume
@@ -317,7 +330,7 @@ class Spotware(Broker):
 
 		return tl.Position(
 			self,
-			order_id, account_id, product,
+			order_id, str(account_id), product,
 			tl.MARKET_ENTRY, direction, lotsize,
 			entry_price, sl, tp, open_time
 		)
@@ -332,7 +345,7 @@ class Spotware(Broker):
 			entry_price = order.limitPrice
 			order_type = tl.LIMIT_ORDER
 
-		order_id = order.orderId
+		order_id = str(order.orderId)
 		product = self._convert_sw_product(order.tradeData.symbolId)
 		direction = tl.LONG if order.tradeData.tradeSide == 1 else tl.SHORT
 		lotsize = order.tradeData.volume
@@ -342,7 +355,7 @@ class Spotware(Broker):
 
 		return tl.Order(
 			self,
-			order_id, account_id, product,
+			order_id, str(account_id), product,
 			order_type, direction, lotsize,
 			entry_price, sl, tp, open_time
 		)
@@ -432,28 +445,26 @@ class Spotware(Broker):
 		result = {}
 		if res.payloadType == 2126:
 		# 	new_pos = self.convert_sw_position(account_id, res.position)
-			pos = self._wait_for_position(res.position.positionId)
+			pos_res = self.parent._wait_for_position(str(res.position.positionId))
+			print(f'Pos Res: {pos_res}')
 
-			if pos is not None:
+			if pos_res is not None:
+				ref_id = list(pos_res.keys())[0]
+				item = pos_res[ref_id]
+				pos = item['item']
+
 				if len(sl_tp_prices) > 0:
-					ref_id = self.generateReference()
+					mod_ref_id = self.generateReference()
 
 					self.client.emit(
 						'AmendPositionSLTPReq',
-						msgid=ref_id, ctidTraderAccountId=int(pos.account_id),
+						msgid=mod_ref_id, ctidTraderAccountId=int(pos.account_id),
 						positionId=int(pos.order_id), **sl_tp_prices
 					)
 
-					res = self.parent._wait(ref_id)
+					res = self.parent._wait(mod_ref_id)
 
-				result.update({
-					ref_id: {
-						'timestamp': pos.open_time,
-						'type': tl.MARKET_ENTRY,
-						'accepted': True,
-						'item': pos
-					}
-				})
+				result.update(pos_res)
 
 		elif not res is None and res.payloadType == 50:
 			result.update({
@@ -488,6 +499,7 @@ class Spotware(Broker):
 
 		ref_id = self.generateReference()
 
+		print(f'{int(pos.account_id)}, {int(pos.order_id)}, {sl_price}, {tp_price}')
 		self.client.emit(
 			'AmendPositionSLTPReq',
 			msgid=ref_id, ctidTraderAccountId=int(pos.account_id),
@@ -495,6 +507,7 @@ class Spotware(Broker):
 		)
 
 		res = self.parent._wait(ref_id)
+		print(res)
 
 		if not isinstance(res, dict):
 			if not res is None and res.payloadType == 50:
@@ -540,16 +553,13 @@ class Spotware(Broker):
 		# Handle delete result
 		result = {}
 		if res.payloadType == 2126:
-			self._wait_for_close(pos)
+			pos_res = self.parent._wait_for_close(str(pos.order_id))
+			if not pos_res is None:
+				ref_id = list(pos_res.keys())[0]
+				item = pos_res[ref_id]
+				print(f'Pos Res [delete]: {pos_res}')
 
-			result.update({
-				ref_id: {
-					'timestamp': pos.close_time,
-					'type': tl.POSITION_CLOSE,
-					'accepted': True,
-					'item': pos
-				}
-			})
+				result.update(pos_res)
 
 		elif not res is None and res.payloadType == 50:
 			result.update({
@@ -805,8 +815,8 @@ class Spotware(Broker):
 
 	def _on_account_update(self, account_id, update, ref_id):
 		if update.payloadType == 2126:
-			if not ref_id:
-				ref_id = self.generateReference()
+			# if not ref_id:
+			ref_id = self.generateReference()
 
 			print(f'Account Update: {update}')
 			execution_type = update.executionType
@@ -819,7 +829,7 @@ class Spotware(Broker):
 					# Delete
 					for i in range(len(self.positions)):
 						pos = self.positions[i]
-						if update.position.positionId == pos.order_id:
+						if str(update.position.positionId) == pos.order_id:
 							# Fully Closed
 							if update.position.tradeData.volume == 0:
 								pos.close_price = update.order.executionPrice
@@ -863,7 +873,7 @@ class Spotware(Broker):
 					result.update({
 						ref_id: {
 							'timestamp': new_pos.open_time,
-							'type': tl.POSITION_CLOSE,
+							'type': tl.MARKET_ENTRY,
 							'accepted': True,
 							'item': new_pos
 						}
@@ -888,7 +898,7 @@ class Spotware(Broker):
 				# Check if `STOP_LOSS_TAKE_PROFIT`
 				elif update.order.orderType == 4:
 					for pos in self.positions:
-						if update.position.positionId == pos.order_id:
+						if str(update.position.positionId) == pos.order_id:
 							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
 							pos.sl = new_sl
 							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
@@ -913,7 +923,7 @@ class Spotware(Broker):
 					new_order = self.convert_sw_order(account_id, update.order)
 					for i in range(len(self.orders)):
 						order = self.orders[i]
-						if update.order.orderId == order.order_id:
+						if str(update.order.orderId) == order.order_id:
 							order.close_time = update.order.utcLastUpdateTimestamp / 1000
 
 							del self.orders[i]
@@ -932,7 +942,7 @@ class Spotware(Broker):
 				# Check if `STOP_LOSS_TAKE_PROFIT`
 				elif update.order.orderType == 4:
 					for pos in self.positions:
-						if update.position.positionId == pos.order_id:
+						if str(update.position.positionId) == pos.order_id:
 							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
 							pos.sl = new_sl
 							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
@@ -956,7 +966,7 @@ class Spotware(Broker):
 					# Update current order
 					new_order = self.convert_sw_order(account_id, update.order)
 					for order in self.orders:
-						if update.order.orderId == order.order_id:
+						if str(update.order.orderId) == order.order_id:
 							order.update(new_order)
 
 							result.update({
@@ -972,7 +982,7 @@ class Spotware(Broker):
 				elif update.order.orderType == 4:
 					# Update current position
 					for pos in self.positions:
-						if update.position.positionId == pos.order_id:
+						if str(update.position.positionId) == pos.order_id:
 							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
 							pos.sl = new_sl
 							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit

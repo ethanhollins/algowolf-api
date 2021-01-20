@@ -1403,7 +1403,19 @@ class Oanda(Broker):
 			if len(update.get('asks')) == 0 or len(update.get('bids')) == 0:
 				return
 			ask = float(update.get('asks')[:3][-1].get('price'))
-			bid = float(update.get('bids')[:3][-1].get('price'))
+			if len(update.get('bids')) >= 4:
+				bid = np.around(
+					(float(update.get('bids')[:4][-1].get('price')) +
+						float(update.get('bids')[:4][-2].get('price'))) / 2,
+					decimals=5
+				)
+			else:
+				bid = float(update.get('bids')[:3][-1].get('price'))
+
+			# print(np.around((ask + bid)/2, decimals=5))
+			# print(bid)
+			# print(f'Ask: {ask}, Mid: {np.around((ask + bid)/2, decimals=5)}, Mid (^): {math.ceil((ask + bid)/2)}, Mid (v): {math.floor((ask + bid)/2)}, Bid: {bid}')
+
 			if update_time is not None:
 				# Convert time to datetime
 				c_ts = tl.convertTimeToTimestamp(datetime.strptime(update_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
@@ -1417,8 +1429,7 @@ class Oanda(Broker):
 						if period != tl.period.TICK:
 							is_new_bar = chart.isNewBar(period, c_ts)
 							if is_new_bar:
-								next_ts = chart.getNextTimestamp(period, chart.lastTs[period])
-								chart.lastTs[period] = next_ts
+								bar_ts = chart.lastTs[period]
 								result.append({
 									'broker': self.name,
 									'product': chart.product,
@@ -1431,6 +1442,8 @@ class Oanda(Broker):
 										'bid': chart.bid[period].tolist()
 									}
 								})
+								chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
+								print(f'[{period}] Prev: {bar_ts}, Next: {chart.lastTs[period]}')
 								chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
 								chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
 								chart.mid[period] = np.array(
