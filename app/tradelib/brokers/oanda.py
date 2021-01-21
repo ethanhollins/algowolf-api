@@ -47,6 +47,7 @@ class Oanda(Broker):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
 
 		self.dl = tl.DataLoader(broker=self)
+		self.data_saver = tl.DataSaver(broker=self)
 
 		self._key = key
 		self._is_demo = is_demo
@@ -81,6 +82,8 @@ class Oanda(Broker):
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
+
+		# Load Charts
 
 
 	def _periodic_check(self):

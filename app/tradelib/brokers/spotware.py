@@ -738,16 +738,23 @@ class Spotware(Broker):
 
 		ref_id = self.generateReference()
 
-		entry_args = {}
-		if order.order_type == tl.STOP_ORDER:
-			entry_args['stopPrice'] = entry_price
-		elif order.order_type == tl.LIMIT_ORDER:
-			entry_args['limitPrice'] = entry_price
+		args = {}
+		if not entry_price is None:
+			if order.order_type == tl.STOP_ORDER:
+				args['stopPrice'] = entry_price
+			elif order.order_type == tl.LIMIT_ORDER:
+				args['limitPrice'] = entry_price
+		if not lotsize is None:
+			args['volume'] = lotsize
+		if not sl_price is None:
+			args['stopLoss'] = sl_price
+		if not tp_price is None:
+			args['takeProfit'] = tp_price
 
 		self.client.emit(
 			'AmendOrderReq',
 			msgid=ref_id, ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id),
-			volume=lotsize, stopLoss=sl_price, takeProfit=tp_price, **entry_args
+			**args
 		)
 
 		res = self.parent._wait(ref_id)
@@ -770,6 +777,8 @@ class Spotware(Broker):
 						'accepted': False
 					}
 				}
+
+		print(f'MOD: {res}')
 
 		return res
 
