@@ -698,7 +698,7 @@ class Spotware(Broker):
 		self.client.emit(
 			'NewOrderReq',
 			msgid=ref_id, ctidTraderAccountId=int(account_id),
-			symbolId=2, orderType=sw_order_type, tradeSide=direction,
+			symbolId=self._convert_product(product), orderType=sw_order_type, tradeSide=direction,
 			volume=lotsize, **params
 		)
 

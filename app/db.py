@@ -674,11 +674,11 @@ class Database(object):
 
 	def updateAccountGui(self, user_id, strategy_id, account_code, obj):
 
-		if 'reports' in obj:
-			reports = obj.pop('reports')
-			for name in reports:
-				report_obj = obj['reports'][name]
-				self.updateStrategyAccountReport(user_id, strategy_id, account_code, name, report_obj)
+		# if 'reports' in obj:
+		# 	reports = obj.pop('reports')
+		# 	for name in reports:
+		# 		report_obj = obj['reports'][name]
+		# 		self.updateStrategyAccountReport(user_id, strategy_id, account_code, name, report_obj)
 
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
