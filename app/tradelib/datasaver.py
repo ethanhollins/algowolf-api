@@ -50,13 +50,53 @@ class DataSaver(object):
 		# self._fill_missing_data(chart.product, period)
 
 
-	def get(self, period, start, end):
+	def get(self, product, period, start, end):
 		''' Retrieve from saved data and memory '''
 
-		# Sequentially load required files
-		# Compile all data between times into dataframe
+		if period != tl.period.TICK:
+			load_period = tl.period.ONE_MINUTE
+		else:
+			load_period = tl.period.TICK
 
-		return
+		frags = []
+		c_dt = start.replace(hour=0, minute=0, second=0, microsecond=0)
+		while c_dt < end + timedelta(days=1):
+			path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{load_period}/{c_dt.strftime("%Y%m%d")}.csv.gz')
+
+			if os.path.exists(path):
+				if period == tl.period.TICK:
+					old_data = pd.read_csv(
+						os.path.join(path, last_file), sep=',', 
+						usecols=['timestamp', 'ask', 'bid'], 
+						index_col='timestamp', compression='gzip'
+					)
+				else:
+					old_data = pd.read_csv(
+						os.path.join(path, last_file), sep=',', 
+						usecols=[
+							'timestamp', 
+							'ask_open', 'ask_high', 'ask_low', 'ask_close',
+							'bid_open', 'bid_high', 'bid_low', 'bid_close'
+						], 
+						index_col='timestamp', compression='gzip'
+					)
+
+				frags.append(old_data.loc[
+					(data.index >= start.timestamp()) & 
+					(data.index < end.timestamp())
+				])
+
+			c_dt += timedelta(days=1)
+
+		result = pd.concat(frags)
+
+		# Create Mid Prices
+
+
+		if load_period == tl.period.ONE_MINUTE:
+			result = self._construct_bars(period, result)
+
+		return result
 
 
 	def _handle_price_data(self, item):
@@ -64,7 +104,12 @@ class DataSaver(object):
 
 		data = self.data[item['product']][item['period']]
 		if item['period'] == tl.period.TICK:
-			data.loc[item['timestamp']] = [item['item']['ask'], item['item']['bid']]
+			data.append(pd.DataFrame(
+				index=pd.Index(data=[item['timestamp']], name='timestamp'),
+				columns=['ask', 'bid'],
+				data=[[item['item']['ask'], item['item']['bid']]]
+			))
+			# data.loc[item['timestamp']] = [item['item']['ask'], item['item']['bid']]
 
 			if time.time() - self.timer >= SAVE_DELAY:
 				self.timer = time.time()
@@ -76,9 +121,20 @@ class DataSaver(object):
 
 		else:
 			if item['bar_end']:
-				data.loc[item['timestamp']] = np.concatenate(
-					(item['item']['ask'], item['item']['bid'])
-				)
+				data.append(pd.DataFrame(
+					index=pd.Index(data=[item['timestamp']], name='timestamp'),
+					columns=[
+						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'bid_open', 'bid_high', 'bid_low', 'bid_close'
+					],
+					data=[np.concatenate(
+						(item['item']['ask'], item['item']['bid'])
+					)]
+				))
+		# 	if item['bar_end']:
+		# 		data.loc[item['timestamp']] = np.concatenate(
+		# 			(item['item']['ask'], item['item']['bid'])
+		# 		)
 
 
 	def _construct_bars(self, period, data, smooth=True):
@@ -130,15 +186,50 @@ class DataSaver(object):
 		''' Fill any data that was missed '''
 
 		# Retrieve saved data
+		path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{period}')
 
-		# list dirs
-		# sort by datetime, get last file, last timestamp
-		# load all data from last timestamp
-		# append data
-		# remove any duplicate data in memory (or save w/memory data)
+		if len(os.listdir(path)) > 0:
+			# Get last saved file
+			last_file = sorted(
+				os.listdir(path), 
+				key=lambda x: datetime.strptime(x.replace('.csv.gz', ''), '%Y%m%d'), 
+				reverse=True
+			)[0]
 
-		# Run historical data search from last saved timestamp to now
-		return
+			# Get last saved timestamp
+			if period == tl.period.TICK:
+				old_data = pd.read_csv(
+					os.path.join(path, last_file), sep=',', 
+					usecols=['timestamp', 'ask', 'bid'], 
+					index_col='timestamp', compression='gzip'
+				)
+				last_ts = old_data.index.values[-1]
+			else:
+				old_data = pd.read_csv(
+					os.path.join(path, last_file), sep=',', 
+					usecols=[
+						'timestamp', 
+						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'bid_open', 'bid_high', 'bid_low', 'bid_close'
+					], 
+					index_col='timestamp', compression='gzip'
+				)
+				last_ts = old_data.index.values[-1]
+
+			# Retrieve new data
+			data = self.broker._download_historical_data(
+				product, period,
+				start=tl.convertTimestampToTime(last_ts),
+				end=datetime.utcnow()
+			)
+
+			# Delete duplicate memory data
+			if product in self.data and period in self.data[product]:
+				mem_data = self.data[product][period]
+				self.data[product][period] = mem_data.loc[mem_data.index > data.index.values[-1]]
+
+			# Save new data
+			self._save_data(product, period, data.loc[data.index > last_ts])
 
 
 	def _save_data(self, product, period, data):
@@ -153,9 +244,6 @@ class DataSaver(object):
 			c_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
 			while c_dt < end_dt + timedelta(days=1):
 				path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{period}/{c_dt.strftime("%Y%m%d")}.csv.gz')
-
-				# Load any existing file at this time
-				# old_df = pd.read_csv(path, sep=',', index_col='timestamp', compression='gzip')
 
 				# Append data to existing file
 				c_data = data.loc[

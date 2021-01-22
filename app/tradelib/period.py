@@ -2,6 +2,7 @@
 Periods
 '''
 TICK = 'TICK'
+FIVE_SECONDS = 'S5'
 ONE_MINUTE = 'M1'
 TWO_MINUTES = 'M2'
 THREE_MINUTES = 'M3'

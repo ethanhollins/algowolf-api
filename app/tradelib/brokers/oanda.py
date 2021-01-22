@@ -122,6 +122,9 @@ class Oanda(Broker):
 		if end:
 			dl_end = tl.utils.convertTimeToTimestamp(end)
 
+		if period == tl.period.TICK:
+			period = tl.period.FIVE_SECONDS
+
 		while True:
 			# time.sleep(0.5)
 
