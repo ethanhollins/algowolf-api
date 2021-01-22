@@ -6,6 +6,7 @@ import json
 import time
 import math
 import traceback
+import dateutil.parser
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 from copy import copy
@@ -42,7 +43,7 @@ class Oanda(Broker):
 		ctrl, key, is_demo, 
 		user_account=None, broker_id=None, 
 		accounts={}, display_name=None,
-		is_dummy=False
+		is_dummy=False, is_parent=False
 	):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
 
@@ -83,7 +84,12 @@ class Oanda(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
-		# Load Charts
+		if is_parent:
+			# Load Charts
+			CHARTS = ['EUR_USD']
+			for instrument in CHARTS:
+				chart = self.getChart(instrument)
+				self.data_saver.subscribe(chart)
 
 
 	def _periodic_check(self):
@@ -1421,7 +1427,7 @@ class Oanda(Broker):
 
 			if update_time is not None:
 				# Convert time to datetime
-				c_ts = tl.convertTimeToTimestamp(datetime.strptime(update_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
+				c_ts = tl.convertTimeToTimestamp(dateutil.parser.isoparse(update_time))
 				result = []
 				# Iterate periods
 				for period in chart.getActivePeriods():

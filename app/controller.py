@@ -86,12 +86,12 @@ class Controller(object):
 
 	def __init__(self, app):
 		self.app = app
-		self.continuousThreadHandler = ContinuousThreadHandler()
+		# self.continuousThreadHandler = ContinuousThreadHandler()
 		self.sio = self.setupSio()
 		self.accounts = Accounts(self)
-		self.brokers = Brokers(self)
-		self.charts = Charts(self)
 		self.db = Database(self, app.config['ENV'])
+		self.charts = Charts(self)
+		self.brokers = Brokers(self)
 		
 
 	def closeApp(self):
@@ -147,6 +147,7 @@ class Brokers(dict):
 		options = self._get_options()
 
 		for k, v in options.items():
+			self.ctrl.charts._init_broker_charts(k)
 			self[k] = self._init_broker(k, v)
 
 	def _get_options(self):
@@ -162,7 +163,7 @@ class Brokers(dict):
 		is_demo = options.get('is_demo')
 		if name == tl.broker.OANDA_NAME:
 			accounts = options.get('accounts')
-			return tl.broker.Oanda(self.ctrl, key, is_demo, accounts=accounts)
+			return tl.broker.Oanda(self.ctrl, key, is_demo, accounts=accounts, is_parent=True)
 		elif name == tl.broker.FXCM_NAME:
 			username = options.get('username')
 			password = options.get('password')
@@ -184,12 +185,15 @@ class Charts(dict):
 	def __init__(self, ctrl):
 		self.ctrl = ctrl
 		self.queue = DictQueue()
-		self._generate_broker_keys()
+		# self._generate_broker_keys()
 
 
-	def _generate_broker_keys(self):
-		for k in self.ctrl.brokers:
-			self[k] = {}
+	# def _generate_broker_keys(self):
+	# 	for k in self.ctrl.brokers:
+	# 		self[k] = {}
+
+	def _init_broker_charts(self, broker):
+		self[broker] = {}
 
 
 	def createChart(self, broker, product):
@@ -201,16 +205,15 @@ class Charts(dict):
 			return self[broker.name][product]
 
 
-	def getChart(self, broker_name, product):
-		if broker_name in self:
-			if product in self[broker_name]:
-				return self[broker_name][product]
+	def getChart(self, broker, product):
+		if broker.name in self:
+			if product in self[broker.name]:
+				return self[broker.name][product]
 			else:
 				return self.queue.handle(
-					f'{broker_name}:{product}',
+					f'{broker.name}:{product}',
 					self.createChart,
-					self.ctrl.brokers.get(broker_name),
-					product
+					broker, product
 				)
 
 		raise abort(404, 'Broker does not exist.')

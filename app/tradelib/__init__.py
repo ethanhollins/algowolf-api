@@ -5,7 +5,7 @@ from .order import Order
 from .backtester import IGBacktester, OandaBacktester
 from .chart import Chart
 from .dataloader import DataLoader
-from .datasaver = import DataSaver
+from .datasaver import DataSaver
 from . import broker, period, product
 
 

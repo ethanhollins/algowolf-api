@@ -32,7 +32,7 @@ def convertTimeToTimestamp(dt):
 		dt = convertTimezone(dt, 'UTC')
 	else:
 		dt = setTimezone(dt, 'UTC')
-	return int(datetime.timestamp(dt))
+	return float(datetime.timestamp(dt))
 
 def convertTimestampToTime(ts):
 	return setTimezone(datetime.utcfromtimestamp(ts), 'UTC')

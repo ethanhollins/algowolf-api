@@ -46,6 +46,10 @@ class FXCM(Broker):
 
 	def _is_logged_in(self):
 		if not self.session is None:
+			while self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
+				time.sleep(0.01)
+
+			print(F'[FXCM] Is logged in: {self.session.session_status}')
 			return self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED
 		return False
 
@@ -54,14 +58,14 @@ class FXCM(Broker):
 		if not self._is_logged_in():
 			try:
 				print('[FXCM] Attempting login...')
-				self.session = self.fx.login(
+				self.fx.login(
 					user_id=self.username, password=self.password, 
 					connection='demo' if self.is_demo else 'real',
 					session_status_callback=self._on_status_change
 				)
 
 			except Exception:
-				pass
+				print(traceback.format_exc(), flush=True)
 
 
 	def _handle_job(self, func, *args, **kwargs):
@@ -74,6 +78,8 @@ class FXCM(Broker):
 
 
 	def _on_status_change(self, session, status):
+		self.session = session
+
 		print(f"Trading session status: {status}")
 		if status in (
 			fxcorepy.AO2GSessionStatus.O2GSessionStatus.DISCONNECTED,

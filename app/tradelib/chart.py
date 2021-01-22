@@ -11,7 +11,7 @@ class Chart(object):
 
 	__slots__ = (
 		'ctrl', 'broker', 'product', 'ask', 'mid', 'bid', 'barReset',
-		'lastTs', '_subscriptions', '_unsubscriptions'
+		'lastTs', '_subscriptions', '_unsubscriptions', '_tick_queue'
 	)
 	def __init__(self, ctrl, broker, product):
 		self.ctrl = ctrl
@@ -25,6 +25,7 @@ class Chart(object):
 		self.lastTs = self._generate_period_dict()
 		self._subscriptions = self._generate_period_dict()
 		self._unsubscriptions = []
+		self._tick_queue = []
 
 		self.start()
 
@@ -124,25 +125,37 @@ class Chart(object):
 
 
 	def handleTick(self, result):
-		for res in result:
-			period = res.get('period')
+		queue_id = self.broker.generateReference()
+		self._tick_queue.append(queue_id)
+		queue_idx = self._tick_queue.index(queue_id)
+		while queue_idx != 0:
+			queue_idx = self._tick_queue.index(queue_id)
+			time.sleep(0.01)
 
-			if self._subscriptions.get(period) is not None:
-				for s in copy(list(self._subscriptions[period].keys())):
-					try:
-						for sub_id in copy(self._subscriptions[period][s]):
-							func = self._subscriptions[period][s][sub_id]
-							Thread(target=func, args=(res,)).start()
-					except Exception as e:
-						pass
+		try:
+			for res in result:
+				period = res.get('period')
 
-			self.ctrl.emit(
-				'ontick', res, 
-				namespace='/admin'
-			)
+				if self._subscriptions.get(period) is not None:
+					for s in copy(list(self._subscriptions[period].keys())):
+						try:
+							for sub_id in copy(self._subscriptions[period][s]):
+								func = self._subscriptions[period][s][sub_id]
+								Thread(target=func, args=(res,)).start()
+						except Exception as e:
+							pass
 
-			# if res.get('bar_end'):
-			# 	self.broker.handle_live_data_save(res)
+				self.ctrl.emit(
+					'ontick', res, 
+					namespace='/admin'
+				)
+
+		except Exception:
+			print(traceback.format_exc(), flush=True)
+
+		finally:
+			del self._tick_queue[queue_idx]
+
 
 	def getNextTimestamp(self, period, ts):
 		new_ts = ts + tl.period.getPeriodOffsetSeconds(period)

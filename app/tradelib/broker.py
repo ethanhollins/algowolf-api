@@ -224,7 +224,7 @@ class Broker(object):
 		return self.accounts
 
 	def createChart(self, product):
-		chart = self.ctrl.charts.getChart(self.name, product)
+		chart = self.ctrl.charts.getChart(self, product)
 		self.charts.append(chart)
 
 		sub_id = self.generateReference()
