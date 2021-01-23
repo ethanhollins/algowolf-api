@@ -48,6 +48,12 @@ class FXCM(Broker):
 
 	def _is_logged_in(self):
 		if not self.session is None:
+			if (
+				self.session.session_status != fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED and
+				tl.isWeekend(datetime.utcnow())
+			):
+				return False
+
 			while self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
 				time.sleep(0.01)
 
