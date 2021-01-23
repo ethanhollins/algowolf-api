@@ -52,7 +52,7 @@ class FXCM(Broker):
 				self.session.session_status != fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED and
 				tl.isWeekend(datetime.utcnow())
 			):
-				return False
+				return True
 
 			while self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
 				time.sleep(0.01)
