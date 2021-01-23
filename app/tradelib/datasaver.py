@@ -66,14 +66,14 @@ class DataSaver(object):
 			if os.path.exists(path):
 				if period == tl.period.TICK:
 					old_data = pd.read_csv(
-						os.path.join(path, last_file), sep=',', 
-						usecols=['timestamp', 'ask', 'bid'], 
+						path, sep=',', 
+						names=['timestamp', 'ask', 'bid'], 
 						index_col='timestamp', compression='gzip'
 					)
 				else:
 					old_data = pd.read_csv(
-						os.path.join(path, last_file), sep=',', 
-						usecols=[
+						path, sep=',', 
+						names=[
 							'timestamp', 
 							'ask_open', 'ask_high', 'ask_low', 'ask_close',
 							'bid_open', 'bid_high', 'bid_low', 'bid_close'
@@ -82,19 +82,30 @@ class DataSaver(object):
 					)
 
 				frags.append(old_data.loc[
-					(data.index >= start.timestamp()) & 
-					(data.index < end.timestamp())
+					(old_data.index >= start.timestamp()) & 
+					(old_data.index < end.timestamp())
 				])
 
 			c_dt += timedelta(days=1)
 
 		result = pd.concat(frags)
-
+		
 		# Create Mid Prices
-
+		result = pd.concat((
+			result, pd.DataFrame(
+				index=result.index, 
+				columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
+				data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5)
+			)
+		), axis=1)[[
+			'ask_open', 'ask_high', 'ask_low', 'ask_close',
+			'mid_open', 'mid_high', 'mid_low', 'mid_close',
+			'bid_open', 'bid_high', 'bid_low', 'bid_close'
+		]]
 
 		if load_period == tl.period.ONE_MINUTE:
 			result = self._construct_bars(period, result)
+			result = result.loc[~(result==0).all(axis=1)]
 
 		return result
 
@@ -104,7 +115,7 @@ class DataSaver(object):
 
 		data = self.data[item['product']][item['period']]
 		if item['period'] == tl.period.TICK:
-			data.append(pd.DataFrame(
+			self.data[item['product']][item['period']] = data.append(pd.DataFrame(
 				index=pd.Index(data=[item['timestamp']], name='timestamp'),
 				columns=['ask', 'bid'],
 				data=[[item['item']['ask'], item['item']['bid']]]
@@ -121,7 +132,7 @@ class DataSaver(object):
 
 		else:
 			if item['bar_end']:
-				data.append(pd.DataFrame(
+				self.data[item['product']][item['period']] = data.append(pd.DataFrame(
 					index=pd.Index(data=[item['timestamp']], name='timestamp'),
 					columns=[
 						'ask_open', 'ask_high', 'ask_low', 'ask_close',

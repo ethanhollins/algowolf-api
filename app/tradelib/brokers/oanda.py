@@ -84,12 +84,12 @@ class Oanda(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
-		if is_parent:
-			# Load Charts
-			CHARTS = ['EUR_USD']
-			for instrument in CHARTS:
-				chart = self.getChart(instrument)
-				self.data_saver.subscribe(chart)
+		# if is_parent:
+		# 	# Load Charts
+		# 	CHARTS = ['EUR_USD']
+		# 	for instrument in CHARTS:
+		# 		chart = self.getChart(instrument)
+		# 		self.data_saver.subscribe(chart)
 
 
 	def _periodic_check(self):
