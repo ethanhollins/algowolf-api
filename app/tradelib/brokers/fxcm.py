@@ -67,7 +67,8 @@ class FXCM(Broker):
 				)
 
 			except Exception:
-				print(traceback.format_exc(), flush=True)
+				# print(traceback.format_exc(), flush=True)
+				print('[FXCM] Login failed.')
 
 
 	def _handle_job(self, func, *args, **kwargs):

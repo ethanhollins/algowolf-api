@@ -89,7 +89,7 @@ class DataSaver(object):
 			c_dt += timedelta(days=1)
 
 		result = pd.concat(frags)
-		
+
 		# Create Mid Prices
 		result = pd.concat((
 			result, pd.DataFrame(
@@ -158,14 +158,14 @@ class DataSaver(object):
 
 		bar_ends = data.index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
 		indicies = np.arange(data.shape[0])[bar_ends.values.astype(bool)]
-		result = np.zeros((indicies.shape[0], 12), dtype=float)
+		result = np.zeros((indicies.shape[0]-1, 12), dtype=float)
 
 		for i in range(1, indicies.shape[0]):
 			idx = indicies[i]
 			passed_count = indicies[i] - indicies[i-1]
 
 			if idx - passed_count == 0:
-				result[i] = [
+				result[i-1] = [
 					data.values[idx-passed_count, 0], np.amax(data.values[idx-passed_count:idx, 1]), 
 					np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
 					data.values[idx-passed_count, 4], np.amax(data.values[idx-passed_count:idx, 5]), 
@@ -174,7 +174,7 @@ class DataSaver(object):
 					np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
 				]
 			else:
-				result[i] = [
+				result[i-1] = [
 					data.values[idx-passed_count-1, 3], np.amax(data.values[idx-passed_count:idx, 1]), 
 					np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
 					data.values[idx-passed_count-1, 7], np.amax(data.values[idx-passed_count:idx, 5]), 
@@ -184,7 +184,7 @@ class DataSaver(object):
 				]
 
 		return pd.DataFrame(
-			index=data[bar_ends].index, data=result, 
+			index=data[bar_ends][:-1].index, data=result, 
 			columns=[ 
 				'ask_open', 'ask_high', 'ask_low', 'ask_close',
 				'mid_open', 'mid_high', 'mid_low', 'mid_close',
