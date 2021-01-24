@@ -35,19 +35,19 @@ class DataSaver(object):
 			]).set_index('timestamp')
 
 
-	def subscribe(self, chart):
+	def subscribe(self, chart, periods):
 		# Subscribe to live updates
 		if not chart.product in self.data:
 			self.data[chart.product] = {}
 
-		for period in self._save_periods:
+		for period in periods:
 			self._init_data_csv(chart, period)
 			self.data[chart.product][period] = self._create_empty_df(period)
 			sub_id = self.broker.generateReference()
 			chart.subscribe(period, self.broker.brokerId, sub_id, self._handle_price_data)
 
 		# Fill missing data
-		# self._fill_missing_data(chart.product, period)
+		self._fill_missing_data(chart.product, period)
 
 
 	def get(self, product, period, start, end):
@@ -87,6 +87,12 @@ class DataSaver(object):
 				])
 
 			c_dt += timedelta(days=1)
+
+		# Add any current relevant memory data
+		frags.append(self.data[product][load_period].loc[
+			(self.data[product][load_period].index >= start.timestamp()) & 
+			(self.data[product][load_period].index < end.timestamp())
+		])
 
 		result = pd.concat(frags)
 
@@ -193,8 +199,16 @@ class DataSaver(object):
 		)
 
 
+	def fill_all_missing_data(self):
+		for product in self.data:
+			for period in self.data[product]:
+				self._fill_missing_data(product, period)
+
+
 	def _fill_missing_data(self, product, period):
 		''' Fill any data that was missed '''
+
+		print(f'FILL: {product} -> {period}')
 
 		# Retrieve saved data
 		path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{period}')
@@ -228,7 +242,7 @@ class DataSaver(object):
 				last_ts = old_data.index.values[-1]
 
 			# Retrieve new data
-			data = self.broker._download_historical_data(
+			data = self.broker._download_historical_broker_data(
 				product, period,
 				start=tl.convertTimestampToTime(last_ts),
 				end=datetime.utcnow()

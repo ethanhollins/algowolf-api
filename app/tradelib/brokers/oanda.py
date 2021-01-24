@@ -87,9 +87,10 @@ class Oanda(Broker):
 		# if is_parent:
 		# 	# Load Charts
 		# 	CHARTS = ['EUR_USD']
+		# 	PERIODS = [tl.period.FIVE_SECONDS, tl.period.ONE_MINUTE]
 		# 	for instrument in CHARTS:
 		# 		chart = self.getChart(instrument)
-		# 		self.data_saver.subscribe(chart)
+		# 		self.data_saver.subscribe(chart, PERIODS)
 
 
 	def _periodic_check(self):
@@ -122,8 +123,8 @@ class Oanda(Broker):
 		if end:
 			dl_end = tl.utils.convertTimeToTimestamp(end)
 
-		if period == tl.period.TICK:
-			period = tl.period.FIVE_SECONDS
+		# if period == tl.period.TICK:
+		# 	period = tl.period.FIVE_SECONDS
 
 		while True:
 			# time.sleep(0.5)

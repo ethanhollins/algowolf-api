@@ -100,6 +100,7 @@ class FXCM(Broker):
 
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')
+			# self.data_saver.fill_all_missing_data()
 
 	'''
 	Broker functions
@@ -155,6 +156,56 @@ class FXCM(Broker):
 
 
 		return result
+
+
+	def _download_historical_broker_data(self, 
+		product, period, tz='Europe/London', 
+		start=None, end=None, count=None,
+		force_download=False
+	):
+		self._login()
+
+		start = start.replace(tzinfo=None)
+		end = end.replace(tzinfo=None)
+		
+		# Count
+		if not count is None:
+			res = self._handle_job(
+				self.fx.get_history,
+				self._convert_product(product), 
+				self._convert_period(period), 
+				quotes_count=count
+			)
+
+		# Start -> End
+		else:
+			res = self._handle_job(
+				self.fx.get_history,
+				self._convert_product(product), 
+				self._convert_period(period), 
+				start, end
+			)
+
+		# Convert to result DF
+		res = np.array(list(map(lambda x: list(x), res)))
+
+		mid_prices = np.around((res[:, 1:5].astype(float) + res[:, 5:9].astype(float))/2, decimals=5)
+		res = np.concatenate((res[:, :1], res[:, 5:9].astype(float), mid_prices.astype(float), res[:, 1:5].astype(float)), axis=1)
+
+		result = pd.DataFrame(
+			index=pd.Index(res[:,0]).map(
+				lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
+			).rename('timestamp'),
+			columns=[
+				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			],
+			data=res[:,1:]
+		)
+
+		return result
+
 
 
 	def _get_all_positions(self, account_id):
