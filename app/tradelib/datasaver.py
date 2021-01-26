@@ -156,47 +156,52 @@ class DataSaver(object):
 
 	def _construct_bars(self, period, data, smooth=True):
 		''' Construct other period bars from appropriate saved data '''
-		first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
-			hour=0, minute=0, second=0, microsecond=0
-		).timestamp()
-		first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
-		data = data.loc[data.index >= first_ts]
 
-		bar_ends = data.index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
-		indicies = np.arange(data.shape[0])[bar_ends.values.astype(bool)]
-		result = np.zeros((indicies.shape[0]-1, 12), dtype=float)
+		if data.size > 0:
+			first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
+				hour=0, minute=0, second=0, microsecond=0
+			).timestamp()
+			first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
+			data = data.loc[data.index >= first_ts]
 
-		for i in range(1, indicies.shape[0]):
-			idx = indicies[i]
-			passed_count = indicies[i] - indicies[i-1]
+			bar_ends = data.index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
+			indicies = np.arange(data.shape[0])[bar_ends.values.astype(bool)]
+			result = np.zeros((indicies.shape[0]-1, 12), dtype=float)
 
-			if idx - passed_count == 0:
-				result[i-1] = [
-					data.values[idx-passed_count, 0], np.amax(data.values[idx-passed_count:idx, 1]), 
-					np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
-					data.values[idx-passed_count, 4], np.amax(data.values[idx-passed_count:idx, 5]), 
-					np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
-					data.values[idx-passed_count, 8], np.amax(data.values[idx-passed_count:idx, 9]), 
-					np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+			for i in range(1, indicies.shape[0]):
+				idx = indicies[i]
+				passed_count = indicies[i] - indicies[i-1]
+
+				if idx - passed_count == 0:
+					result[i-1] = [
+						data.values[idx-passed_count, 0], np.amax(data.values[idx-passed_count:idx, 1]), 
+						np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
+						data.values[idx-passed_count, 4], np.amax(data.values[idx-passed_count:idx, 5]), 
+						np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
+						data.values[idx-passed_count, 8], np.amax(data.values[idx-passed_count:idx, 9]), 
+						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+					]
+				else:
+					result[i-1] = [
+						data.values[idx-passed_count-1, 3], np.amax(data.values[idx-passed_count:idx, 1]), 
+						np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
+						data.values[idx-passed_count-1, 7], np.amax(data.values[idx-passed_count:idx, 5]), 
+						np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
+						data.values[idx-passed_count-1, 11], np.amax(data.values[idx-passed_count:idx, 9]), 
+						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+					]
+
+			return pd.DataFrame(
+				index=data[bar_ends][:-1].index, data=result, 
+				columns=[ 
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
 				]
-			else:
-				result[i-1] = [
-					data.values[idx-passed_count-1, 3], np.amax(data.values[idx-passed_count:idx, 1]), 
-					np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
-					data.values[idx-passed_count-1, 7], np.amax(data.values[idx-passed_count:idx, 5]), 
-					np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
-					data.values[idx-passed_count-1, 11], np.amax(data.values[idx-passed_count:idx, 9]), 
-					np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
-				]
-
-		return pd.DataFrame(
-			index=data[bar_ends][:-1].index, data=result, 
-			columns=[ 
-				'ask_open', 'ask_high', 'ask_low', 'ask_close',
-				'mid_open', 'mid_high', 'mid_low', 'mid_close',
-				'bid_open', 'bid_high', 'bid_low', 'bid_close'
-			]
-		)
+			)
+			
+		else:
+			return data
 
 
 	def fill_all_missing_data(self):

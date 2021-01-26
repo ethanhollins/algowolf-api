@@ -443,6 +443,14 @@ class Broker(object):
 			namespace='/admin'
 		)
 
+	# Update Handlers
+	def handleOnSessionStatus(self, res):
+		self.ctrl.sio.emit(
+			'onsessionstatus', 
+			{'broker_id': self.brokerId, 'item': res}, 
+			namespace='/admin'
+		)
+
 
 	def handleTransaction(self, res):
 		for k, v in res.items():

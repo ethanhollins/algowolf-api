@@ -5,7 +5,9 @@ import pandas as pd
 from datetime import datetime
 from copy import copy
 from threading import Thread
-from . import spotware_connect as sc
+from .spotware_connect.client import Client
+from .spotware_connect.messages import OpenApiCommonMessages_pb2 as o1
+from .spotware_connect.messages import OpenApiMessages_pb2 as o2
 from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
@@ -38,25 +40,25 @@ class Spotware(Broker):
 		'''
 		Setup Spotware Funcs
 		'''
-
 		if is_parent:
 			self.parent = self
 			self.children = []
 
-			self.client = sc.Client()
+			self.client = Client(self.is_demo)
 
-			self.client.event(self.connect)
-			self.client.event(self.disconnect)
-			self.client.event(self.message)
-			self.client.event('message', self.on_auth_ok, msgtype='ApplicationAuthRes')
-			self.client.event('message', self.on_account_auth_ok, msgtype='AccountAuthRes')
+			self.client.event('connect', self.connect)
+			self.client.event('disconnect', self.disconnect)
+			self.client.event('message', self.message)
 
-			Thread(target=self._run).start()
-			
+			self.client.connect()
+
 			while not self._spotware_connected:
-				time.sleep(1)
+				pass
 
 			super().__init__(ctrl, user_account, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
+
+			# Start refresh thread
+			Thread(target=self._periodic_refresh).start()
 
 		else:
 			self.parent = ctrl.brokers.getBroker(tl.broker.SPOTWARE_NAME)
@@ -75,8 +77,6 @@ class Spotware(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
-		# Start refresh thread
-		Thread(target=self._periodic_refresh).start()
 
 	'''
 	Spotware messages
@@ -86,8 +86,14 @@ class Spotware(Broker):
 		TEN_SECONDS = 10
 		while self.is_running:
 			if time.time() - self._last_update > TEN_SECONDS:
-				self.client.emit('HeartbeatEvent')
-				self._last_update = time.time()
+				try:
+					print('[SC] Send heartbeat!')
+					heartbeat = o1.ProtoHeartbeatEvent()
+					self.client.send(heartbeat)
+					self._last_update = time.time()
+				except Exception as e:
+					print(f'[SC] {str(e)}')
+					pass
 
 			time.sleep(1)
 
@@ -124,42 +130,47 @@ class Spotware(Broker):
 		return self._handled_position_events[tl.POSITION_CLOSE][order_id]
 
 
-	def _run(self):
-		self.client.start()		
-
-
 	def connect(self):
 		print('Spotware connected!')
 
 		# Application Auth
-		self.client.emit(
-			'ApplicationAuthReq', clientId=CLIENT_ID, clientSecret=CLIENT_SECRET
+		auth_req = o2.ProtoOAApplicationAuthReq(
+			clientId = CLIENT_ID,
+			clientSecret = CLIENT_SECRET
 		)
+		self.client.send(auth_req, msgid=self.generateReference())
 
 
 	def disconnect(self):
 		print('Spotware disconnected')
 
 
-	def message(self, msg, payload, **kwargs):
-		# print(f'MSG: {payload.payloadType}')
+	def message(self, payloadType, payload, msgid):
+		# print(f'MSG: {payload}')
 
 		# Heartbeat
-		if payload.payloadType == 51:
-			self.client.emit('HeartbeatEvent')
+		if payloadType == 51:
+			heartbeat = o1.ProtoHeartbeatEvent()
+			self.client.send(heartbeat)
 			self._last_update = time.time()
 
+		elif payloadType == 2101:
+			self._spotware_connected = True
+			for child in self.children:
+				self._authorize_accounts()
+
 		# Tick
-		elif payload.payloadType == 2131:
+		elif payloadType == 2131:
 			if str(payload.symbolId) in self._subscriptions:
 				self._subscriptions[str(payload.symbolId)](payload)
+
 		else:
 			result = None
 			if 'ctidTraderAccountId' in payload.DESCRIPTOR.fields_by_name.keys():
 				account_id = payload.ctidTraderAccountId
 				for child in self.children:
 					if account_id in map(int, child.accounts.keys()):
-						result = child._on_account_update(account_id, payload, kwargs.get('msgid'))
+						result = child._on_account_update(account_id, payload, msgid)
 
 						if isinstance(result, dict): 
 							for k, v in result.items():
@@ -171,42 +182,22 @@ class Spotware(Broker):
 
 						break
 
-			if kwargs.get('msgid'):
+			if msgid:
 				if result is None:
-					self._handled[kwargs['msgid']] = payload
+					self._handled[msgid] = payload
 				else:
-					self._handled[kwargs['msgid']] = result
+					self._handled[msgid] = result
 
-
-
-	def on_auth_ok(self, **kwargs):
-		# Account Auth
-		# self.client.emit(
-		# 	'AccountAuthReq', 
-		# 	ctidTraderAccountId=19891017, 
-		# 	accessToken='UWU1cwMhRWbUhQ5gFZNImArEhMI7oPKJeV3dIizOFYY'
-		# )
-		print("[SW] Authorized")
-
-		# Re-Authorize accounts
-		for child in self.children:
-			child._authorize_accounts(child.accounts)
-
-		self._spotware_connected = True
-
-
-	def on_account_auth_ok(self, **kwargs):
-		return
 
 
 	def _authorize_accounts(self, accounts):
 		for account_id in accounts:
 			ref_id = self.generateReference()
-			self.client.emit(
-				'AccountAuthReq', 
-				msgid=ref_id, ctidTraderAccountId=int(account_id), 
+			acc_auth = o2.ProtoOAAccountAuthReq(
+				ctidTraderAccountId=int(account_id), 
 				accessToken='UWU1cwMhRWbUhQ5gFZNImArEhMI7oPKJeV3dIizOFYY'
 			)
+			self.client.send(acc_auth, msgid=ref_id)
 			self.parent._wait(ref_id)
 
 
@@ -242,12 +233,12 @@ class Spotware(Broker):
 
 
 		ref_id = self.generateReference()
-		self.client.emit(
-			'GetTrendbarsReq',
-			msgid=ref_id, ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		trendbars_req = o2.ProtoOAGetTrendbarsReq(
+			ctidTraderAccountId=int(list(self.accounts.keys())[0]),
 			fromTimestamp=int(dl_start*1000), toTimestamp=int(dl_end*1000), 
 			symbolId=sw_product, period=sw_period
 		)
+		self.client.send(trendbars_req, msgid=ref_id)
 
 		res = self._wait(ref_id)
 
@@ -363,11 +354,10 @@ class Spotware(Broker):
 
 	def _get_all_positions(self, account_id):
 		ref_id = self.generateReference()
-		self.client.emit(
-			'ReconcileReq',
-			msgid=ref_id, ctidTraderAccountId=int(account_id)
+		pos_req = o2.ProtoOAReconcileReq(
+			ctidTraderAccountId=int(account_id)
 		)
-
+		self.client.send(pos_req, msgid=ref_id)
 		res = self.parent._wait(ref_id)
 
 		result = { account_id: [] }
@@ -433,13 +423,12 @@ class Spotware(Broker):
 		direction = 1 if direction == tl.LONG else 2
 
 		# Execute Market Order
-		self.client.emit(
-			'NewOrderReq',
-			msgid=ref_id, ctidTraderAccountId=int(account_id),
+		new_order = o2.ProtoOANewOrderReq(
+			ctidTraderAccountId=int(account_id),
 			symbolId=sw_product, orderType=1, tradeSide=direction,
 			volume=lotsize, **sl_tp_ranges
 		)
-
+		self.client.send(new_order, msgid=ref_id)
 		res = self.parent._wait(ref_id)
 
 		result = {}
@@ -456,11 +445,11 @@ class Spotware(Broker):
 				if len(sl_tp_prices) > 0:
 					mod_ref_id = self.generateReference()
 
-					self.client.emit(
-						'AmendPositionSLTPReq',
-						msgid=mod_ref_id, ctidTraderAccountId=int(pos.account_id),
+					amend_req = o2.ProtoOAAmendPositionSLTPReq(
+						ctidTraderAccountId=int(pos.account_id),
 						positionId=int(pos.order_id), **sl_tp_prices
 					)
+					self.client.send(amend_req, msgid=mod_ref_id)
 
 					res = self.parent._wait(mod_ref_id)
 
@@ -500,12 +489,11 @@ class Spotware(Broker):
 		ref_id = self.generateReference()
 
 		print(f'{int(pos.account_id)}, {int(pos.order_id)}, {sl_price}, {tp_price}')
-		self.client.emit(
-			'AmendPositionSLTPReq',
-			msgid=ref_id, ctidTraderAccountId=int(pos.account_id),
+		amend_req = o2.ProtoOAAmendPositionSLTPReq(
+			ctidTraderAccountId=int(account_id),
 			positionId=int(pos.order_id), stopLoss=sl_price, takeProfit=tp_price
 		)
-
+		self.client.send(amend_req, msgid=ref_id)
 		res = self.parent._wait(ref_id)
 		print(res)
 
@@ -542,11 +530,11 @@ class Spotware(Broker):
 
 		ref_id = self.generateReference()
 
-		self.client.emit(
-			'ClosePositionReq',
-			msgid=ref_id, ctidTraderAccountId=int(pos.account_id),
+		close_req = o2.ProtoOAClosePositionReq(
+			ctidTraderAccountId=int(account_id),
 			positionId=int(pos.order_id), volume=lotsize
 		)
+		self.client.send(close_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
 
@@ -585,11 +573,10 @@ class Spotware(Broker):
 
 	def _get_all_orders(self, account_id):
 		ref_id = self.generateReference()
-		self.client.emit(
-			'ReconcileReq',
-			msgid=ref_id, ctidTraderAccountId=int(account_id)
+		order_req = o2.ProtoOAReconcileReq(
+			ctidTraderAccountId=int(account_id)
 		)
-
+		self.client.send(order_req, msgid=ref_id)
 		res = self.parent._wait(ref_id)
 
 		result = { account_id: [] }
@@ -604,10 +591,10 @@ class Spotware(Broker):
 
 	def getAllAccounts(self):
 		ref_id = self.generateReference()
-		self.client.emit(
-			'GetAccountListByAccessTokenReq',
-			msgid=ref_id, accessToken=self.access_token
+		accounts_req = o2.ProtoOAGetAccountListByAccessTokenReq(
+			accessToken=self.access_token
 		)
+		self.client.send(accounts_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
 		if res is not None:
@@ -628,11 +615,10 @@ class Spotware(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
 		ref_id = self.generateReference()
-
-		self.client.emit(
-			'TraderReq',
-			msgid=ref_id, ctidTraderAccountId=int(account_id)
+		trader_req = o2.ProtoOATraderReq(
+			ctidTraderAccountId=int(account_id)
 		)
+		self.client.send(trader_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
 
@@ -695,12 +681,12 @@ class Spotware(Broker):
 		direction = 1 if direction == tl.LONG else 2
 		sw_order_type = 3 if order_type == tl.STOP_ORDER else 2
 
-		self.client.emit(
-			'NewOrderReq',
-			msgid=ref_id, ctidTraderAccountId=int(account_id),
+		new_order_req = o2.ProtoOANewOrderReq(
+			ctidTraderAccountId=int(account_id),
 			symbolId=self._convert_product(product), orderType=sw_order_type, tradeSide=direction,
 			volume=lotsize, **params
 		)
+		self.client.send(new_order_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
 
@@ -751,11 +737,11 @@ class Spotware(Broker):
 		if not tp_price is None:
 			args['takeProfit'] = tp_price
 
-		self.client.emit(
-			'AmendOrderReq',
-			msgid=ref_id, ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id),
+		amend_req = o2.ProtoOAAmendOrderReq(
+			ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id),
 			**args
 		)
+		self.client.send(amend_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
 
@@ -792,11 +778,10 @@ class Spotware(Broker):
 
 		ref_id = self.generateReference()
 
-		self.client.emit(
-			'CancelOrderReq',
-			msgid=ref_id, ctidTraderAccountId=int(order.account_id),
-			orderId=int(order.order_id)
+		cancel_req = o2.ProtoOACancelOrderReq(
+			ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id)
 		)
+		self.client.send(cancel_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
 
@@ -1016,26 +1001,28 @@ class Spotware(Broker):
 	def _subscribe_chart_updates(self, product, listener):
 		ref_id = self.generateReference()
 
+		print(product)
 		product = self._convert_product(product)
+		print(product)
+		print(int(list(self.accounts.keys())[0]))
 		self.parent._subscriptions[str(product)] = listener
 
-		self.client.emit(
-			'SubscribeSpotsReq',
-			msgid=ref_id, ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		sub_req = o2.ProtoOASubscribeSpotsReq(
+			ctidTraderAccountId=int(list(self.accounts.keys())[0]),
 			symbolId=[product]
 		)
+		self.client.send(sub_req, msgid=ref_id)
 		self.parent._wait(ref_id)
 
 		for i in range(14):
 			if i % 5 == 0:
 				time.sleep(1)
 
-			self.client.emit(
-				'SubscribeLiveTrendbarReq',
+			sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
 				ctidTraderAccountId=int(list(self.accounts.keys())[0]),
 				symbolId=product, period=i+1
 			)
-
+			self.client.send(sub_req)
 
 
 	def onChartUpdate(self, chart, payload):

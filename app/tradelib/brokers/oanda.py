@@ -74,6 +74,7 @@ class Oanda(Broker):
 
 		self._last_update = time.time()
 		self._subscriptions = []
+		self._is_connected = False
 
 		if not is_dummy:
 			for account_id in self.getAccounts():
@@ -100,8 +101,17 @@ class Oanda(Broker):
 		while self.is_running:
 			if time.time() - self._last_update > TWENTY_SECONDS:
 				print('RECONNECT')
-				# Perform periodic refresh
-				self._reconnect()
+				if self._is_connected:
+					self._is_connected = False
+					# Run disconnected callback
+					self.handleOnSessionStatus({
+						'timestamp': math.floor(time.time()),
+						'type': 'disconnected',
+						'message': 'The session has been disconnected.'
+					})
+
+					# Perform periodic refresh
+					self._reconnect()
 			time.sleep(5)
 
 		for sub in self._subscriptions:
@@ -1346,19 +1356,21 @@ class Oanda(Broker):
 
 	# Live utilities
 	def _reconnect(self):
-		for sub in self._subscriptions:
-			for i in copy(sub.res):
-				i.close()
-				del sub.res[sub.res.index(i)]
+		for sub in copy(self._subscriptions):
+			sub.receive = False
 
-			try:
-				if sub.sub_type == Subscription.ACCOUNT:
-					self._perform_account_connection(sub)
-				elif sub.sub_type == Subscription.CHART:
-					self._perform_chart_connection(sub)
+			# for i in copy(sub.res):
+			# 	i.close()
+			# 	del sub.res[sub.res.index(i)]
 
-			except requests.exceptions.ConnectionError:
-				return
+			# try:
+			# 	if sub.sub_type == Subscription.ACCOUNT:
+			# 		self._perform_account_connection(sub)
+			# 	elif sub.sub_type == Subscription.CHART:
+			# 		self._perform_chart_connection(sub)
+
+			# except requests.exceptions.ConnectionError:
+			# 	return
 
 
 	def _encode_params(self, params):
@@ -1385,11 +1397,13 @@ class Oanda(Broker):
 			Thread(target=self._stream_price_updates, args=(sub,)).start()
 		except Exception as e:
 			time.sleep(1)
+			print('[Oanda] Attempting price reconnect.')
 			Thread(target=self._perform_chart_connection, args=(sub,)).start()
 			return
 
 
-	def _stream_price_updates(self, sub):		
+	def _stream_price_updates(self, sub):
+
 		while sub.receive:
 			try:
 				message = sub.stream.readline().decode('utf-8').rstrip()
@@ -1403,6 +1417,7 @@ class Oanda(Broker):
 				sub.receive = False
 
 		# Reconnect
+		print('[Oanda] Price Updates Disconnected.')
 		self._perform_chart_connection(sub)
 
 
@@ -1544,11 +1559,22 @@ class Oanda(Broker):
 			Thread(target=self._stream_account_update, args=(sub,)).start()
 		except Exception as e:
 			time.sleep(1)
+			print('[Oanda] Attempting account reconnect.')
 			Thread(target=self._perform_account_connection, args=(sub,)).start()
 			return
 
 
 	def _stream_account_update(self, sub):
+		if not self._is_connected:
+			self._is_connected = True
+			self._last_update = time.time()
+			# Run connected callback
+			self.handleOnSessionStatus({
+				'timestamp': math.floor(time.time()),
+				'type': 'connected',
+				'message': 'The session connected successfully.'
+			})
+
 		while sub.receive:
 			try:
 				message = sub.stream.readline().decode('utf-8').rstrip()
@@ -1562,6 +1588,17 @@ class Oanda(Broker):
 				sub.receive = False
 
 		# Reconnect
+		print('[Oanda] Account Updates Disconnected.')
+
+		if self._is_connected:
+			self._is_connected = False
+			# Run disconnected callback
+			self.handleOnSessionStatus({
+				'timestamp': math.floor(time.time()),
+				'type': 'disconnected',
+				'message': 'The session has been disconnected.'
+			})
+
 		self._perform_account_connection(sub)
 
 

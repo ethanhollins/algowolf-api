@@ -1,166 +1,173 @@
-from twisted.internet.protocol import Factory
-from twisted.internet.endpoints import clientFromString
-from twisted.application.internet import ClientService
-from twisted.internet import reactor
-from twisted.internet.task import LoopingCall
-from .protocol import Protocol
-from .protobuf import Protobuf
+import os
+import socket
+import ssl
+import traceback
+import time
+from threading import Thread
+from struct import pack, unpack
+from .messages import OpenApiCommonMessages_pb2 as o1
+from .messages import OpenApiMessages_pb2 as o2
 
 
-class Client(ClientService):
-    PROXY_DEMO = "demo.ctraderapi.com:5035"
-    PROXY_LIVE = "live.ctraderapi.com:5035"
-    EVENT_CONNECT_NAME = "connect"
-    EVENT_DISCONNECT_NAME = "disconnect"
-    EVENT_MESSAGE_NAME = "message"
+CONNECT_EVENT = 'connect'
+DISCONNECT_EVENT = 'disconnect'
+MESSAGE_EVENT = 'message'
 
-    class Protocol(Protocol):
-        client = None
+class Client(object):
 
-        def connectionMade(self):
-            super().connectionMade()
-            self.client.connect()
+	def __init__(self, is_demo=False, timeout=None):
+		self._events = {
+			CONNECT_EVENT: [],
+			DISCONNECT_EVENT: [],
+			MESSAGE_EVENT: []
+		}
+		self._msg_queue = []
 
-        def connectionLost(self, reason):
-            super().connectionLost(reason)
-            self.client.disconnect()
+		self.host = "demo.ctraderapi.com" if is_demo else "live.ctraderapi.com"
+		self.port = 5035
 
-        def receive(self, message):
-            self.client.receive(message)
+		self.ssock = None
 
-    class Factory(Factory):
-        client = None
-
-        def __init__(self, *args, **kwargs):
-            super().__init__()
-            self.client = kwargs['client']
-
-        def buildProtocol(self, addr):
-            p = super().buildProtocol(addr)
-            p.client = self.client
-            return p
-
-    def __init__(self, live=False, retryPolicy=None,
-                 clock=None, prepareConnection=None):
-        host = "ssl:" + (self.PROXY_LIVE if live else self.PROXY_DEMO)
-        endpoint = clientFromString(reactor, host)
-        factory = Client.Factory.forProtocol(Client.Protocol, client=self)
-        super().__init__(endpoint, factory, retryPolicy=retryPolicy,
-                         clock=clock, prepareConnection=prepareConnection)
+		self._populate_protos()
 
 
-    def _on_loop(self):
-        print('loop!')
+	def _populate_protos(self):
+		self._protos = {}
+		for name in dir(o1) + dir(o2):
+			if not name.startswith("Proto"):
+				continue
+
+			m = o1 if hasattr(o1, name) else o2
+			klass = getattr(m, name)
+			self._protos[klass().payloadType] = klass
 
 
-    def start(self, timeout=None):
-        # LoopingCall(self._on_loop)
+	def connect(self, timeout=None):
+		if self.ssock is not None:
+			try:
+				self.ssock.close()
+			except Exception:
+				pass
 
-        self.startService()
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		if timeout:
+			sock.settimeout(timeout)
 
-        if timeout:
-            reactor.callLater(timeout, self.stop)
+		PEM_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cert.pem")
+		self.ssock = ssl.wrap_socket(sock, ssl_version=ssl.PROTOCOL_SSLv23, certfile=PEM_PATH, keyfile=PEM_PATH)
+		self.ssock.connect((self.host, self.port))
 
-        reactor.run(installSignalHandlers=False)
+		print('[SC] Connected')
 
-    def stop(self):
-        self.stopService()
-        if reactor.running:
-            reactor.stop()
+		t = Thread(target=self.receive)
+		t.start()
 
-    def connect(self):
-        self.exec_events(self.EVENT_CONNECT_NAME)
-
-    def disconnect(self):
-        self.exec_events(self.EVENT_DISCONNECT_NAME)
-
-    def receive(self, message):
-        payload = Protobuf.extract(message)
-        kargs = dict(msg=message, msgid=message.clientMsgId,
-                     msgtype=message.payloadType,
-                     payload=payload,
-                     **{fv[0].name: fv[1] for fv in payload.ListFields()})
-
-        if "ctidTraderAccountId" in kargs:
-            kargs["ctid"] = payload.ctidTraderAccountId
-
-        self.exec_events(self.EVENT_MESSAGE_NAME, **kargs)
+		try:
+			for e in self._events[CONNECT_EVENT]:
+				e()
+		except Exception:
+			print(traceback.format_exc())
 
 
-    # def emit_from_thread(self, message, msgid=None, **params):
-    #     reactor.callFromThread(self.emit, message, msgid=None, **params)
+	def reconnect(self):
+		while True:
+			print('[SC] Attempting reconnect.')
+			try:
+				self.connect()
+				break
+			except Exception:
+				time.sleep(1)
 
 
-    def emit(self, message, msgid=None, **params):
-        if type(message) in [str, int]:
-            message = Protobuf.get(message, **params)
+	def send(self, payload, msgid=''):
+		if self.ssock is not None:
+			proto_msg = o1.ProtoMessage(
+				payloadType=payload.payloadType,
+				payload=payload.SerializeToString(),
+				clientMsgId=msgid
+			).SerializeToString()
 
-        def protocol_send(protocol):
-            protocol.send(message, msgid=msgid)
+			sock_msg = pack("!I", len(proto_msg)) + proto_msg
+			# print(f'[SC] SEND MSG: {sock_msg}')
+			self.ssock.send(sock_msg)
 
-        def protocol_err(msg):
-            print(f'[ERROR]: {msg}')
+		else:
+			print('[SC] Not connected.')
 
-        con = self.whenConnected()
-        con.addCallback(protocol_send)
-        con.addErrback(protocol_err)
-        return con
 
-    _events = dict()
+	def receive(self):
+		buffer=b''
+		msg_len = 0
+		msg = b''
 
-    def event(self, name_or_func=None, func=None, **filters):
-        if not self._events:  # lazy create
-            for e in [self.EVENT_CONNECT_NAME,
-                      self.EVENT_DISCONNECT_NAME, self.EVENT_MESSAGE_NAME]:
-                self._events[e] = []
+		while True:
+			try:
+				recv = self.ssock.recv(1024)
+				if len(recv) == 0:
+					break
+				buffer += recv
+			except Exception:
+				print(f'[SC] ERROR:\n{traceback.format_exc()}')
+				break
 
-        if callable(name_or_func):  # callable append
-            name = name_or_func.__name__
-            self._events[name].append(name_or_func)
-            return name_or_func
-        
+			while len(buffer):
+				# print(buffer)
+				# Retrieve message length
+				if msg_len == 0:
+					if len(buffer) >= 4:
+						msg_len = unpack("!I", buffer[:4])[0]
+						buffer = buffer[4:]
+					else:
+						break
 
-        if callable(func):
-            name = name_or_func
-            if 'msgtype' in filters and type(filters['msgtype']) in [str, int]:
-                filters['msgtype'] = Protobuf.get_type(filters['msgtype'])
+				# Retrieve message
+				if msg_len > 0:
+					# Get new message
+					new_message = buffer[:msg_len]
+					# Delete read info from buffer
+					buffer = buffer[min(len(buffer), msg_len):]
+					# Update msg length remaining
+					msg_len -= len(new_message)
+					# Add to result message
+					msg += new_message
 
-            def callback(*args, **kwargs):
-                for k, v in filters.items():
-                    if k not in kwargs or kwargs[k] != v:
-                        return
-                func(*args, **kwargs)
+					if msg_len == 0:
+						# Message callback
+						proto_msg = o1.ProtoMessage()
+						proto_msg.ParseFromString(msg)
+						payload = self._protos[proto_msg.payloadType]()
+						payload.ParseFromString(proto_msg.payload)
+						try:
+							for e in self._events[MESSAGE_EVENT]:
+								e(proto_msg.payloadType, payload, proto_msg.clientMsgId)
+						except Exception:
+							print(traceback.format_exc())
 
-            self._events[name].append(callback)
 
-        else:
+						msg = b''
 
-            def decorate(func):  # decorate with args
-                evname = name_or_func
+		print('[SC] Disconnected...')
+		try:
+			for e in self._events[DISCONNECT_EVENT]:
+				e()
+		except Exception:
+			print(traceback.format_exc())
 
-                from functools import wraps
+		self.reconnect()
 
-                @wraps(func)
-                def func_wrap(*args, **kwargs):
-                    for k, v in filters.items():
-                        if k not in kwargs or kwargs[k] != v:
-                            return
-                    func(*args, **kwargs)
 
-                self._events[evname].append(func_wrap)
-                return func
+	def stop(self):
+		self.ssock.close()
 
-            return decorate
 
-    def message(self, **filters):
-        if 'msgtype' in filters and type(filters['msgtype']) in [str, int]:
-            filters['msgtype'] = Protobuf.get_type(filters['msgtype'])
+	def event(self, event_type, func):
+		if callable(func):
+			if event_type == CONNECT_EVENT:
+				self._events[CONNECT_EVENT].append(func)
 
-        return self.event(self.EVENT_MESSAGE_NAME, **filters)
+			elif event_type == DISCONNECT_EVENT:
+				self._events[DISCONNECT_EVENT].append(func)
 
-    def exec_events(self, name, *args, **kwargs):
-        if name not in self._events:
-            return
+			elif event_type == MESSAGE_EVENT:
+				self._events[MESSAGE_EVENT].append(func)
 
-        for f in self._events[name]:
-            f(*args, **kwargs)

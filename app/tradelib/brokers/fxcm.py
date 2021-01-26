@@ -96,7 +96,8 @@ class FXCM(Broker):
 		):
 			print('[FXCM] Disconnected.')
 			time.sleep(1)
-			# self._login()
+			if not tl.isWeekend(datetime.utcnow()):
+				self._login()
 
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')
@@ -106,7 +107,7 @@ class FXCM(Broker):
 	Broker functions
 	'''
 
-	def _download_historical_data(self, 
+	def _download_historical_data_asd(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
@@ -158,7 +159,7 @@ class FXCM(Broker):
 		return result
 
 
-	def _download_historical_broker_data(self, 
+	def _download_historical_data(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
