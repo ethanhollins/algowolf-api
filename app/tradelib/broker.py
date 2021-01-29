@@ -446,8 +446,7 @@ class Broker(object):
 	# Update Handlers
 	def handleOnSessionStatus(self, res):
 		self.ctrl.sio.emit(
-			'onsessionstatus', 
-			{'broker_id': self.brokerId, 'item': res}, 
+			'onsessionstatus', res, 
 			namespace='/admin'
 		)
 

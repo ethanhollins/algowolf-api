@@ -87,6 +87,18 @@ def get_account_ept():
 	)
 
 
+@bp.route('/session', methods=('GET',))
+@auth.login_required
+def get_session_token():
+	res = {
+		'token': g.user.generateSessionToken()
+	}
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/strategy', methods=('POST',))
 @auth.login_required
 def create_strategy_ept():
@@ -161,6 +173,12 @@ def check_key(strategy_id, req_access):
 				error = {
 					'error': 'AuthorizationException',
 					'message': 'Invalid authorization key.'
+				}
+				return error, 403
+			except jwt.exceptions.ExpiredSignatureError:
+				error = {
+					'error': 'AuthorizationException',
+					'message': 'Authorization key expired.'
 				}
 				return error, 403
 

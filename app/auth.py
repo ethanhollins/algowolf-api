@@ -296,8 +296,8 @@ def delete_broker(name):
 	)
 
 
-@bp.route('/broker/auth/spotware/<broker>', methods=('GET',))
-def spotware_broker_auth(broker):
+@bp.route('/broker/auth/spotware', methods=('GET',))
+def spotware_broker_auth():
 	code = request.args.get('code')
 	print(request.args)
 	if not code is None:

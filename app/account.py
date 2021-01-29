@@ -347,6 +347,14 @@ class Account(object):
 		}
 		return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 
+
+	def generateSessionToken(self):
+		payload = { 
+			'sub': self.userId, 'iat': math.floor(time.time())
+		}
+		return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+
+
 	def checkToken(self, token):
 		try:
 			payload = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])

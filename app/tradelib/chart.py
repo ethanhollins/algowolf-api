@@ -133,6 +133,17 @@ class Chart(object):
 			time.sleep(0.01)
 
 		try:
+			self.ctrl.emit(
+				'ontick', 
+				{
+					'broker': self.broker.name,
+					'product': self.product,
+					'period': 'all',
+					'items': result
+				}, 
+				namespace='/admin'
+			)
+
 			for res in result:
 				period = res.get('period')
 

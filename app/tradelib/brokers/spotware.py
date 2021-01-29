@@ -87,7 +87,7 @@ class Spotware(Broker):
 		while self.is_running:
 			if time.time() - self._last_update > TEN_SECONDS:
 				try:
-					print('[SC] Send heartbeat!')
+					# print('[SC] Send heartbeat!')
 					heartbeat = o1.ProtoHeartbeatEvent()
 					self.client.send(heartbeat)
 					self._last_update = time.time()
@@ -157,7 +157,7 @@ class Spotware(Broker):
 		elif payloadType == 2101:
 			self._spotware_connected = True
 			for child in self.children:
-				self._authorize_accounts()
+				self._authorize_accounts(child.accounts)
 
 		# Tick
 		elif payloadType == 2131:
@@ -167,6 +167,7 @@ class Spotware(Broker):
 		else:
 			result = None
 			if 'ctidTraderAccountId' in payload.DESCRIPTOR.fields_by_name.keys():
+				# print(f'MSG: {payload}')
 				account_id = payload.ctidTraderAccountId
 				for child in self.children:
 					if account_id in map(int, child.accounts.keys()):
@@ -315,8 +316,8 @@ class Spotware(Broker):
 		direction = tl.LONG if pos.tradeData.tradeSide == 1 else tl.SHORT
 		lotsize = pos.tradeData.volume
 		entry_price = pos.price
-		sl = None if pos.stopLoss == 0 else pos.stopLoss
-		tp = None if pos.takeProfit == 0 else pos.takeProfit
+		sl = None if pos.stopLoss == 0 else round(pos.stopLoss, 5)
+		tp = None if pos.takeProfit == 0 else round(pos.takeProfit, 5)
 		open_time = pos.tradeData.openTimestamp / 1000
 
 		return tl.Position(
@@ -340,8 +341,8 @@ class Spotware(Broker):
 		product = self._convert_sw_product(order.tradeData.symbolId)
 		direction = tl.LONG if order.tradeData.tradeSide == 1 else tl.SHORT
 		lotsize = order.tradeData.volume
-		sl = None if order.stopLoss == 0 else order.stopLoss
-		tp = None if order.takeProfit == 0 else order.takeProfit
+		sl = None if order.stopLoss == 0 else round(order.stopLoss, 5)
+		tp = None if order.takeProfit == 0 else round(order.takeProfit, 5)
 		open_time = order.tradeData.openTimestamp / 1000
 
 		return tl.Order(
@@ -428,8 +429,10 @@ class Spotware(Broker):
 			symbolId=sw_product, orderType=1, tradeSide=direction,
 			volume=lotsize, **sl_tp_ranges
 		)
+		print(f'Sending:\n{new_order}')
 		self.client.send(new_order, msgid=ref_id)
 		res = self.parent._wait(ref_id)
+		print(f'Result:\n{res}')
 
 		result = {}
 		if res.payloadType == 2126:
@@ -490,7 +493,7 @@ class Spotware(Broker):
 
 		print(f'{int(pos.account_id)}, {int(pos.order_id)}, {sl_price}, {tp_price}')
 		amend_req = o2.ProtoOAAmendPositionSLTPReq(
-			ctidTraderAccountId=int(account_id),
+			ctidTraderAccountId=int(pos.account_id),
 			positionId=int(pos.order_id), stopLoss=sl_price, takeProfit=tp_price
 		)
 		self.client.send(amend_req, msgid=ref_id)
@@ -531,7 +534,7 @@ class Spotware(Broker):
 		ref_id = self.generateReference()
 
 		close_req = o2.ProtoOAClosePositionReq(
-			ctidTraderAccountId=int(account_id),
+			ctidTraderAccountId=int(pos.account_id),
 			positionId=int(pos.order_id), volume=lotsize
 		)
 		self.client.send(close_req, msgid=ref_id)
@@ -860,6 +863,27 @@ class Spotware(Broker):
 
 							break
 				else:
+					order_type = tl.MARKET_ENTRY
+					for i in range(len(self.orders)):
+						order = self.orders[i]
+						if str(update.order.orderId) == order.order_id:
+							order.close_time = update.order.utcLastUpdateTimestamp / 1000
+							if order.order_type == tl.STOP_ORDER:
+								order_type = tl.STOP_ENTRY
+							elif order.order_type == tl.LIMIT_ORDER:
+								order_type = tl.LIMIT_ENTRY
+							del self.orders[i]
+
+							self.handleOnTrade({
+								self.generateReference(): {
+									'timestamp': order.close_time,
+									'type': tl.ORDER_CANCEL,
+									'accepted': True,
+									'item': order
+								}
+							})
+							break
+
 					# Create
 					new_pos = self.convert_sw_position(account_id, update.position)
 					self.positions.append(new_pos)
@@ -867,7 +891,7 @@ class Spotware(Broker):
 					result.update({
 						ref_id: {
 							'timestamp': new_pos.open_time,
-							'type': tl.MARKET_ENTRY,
+							'type': order_type,
 							'accepted': True,
 							'item': new_pos
 						}

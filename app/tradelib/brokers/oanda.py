@@ -105,6 +105,7 @@ class Oanda(Broker):
 					self._is_connected = False
 					# Run disconnected callback
 					self.handleOnSessionStatus({
+						'broker': self.name,
 						'timestamp': math.floor(time.time()),
 						'type': 'disconnected',
 						'message': 'The session has been disconnected.'
@@ -1565,7 +1566,9 @@ class Oanda(Broker):
 
 
 	def _stream_account_update(self, sub):
+		print(f'accounts connected. {self._is_connected}')
 		if not self._is_connected:
+			print('Send connected.')
 			self._is_connected = True
 			self._last_update = time.time()
 			# Run connected callback
