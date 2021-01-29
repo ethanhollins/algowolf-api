@@ -89,10 +89,10 @@ class DataSaver(object):
 			c_dt += timedelta(days=1)
 
 		# Add any current relevant memory data
-		frags.append(self.data[product][load_period].loc[
-			(self.data[product][load_period].index >= start.timestamp()) & 
-			(self.data[product][load_period].index < end.timestamp())
-		])
+		# frags.append(self.data[product][load_period].loc[
+		# 	(self.data[product][load_period].index >= start.timestamp()) & 
+		# 	(self.data[product][load_period].index < end.timestamp())
+		# ])
 
 		result = pd.concat(frags)
 
