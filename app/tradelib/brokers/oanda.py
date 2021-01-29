@@ -1572,11 +1572,11 @@ class Oanda(Broker):
 			self._is_connected = True
 			self._last_update = time.time()
 			# Run connected callback
-			self.handleOnSessionStatus({
-				'timestamp': math.floor(time.time()),
-				'type': 'connected',
-				'message': 'The session connected successfully.'
-			})
+			# self.handleOnSessionStatus({
+			# 	'timestamp': math.floor(time.time()),
+			# 	'type': 'connected',
+			# 	'message': 'The session connected successfully.'
+			# })
 
 		while sub.receive:
 			try:
@@ -1596,11 +1596,11 @@ class Oanda(Broker):
 		if self._is_connected:
 			self._is_connected = False
 			# Run disconnected callback
-			self.handleOnSessionStatus({
-				'timestamp': math.floor(time.time()),
-				'type': 'disconnected',
-				'message': 'The session has been disconnected.'
-			})
+			# self.handleOnSessionStatus({
+			# 	'timestamp': math.floor(time.time()),
+			# 	'type': 'disconnected',
+			# 	'message': 'The session has been disconnected.'
+			# })
 
 		self._perform_account_connection(sub)
 
