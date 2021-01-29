@@ -46,8 +46,8 @@ class DataSaver(object):
 			sub_id = self.broker.generateReference()
 			chart.subscribe(period, self.broker.brokerId, sub_id, self._handle_price_data)
 
-		# Fill missing data
-		self._fill_missing_data(chart.product, period)
+			# Fill missing data
+			self._fill_missing_data(chart.product, period)
 
 
 	def get(self, product, period, start, end):
@@ -226,32 +226,39 @@ class DataSaver(object):
 				reverse=True
 			)[0]
 
+			print(last_file)
+
 			# Get last saved timestamp
 			if period == tl.period.TICK:
 				old_data = pd.read_csv(
 					os.path.join(path, last_file), sep=',', 
-					usecols=['timestamp', 'ask', 'bid'], 
-					index_col='timestamp', compression='gzip'
-				)
+					names=['timestamp', 'ask', 'bid'], 
+					compression='gzip'
+				).set_index('timestamp')
 				last_ts = old_data.index.values[-1]
 			else:
 				old_data = pd.read_csv(
 					os.path.join(path, last_file), sep=',', 
-					usecols=[
+					names=[
 						'timestamp', 
 						'ask_open', 'ask_high', 'ask_low', 'ask_close',
 						'bid_open', 'bid_high', 'bid_low', 'bid_close'
 					], 
-					index_col='timestamp', compression='gzip'
-				)
+					compression='gzip'
+				).set_index('timestamp')
 				last_ts = old_data.index.values[-1]
 
+			print(last_ts)
+			print(tl.convertTimestampToTime(last_ts))
+
 			# Retrieve new data
-			data = self.broker._download_historical_broker_data(
+			data = self.broker._download_historical_data(
 				product, period,
 				start=tl.convertTimestampToTime(last_ts),
 				end=datetime.utcnow()
 			)
+			data = data.loc[data.index > last_ts]
+			print(data)
 
 			# Delete duplicate memory data
 			if product in self.data and period in self.data[product]:
@@ -259,11 +266,19 @@ class DataSaver(object):
 				self.data[product][period] = mem_data.loc[mem_data.index > data.index.values[-1]]
 
 			# Save new data
-			self._save_data(product, period, data.loc[data.index > last_ts])
+			self._save_data(
+				product, period, 
+				data[[
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				]]
+			)
 
 
 	def _save_data(self, product, period, data):
 		''' Save data to storage '''
+
+		print(f'Save: {data.columns}, {data.shape}')
 
 		start_ts = data.index.values[0]
 		start_dt = tl.convertTimestampToTime(start_ts)

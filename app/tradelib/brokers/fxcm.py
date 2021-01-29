@@ -17,7 +17,7 @@ class FXCM(Broker):
 	def __init__(self,
 		ctrl, username, password, is_demo,
 		user_account=None, broker_id=None, accounts={}, 
-		display_name=None, is_dummy=False
+		display_name=None, is_dummy=False, is_parent=False
 	):
 		super().__init__(ctrl, user_account, broker_id, tl.broker.FXCM_NAME, accounts, display_name)
 
@@ -44,6 +44,14 @@ class FXCM(Broker):
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
+
+		# if is_parent:
+		# 	# Load Charts
+		# 	CHARTS = ['EUR_USD']
+		# 	PERIODS = [tl.period.TICK, tl.period.ONE_MINUTE]
+		# 	for instrument in CHARTS:
+		# 		chart = self.getChart(instrument)
+		# 		self.data_saver.subscribe(chart, PERIODS)
 
 
 	def _is_logged_in(self):
@@ -166,9 +174,6 @@ class FXCM(Broker):
 	):
 		self._login()
 
-		start = start.replace(tzinfo=None)
-		end = end.replace(tzinfo=None)
-		
 		# Count
 		if not count is None:
 			res = self._handle_job(
@@ -180,12 +185,15 @@ class FXCM(Broker):
 
 		# Start -> End
 		else:
+			start = start.replace(tzinfo=None)
+			end = end.replace(tzinfo=None)
 			res = self._handle_job(
 				self.fx.get_history,
 				self._convert_product(product), 
 				self._convert_period(period), 
 				start, end
 			)
+		print(res)
 
 		# Convert to result DF
 		res = np.array(list(map(lambda x: list(x), res)))
@@ -497,4 +505,30 @@ class FXCM(Broker):
 			return 'm5'
 		elif period == tl.period.TEN_MINUTES:
 			return 'm10'
+		elif period == tl.period.FIFTEEN_MINUTES:
+			return 'm15'
+		elif period == tl.period.THIRTY_MINUTES:
+			return 'm30'
+		elif period == tl.period.ONE_HOUR:
+			return 'H1'
+		elif period == tl.period.TWO_HOURS:
+			return 'H2'
+		elif period == tl.period.THREE_HOURS:
+			return 'H3'
+		elif period == tl.period.FOUR_HOURS:
+			return 'H4'
+		elif period == tl.period.DAILY:
+			return 'D1'
+		elif period == tl.period.WEEKLY:
+			return 'W1'
+		elif period == tl.period.MONTHLY:
+			return 'M1'
 
+# tl.period.ONE_MINUTE,
+# 			tl.period.TWO_MINUTES, tl.period.THREE_MINUTES,
+# 			tl.period.FIVE_MINUTES, tl.period.TEN_MINUTES,
+# 			tl.period.FIFTEEN_MINUTES, tl.period.THIRTY_MINUTES,
+# 			tl.period.ONE_HOUR, tl.period.TWO_HOURS, 
+# 			tl.period.THREE_HOURS, tl.period.FOUR_HOURS, 
+# 			tl.period.DAILY, tl.period.WEEKLY, 
+# 			tl.period.MONTHLY

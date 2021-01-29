@@ -167,7 +167,7 @@ class Brokers(dict):
 		elif name == tl.broker.FXCM_NAME:
 			username = options.get('username')
 			password = options.get('password')
-			return tl.broker.FXCM(self.ctrl, username, password, is_demo)
+			return tl.broker.FXCM(self.ctrl, username, password, is_demo, is_parent=True)
 		elif name == tl.broker.IG_NAME:
 			username = options.get('username')
 			password = options.get('password')
