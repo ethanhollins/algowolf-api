@@ -399,25 +399,36 @@ class Database(object):
 		return jwt.decode(broker_key, self.ctrl.app.config['SECRET_KEY'], algorithms=['HS256'])
 
 	def createBroker(self, user_id, broker_id, name, broker_name, props):
+		print('THIS')
+		print(user_id)
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
+		print(user)
 		if user is None:
 			raise BrokerException('User not found.')
 
+		print('user found')
 		# Check if key in use
 		for v in user['brokers'].values():
 			v = jwt.decode(
 				v, self.ctrl.app.config['SECRET_KEY'], 
 				algorithms=['HS256']
 			)
-			if (v.get('broker') == broker_name and 
-					v.get('key') == props.get('key')):
+			if (
+				v.get('broker') == broker_name and 
+				(v.get('key') is not None and
+					v.get('key') == props.get('key'))
+			):
 				return None
+		print('key good')
 
 		props.update({
 			'name': name,
 			'broker': broker_name
 		})
+
+		print(broker_name)
+		print(props)
 
 		if broker_name == tl.broker.IG_NAME:
 			# IG Validation
@@ -468,16 +479,18 @@ class Database(object):
 			}
 
 		elif broker_name == tl.broker.SPOTWARE_NAME:
+			print('CREATE SPOTWARE')
 			if props.get('access_token') is None:
 				raise BrokerException('Invalid data submitted.')
-			if props.get('is_demo') is None:
-				raise BrokerException('Invalid data submitted.')
+			# if props.get('is_demo') is None:
+			# 	raise BrokerException('Invalid data submitted.')
 
 			# Run broker API call check
 			dummy_broker = tl.broker.Spotware(
 				self.ctrl, props.get('is_demo'), props.get('access_token'), is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
+			print(accounts)
 
 			if accounts is None:
 				raise BrokerException('Unable to connect to broker.')
@@ -488,6 +501,9 @@ class Database(object):
 				for account_id in accounts
 			}
 
+			print(props)
+
+		print('done')
 
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')

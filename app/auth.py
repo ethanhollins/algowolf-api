@@ -3,7 +3,7 @@ import json, jwt
 import requests
 
 from flask import (
-	Blueprint, Response, abort, current_app, g, request, session, url_for
+	Blueprint, Response, abort, current_app, g, request, session, url_for, redirect
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 from app import tradelib as tl
@@ -296,9 +296,11 @@ def delete_broker(name):
 	)
 
 
-@bp.route('/broker/auth/spotware', methods=('GET',))
+@bp.route('/auth/spotware', methods=('GET',))
+@login_required
 def spotware_broker_auth():
 	code = request.args.get('code')
+	print('SPOTWARE BROKER AUTH')
 	print(request.args)
 	if not code is None:
 		res = requests.get(
@@ -306,7 +308,7 @@ def spotware_broker_auth():
 			params={
 				'grant_type': 'authorization_code',
 				'code': code,
-				'redirect_uri': 'http://127.0.0.1:3000/broker/auth/spotware',
+				'redirect_uri': 'http://127.0.0.1:3004/auth/spotware',
 				'client_id': '2096_sEzU1jyvCjvNMo2ViU8YnZha8UQmuHokkaXJDVD7fVEoIc1wx3',
 				'client_secret': '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
 			}
@@ -314,18 +316,28 @@ def spotware_broker_auth():
 
 		if res.status_code == 200:
 			result = res.json()
-			
+
+			print(result)
+			print(result.get('errorCode') is None)
 			if result.get('errorCode') is None:
 				access_token = result.get('accessToken')
 				refresh_token = result.get('refreshToken')
 				token_type = result.get('tokenType')
 				expires_in = result.get('expiresIn')
 
+				# Add broker to account
+				broker_id = g.user.generateId()
 
-		print(res.text)
-		print(res.status_code)
+				props = {
+					"access_token": access_token,
+					"refresh_token": refresh_token,
+				}
+				print('PERFORM CREATE BROKER')
+				g.user.createBroker(broker_id, 'Spotware Testing', 'spotware', **props)
 
+
+	res_ = { 'message': 'done' }
 	return Response(
-		json.dumps({'message': 'Hello Auth!'}, indent=2),
-		status=200, content_type='application/json'
+		json.dumps(res_, indent=2),
+		status=res.status_code, content_type='application/json'
 	)
