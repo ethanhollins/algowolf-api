@@ -232,7 +232,6 @@ class Spotware(Broker):
 				dl_start = tl.utils.getCountDate(period, count+1).timestamp()
 				dl_end = datetime.utcnow().timestamp()
 
-
 		ref_id = self.generateReference()
 		trendbars_req = o2.ProtoOAGetTrendbarsReq(
 			ctidTraderAccountId=int(list(self.accounts.keys())[0]),
@@ -823,10 +822,12 @@ class Spotware(Broker):
 			if execution_type == 3:
 				# Check `closingOrder`
 				if update.order.closingOrder:
+					print(f'CLOSING: {str(update.position.positionId)}')
 					# Delete
 					for i in range(len(self.positions)):
 						pos = self.positions[i]
 						if str(update.position.positionId) == pos.order_id:
+							print('FOUND')
 							# Fully Closed
 							if update.position.tradeData.volume == 0:
 								pos.close_price = update.order.executionPrice
@@ -861,6 +862,7 @@ class Spotware(Broker):
 									}
 								})
 
+							print(self.positions)
 							break
 				else:
 					order_type = tl.MARKET_ENTRY

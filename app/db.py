@@ -6,16 +6,21 @@ import string, random
 import jwt
 import pandas as pd
 import dateutil.parser
+import time
+from copy import copy
 from datetime import datetime
 from app import tradelib as tl
 from app.error import BrokerException
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
+from threading import Thread
 
 class Database(object):
 
 	def __init__(self, ctrl, env):
+		self._job_queue = []
+
 		self.ctrl = ctrl
 		self._generate_db()
 		self._generate_s3()
@@ -34,9 +39,25 @@ class Database(object):
 		self.emailsTable = self._generate_table('algowolf-emails')
 		self.priceDataBucketName = 'brokerlib-prices'
 
+		Thread(target=self._handle_jobs).start()
+
+
 	'''
 	Utilities
 	'''
+
+	def addAsyncJob(self, func, *args, **kwargs):
+		self._job_queue.append((func, args, kwargs))
+
+
+	def _handle_jobs(self):
+		while True:
+			if len(self._job_queue):
+				i = self._job_queue[0]
+				result = i[0](*i[1], **i[2])
+				del self._job_queue[0]
+			time.sleep(0.1)
+
 
 	def generateId(self):
 		letters = string.ascii_uppercase + string.digits
@@ -691,6 +712,75 @@ class Database(object):
 		)
 
 		return True
+
+
+	def appendAccountGui(self, user_id, strategy_id, account_code, obj):
+		self.addAsyncJob(self._handle_append_account_gui, user_id, strategy_id, account_code, obj)
+
+
+	def _handle_append_account_gui(self, user_id, strategy_id, account_code, obj):
+		gui = getAccountGui(user_id, strategy_id, account_code)
+
+		# if 'reports' in obj:
+		# 	if 'reports' not in gui:
+		# 		gui['reports'] = {}
+
+		# Handle Drawings
+		if 'drawings' in obj:
+			if 'drawings' not in gui or not isinstance(gui['drawings'], dict):
+				gui['drawings'] = {}
+
+			for i in obj['drawings']:
+				if i['type'] == tl.CREATE_DRAWING:
+					if i['item']['layer'] not in gui['drawings']:
+						gui['drawings'][i['item']['layer']] = []
+					gui['drawings'][i['item']['layer']].append(i['item'])
+
+				elif i['type'] == tl.CLEAR_DRAWING_LAYER:
+					if i['item'] in gui['drawings']:
+						gui['drawings'][i['item']] = []
+
+				elif i['type'] == tl.CLEAR_ALL_DRAWINGS:
+					for layer in gui['drawings']:
+						gui['drawings'][layer] = []
+
+			for layer in gui['drawings']:
+				gui['drawings'][layer] = gui['drawings'][layer][-MAX_GUI:]
+
+		# Handle Logs
+		if 'logs' in obj:
+			if 'logs' not in gui or not isinstance(gui['logs'], list):
+				gui['logs'] = []
+
+			gui['logs'] += obj['logs']
+			gui['logs'] = gui['logs'][-MAX_GUI:]
+
+		# Handle Info
+		if 'info' in obj:
+			if 'info' not in gui or not isinstance(gui['info'], dict):
+				gui['info'] = {}
+
+			for i in obj['info']:
+				if i['product'] not in gui['info']:
+					gui['info'][i['product']] = {}
+				if i['period'] not in gui['info'][i['product']]:
+					gui['info'][i['product']][i['period']] = {}
+				if str(int(i['timestamp'])) not in gui['info'][i['product']][i['period']]:
+					gui['info'][i['product']][i['period']][str(int(i['timestamp']))] = []
+
+				gui['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
+
+
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				json.dumps(gui).encode('utf8')
+			)
+		)
+
 
 
 	def updateStrategyTrades(self, user_id, strategy_id, obj):
