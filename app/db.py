@@ -786,7 +786,9 @@ class Database(object):
 
 				gui['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
 
-
+		print('Upload:')
+		print(obj)
+		print(gui)
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
