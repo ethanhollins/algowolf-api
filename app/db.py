@@ -399,15 +399,11 @@ class Database(object):
 		return jwt.decode(broker_key, self.ctrl.app.config['SECRET_KEY'], algorithms=['HS256'])
 
 	def createBroker(self, user_id, broker_id, name, broker_name, props):
-		print('THIS')
-		print(user_id)
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
-		print(user)
 		if user is None:
 			raise BrokerException('User not found.')
 
-		print('user found')
 		# Check if key in use
 		for v in user['brokers'].values():
 			v = jwt.decode(
@@ -420,15 +416,11 @@ class Database(object):
 					v.get('key') == props.get('key'))
 			):
 				return None
-		print('key good')
 
 		props.update({
 			'name': name,
 			'broker': broker_name
 		})
-
-		print(broker_name)
-		print(props)
 
 		if broker_name == tl.broker.IG_NAME:
 			# IG Validation
@@ -479,7 +471,6 @@ class Database(object):
 			}
 
 		elif broker_name == tl.broker.SPOTWARE_NAME:
-			print('CREATE SPOTWARE')
 			if props.get('access_token') is None:
 				raise BrokerException('Invalid data submitted.')
 			# if props.get('is_demo') is None:
@@ -490,7 +481,6 @@ class Database(object):
 				self.ctrl, props.get('is_demo'), props.get('access_token'), is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
-			print(accounts)
 
 			if accounts is None:
 				raise BrokerException('Unable to connect to broker.')
@@ -500,10 +490,6 @@ class Database(object):
 				account_id: { 'active': False, 'nickname': '' }
 				for account_id in accounts
 			}
-
-			print(props)
-
-		print('done')
 
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
@@ -735,7 +721,9 @@ class Database(object):
 
 
 	def _handle_append_account_gui(self, user_id, strategy_id, account_code, obj):
-		gui = getAccountGui(user_id, strategy_id, account_code)
+		MAX_GUI = 1000
+
+		gui = self.getAccountGui(user_id, strategy_id, account_code)
 
 		# if 'reports' in obj:
 		# 	if 'reports' not in gui:
@@ -786,9 +774,7 @@ class Database(object):
 
 				gui['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
 
-		print('Upload:')
-		print(obj)
-		print(gui)
+		print('Upload!')
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'

@@ -1077,7 +1077,7 @@ def update_account_gui_details_ept(strategy_id, broker_id, account_id):
 			body = json.loads(f.read())
 
 		account_code = '.'.join((broker_id, account_id))
-		account.updateAccountGui(strategy_id, account_code, body)
+		account.appendAccountGui(strategy_id, account_code, body)
 		account = ctrl.accounts.getAccount(user_id)
 
 		os.remove(path)
