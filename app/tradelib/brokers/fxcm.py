@@ -115,7 +115,7 @@ class FXCM(Broker):
 	Broker functions
 	'''
 
-	def _download_historical_data(self, 
+	def _download_historical_data_asd(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
@@ -167,7 +167,7 @@ class FXCM(Broker):
 		return result
 
 
-	def _download_historical_broker_data(self, 
+	def _download_historical_data(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
@@ -193,7 +193,6 @@ class FXCM(Broker):
 				self._convert_period(period), 
 				start, end
 			)
-		print(res)
 
 		# Convert to result DF
 		res = np.array(list(map(lambda x: list(x), res)))
