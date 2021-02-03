@@ -146,7 +146,7 @@ class Spotware(Broker):
 
 
 	def message(self, payloadType, payload, msgid):
-		# print(f'MSG: {payload}')
+		# print(f'MSG: ({payloadType}) {payload}')
 
 		# Heartbeat
 		if payloadType == 51:
@@ -190,16 +190,34 @@ class Spotware(Broker):
 					self._handled[msgid] = result
 
 
+	def _refresh_token(self):
+		ref_id = self.generateReference()
+		refresh_req = o2.ProtoOARefreshTokenReq(
+			refreshToken='JXfdVnfhQllQ_L9c1xkFUIRhplKjzt06qq9jVR6UUrg'
+		)
+		self.client.send(refresh_req, msgid=ref_id)
+		res = self.parent._wait(ref_id)
+
+		if res.payloadType == 2174:
+			print(res)
+			self.access_token = res.accessToken
+
 
 	def _authorize_accounts(self, accounts):
+		self._refresh_token()
+
 		for account_id in accounts:
 			ref_id = self.generateReference()
 			acc_auth = o2.ProtoOAAccountAuthReq(
 				ctidTraderAccountId=int(account_id), 
-				accessToken='UWU1cwMhRWbUhQ5gFZNImArEhMI7oPKJeV3dIizOFYY'
+				accessToken=self.access_token
 			)
 			self.client.send(acc_auth, msgid=ref_id)
-			self.parent._wait(ref_id)
+			res = self.parent._wait(ref_id)
+
+			# if res.payloadType == 2142:
+				
+			# 	return self._authorize_accounts(accounts)
 
 
 	'''
@@ -620,9 +638,11 @@ class Spotware(Broker):
 		trader_req = o2.ProtoOATraderReq(
 			ctidTraderAccountId=int(account_id)
 		)
+		print(trader_req)
 		self.client.send(trader_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
+		print(res)
 
 		# Handle account info result
 
