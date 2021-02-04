@@ -696,16 +696,38 @@ class Database(object):
 
 
 	def updateAccountGui(self, user_id, strategy_id, account_code, obj):
-
-		# if 'reports' in obj:
-		# 	reports = obj.pop('reports')
-		# 	for name in reports:
-		# 		report_obj = obj['reports'][name]
-		# 		self.updateStrategyAccountReport(user_id, strategy_id, account_code, name, report_obj)
-
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/accounts/{account_code}/gui.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				self._flat_dump(obj, indent=2).encode('utf8')
+			)
+		)
+
+		return True
+
+
+	def getAccountTransactions(self, user_id, strategy_id, account_code):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/accounts/{account_code}/transactions.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
+
+		except Exception:
+			return {}
+
+
+	def updateAccountTransactions(self, user_id, strategy_id, account_code, obj):
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/accounts/{account_code}/transactions.json.gz'
 		)
 		gui_object.put(
 			Body=gzip.compress(
@@ -722,12 +744,9 @@ class Database(object):
 
 	def _handle_append_account_gui(self, user_id, strategy_id, account_code, obj):
 		MAX_GUI = 1000
+		MAX_TRANSACTIONS = 3000
 
 		gui = self.getAccountGui(user_id, strategy_id, account_code)
-
-		# if 'reports' in obj:
-		# 	if 'reports' not in gui:
-		# 		gui['reports'] = {}
 
 		# Handle Drawings
 		if 'drawings' in obj:
@@ -773,6 +792,36 @@ class Database(object):
 					gui['info'][i['product']][i['period']][str(int(i['timestamp']))] = []
 
 				gui['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
+
+		# Handle Transactions
+		if 'transactions' in obj:
+			result = self.getAccountTransactions(user_id, strategy_id, account_code)
+			if result is not None:
+				if not isinstance(result.get('transactions'), list):
+					result['transactions'] = []
+				result['transactions'] += obj['transactions']
+			else:
+				result = { 'transactions': obj['transactions'] }
+
+			result['transactions'] = result['transactions'][-MAX_TRANSACTIONS:]
+			self.updateAccountTransactions(user_id, strategy_id, account_code, result)
+
+
+		# Handle Reports
+		if 'reports' in obj:
+			print(f'Reports: {obj["reports"]}')
+			for name in obj['reports']:
+				old_df = self.getStrategyAccountReport(user_id, strategy_id, account_code, name)
+				if old_df is not None:
+					new_df = pd.concat((
+						old_df, 
+						pd.DataFrame(data=obj['reports'][name])
+					))
+					self.updateStrategyAccountReport(user_id, strategy_id, account_code, name, new_df)
+				else:
+					self.updateStrategyAccountReport(
+						user_id, strategy_id, account_code, name, pd.DataFrame(data=obj['reports'][name])
+					)
 
 		print('Upload!')
 		gui_object = self._s3_res.Object(

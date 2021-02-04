@@ -899,6 +899,11 @@ def get_account_info_ept(strategy_id, broker_id, account_id):
 def get_transaction_info_ept(strategy_id, broker_id, account_id):
 	res, status = get_transaction_info(strategy_id, broker_id, account_id)
 
+	return Response(
+		json.dumps(res, indent=2), 
+		status=status, content_type='application/json'
+	)
+
 
 # `/prices` ept
 @bp.route('/prices/<broker>/<product>/<period>', methods=('GET',))

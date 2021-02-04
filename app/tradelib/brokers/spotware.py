@@ -204,16 +204,18 @@ class Spotware(Broker):
 
 
 	def _authorize_accounts(self, accounts):
-		self._refresh_token()
+		# self._refresh_token()
 
 		for account_id in accounts:
 			ref_id = self.generateReference()
 			acc_auth = o2.ProtoOAAccountAuthReq(
 				ctidTraderAccountId=int(account_id), 
-				accessToken=self.access_token
+				accessToken='xAyF-YB0XuDYK1Je8w5M1Uc8mMgm-tM-k32AC0FdKMg'
 			)
+			print(acc_auth)
 			self.client.send(acc_auth, msgid=ref_id)
 			res = self.parent._wait(ref_id)
+			print(res)
 
 			# if res.payloadType == 2142:
 				

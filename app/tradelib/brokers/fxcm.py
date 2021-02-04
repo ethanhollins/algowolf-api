@@ -3,7 +3,6 @@ import traceback
 import numpy as np
 import pandas as pd
 import dateutil.parser
-from forexconnect import ForexConnect, fxcorepy, Common
 from datetime import datetime
 from copy import copy
 from threading import Thread
@@ -11,6 +10,7 @@ from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
 from app.error import OrderException, BrokerException
+from forexconnect import ForexConnect, fxcorepy, Common
 
 
 class OffersTableListener(object):

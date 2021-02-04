@@ -309,6 +309,7 @@ class Account(object):
 
 		result = {}
 		result.update(self.getAccountGui(strategy_id, account_code))
+		result.update(self.getAccountTransactions(strategy_id, account_code))
 		result['input_variables'] = self.getAccountInputVariables(strategy_id, account_code, script_id)
 		return result
 
@@ -389,6 +390,10 @@ class Account(object):
 
 	def getAccountGui(self, strategy_id, account_code):
 		return self.ctrl.getDb().getAccountGui(self.userId, strategy_id, account_code)
+
+
+	def getAccountTransactions(self, strategy_id, account_code):
+		return self.ctrl.getDb().getAccountTransactions(self.userId, strategy_id, account_code)
 
 
 	def getAccountReport(self, strategy_id, account_code, name):
