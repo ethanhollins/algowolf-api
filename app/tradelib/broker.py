@@ -443,6 +443,9 @@ class Broker(object):
 			namespace='/admin'
 		)
 
+		# Save transaction to storage
+
+
 	# Update Handlers
 	def handleOnSessionStatus(self, res):
 		self.ctrl.sio.emit(
