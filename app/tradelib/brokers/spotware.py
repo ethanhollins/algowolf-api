@@ -55,7 +55,7 @@ class Spotware(Broker):
 			while not self._spotware_connected:
 				pass
 
-			super().__init__(ctrl, user_account, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
 
 			# Start refresh thread
 			Thread(target=self._periodic_refresh).start()
