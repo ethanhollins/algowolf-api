@@ -92,16 +92,16 @@ class Chart(object):
 
 
 	def _load_data(self, period, start=None, end=None, count=None, force_download=False):
-		if self.broker.name == 'fxcm':
-			df = self.broker._download_historical_data_broker(
-				self.product, period, start=start, end=end,
-				count=count, force_download=force_download
-			)
-		else:
-			df = self.broker._download_historical_data(
-				self.product, period, start=start, end=end,
-				count=count, force_download=force_download
-			)
+		# if self.broker.name == 'fxcm':
+		# 	df = self.broker._download_historical_data_broker(
+		# 		self.product, period, start=start, end=end,
+		# 		count=count, force_download=force_download
+		# 	)
+		# else:
+		df = self.broker._download_historical_data(
+			self.product, period, start=start, end=end,
+			count=count, force_download=force_download
+		)
 		df = df[~df.index.duplicated(keep='first')]
 		return df
 
