@@ -105,7 +105,7 @@ class FXCM(Broker):
 		# 	for instrument in CHARTS:
 		# 		chart = self.getChart(instrument)
 		# 		self.data_saver.subscribe(chart, PERIODS)
-		self.data_saver.fill_all_missing_data()	
+		# self.data_saver.fill_all_missing_data()	
 
 
 	def _is_logged_in(self):
