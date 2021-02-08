@@ -438,6 +438,7 @@ class Broker(object):
 		for func in self.ontrade_subs.values():
 			func(res)
 
+		print(f'on trade: {res}')
 		self.ctrl.sio.emit(
 			'ontrade', 
 			{'broker_id': self.brokerId, 'item': res}, 
@@ -445,11 +446,11 @@ class Broker(object):
 		)
 
 		# Save transaction to storage
-		account_code = '.'.join((self.brokerId, account_id))
-		self.userAccount.appendAccountGui(
-			self.strategyId, account_code,
-			{ 'transactions': res }
-		)
+		# account_code = '.'.join((self.brokerId, account_id))
+		# self.userAccount.appendAccountGui(
+		# 	self.strategyId, account_code,
+		# 	{ 'transactions': res }
+		# )
 
 
 	# Update Handlers
