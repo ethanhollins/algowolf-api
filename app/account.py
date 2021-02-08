@@ -599,6 +599,7 @@ class Account(object):
 			broker_args = {
 				'ctrl': self.ctrl,
 				'user_account': self,
+				'strategy_id': strategy_id,
 				'broker_id': broker_id,
 				'accounts': broker_info
 			}

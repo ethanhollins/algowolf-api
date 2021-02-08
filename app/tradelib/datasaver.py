@@ -89,29 +89,41 @@ class DataSaver(object):
 			c_dt += timedelta(days=1)
 
 		# Add any current relevant memory data
-		# frags.append(self.data[product][load_period].loc[
-		# 	(self.data[product][load_period].index >= start.timestamp()) & 
-		# 	(self.data[product][load_period].index < end.timestamp())
-		# ])
+		if product in self.data and load_period in self.data[product]:
+			frags.append(self.data[product][load_period].loc[
+				(self.data[product][load_period].index >= start.timestamp()) & 
+				(self.data[product][load_period].index < end.timestamp())
+			])
 
-		result = pd.concat(frags)
+		if len(frags):
+			result = pd.concat(frags)
 
-		# Create Mid Prices
-		result = pd.concat((
-			result, pd.DataFrame(
-				index=result.index, 
-				columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
-				data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5)
-			)
-		), axis=1)[[
-			'ask_open', 'ask_high', 'ask_low', 'ask_close',
-			'mid_open', 'mid_high', 'mid_low', 'mid_close',
-			'bid_open', 'bid_high', 'bid_low', 'bid_close'
-		]]
+			# Create Mid Prices
+			result = pd.concat((
+				result, pd.DataFrame(
+					index=result.index, 
+					columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
+					data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5)
+				)
+			), axis=1)[[
+				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			]]
 
-		if load_period == tl.period.ONE_MINUTE:
-			result = self._construct_bars(period, result)
-			result = result.loc[~(result==0).all(axis=1)]
+			if load_period == tl.period.ONE_MINUTE:
+				result = self._construct_bars(period, result)
+				result = result.loc[~(result==0).all(axis=1)]
+
+		else:
+			result = pd.DataFrame(
+				columns=[
+					'timestamp',
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				]
+			).set_index('timestamp')
 
 		return result
 

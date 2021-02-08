@@ -61,10 +61,10 @@ class FXCM(Broker):
 
 	def __init__(self,
 		ctrl, username, password, is_demo,
-		user_account=None, broker_id=None, accounts={}, 
+		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
-		super().__init__(ctrl, user_account, broker_id, tl.broker.FXCM_NAME, accounts, display_name)
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.FXCM_NAME, accounts, display_name)
 
 		self.data_saver = tl.DataSaver(broker=self)
 
@@ -75,12 +75,19 @@ class FXCM(Broker):
 		self._last_update = time.time()
 		self._subscriptions = {}
 		self.session = None
+		self._initialized = False
 
 		self.fx = ForexConnect()
 		self.offers_listener = None
 		self._login()
 
+		while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
+			time.sleep(0.01)
+
+		self._get_offers_listener()
 		self.job_queue = []
+
+		self._initialized = True
 
 		if not is_dummy:
 			# for account_id in self.getAccounts():
@@ -98,6 +105,7 @@ class FXCM(Broker):
 		# 	for instrument in CHARTS:
 		# 		chart = self.getChart(instrument)
 		# 		self.data_saver.subscribe(chart, PERIODS)
+		self.data_saver.fill_all_missing_data()	
 
 
 	def _is_logged_in(self):
@@ -155,9 +163,8 @@ class FXCM(Broker):
 
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')
-			# if self.offers_listener is None:
-			# 	self._get_offers_listener()
-			# self.data_saver.fill_all_missing_data()
+			if self._initialized and self.offers_listener is None:
+				self._get_offers_listener()
 
 
 	def _get_offers_listener(self):
@@ -228,7 +235,7 @@ class FXCM(Broker):
 		return result
 
 
-	def _download_historical_data_asd(self, 
+	def _download_historical_data_broker(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
@@ -494,7 +501,7 @@ class FXCM(Broker):
 						}
 					})
 
-		print(result)
+		# print(result)
 
 		if len(result):
 			chart.handleTick(result)

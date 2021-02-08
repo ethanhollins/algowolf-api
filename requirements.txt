@@ -10,7 +10,6 @@ click==7.1.2
 configparser==5.0.1
 constantly==15.1.0
 cryptography==3.3.1
-forexconnect==1.6.3
 Flask==1.1.2
 Flask-Cors==3.0.9
 hyperlink==20.0.1

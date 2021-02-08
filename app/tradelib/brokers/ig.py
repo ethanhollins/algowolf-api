@@ -59,10 +59,10 @@ class IG(Broker):
 	)
 	def __init__(self, 
 		ctrl, username, password, key, is_demo, 
-		user_account=None, broker_id=None, accounts={}, 
+		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False
 	):
-		super().__init__(ctrl, user_account, broker_id, tl.broker.IG_NAME, accounts, display_name)
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.IG_NAME, accounts, display_name)
 
 		self.dl = tl.DataLoader(broker=self)
 
@@ -1070,7 +1070,7 @@ class IG(Broker):
 						}
 					}
 
-					self.handleOnTrade(res)
+					self.handleOnTrade(account_id, res)
 					self._handled[ref] = res
 
 			elif i.get('actionType') == 'POSITION_CLOSED':
@@ -1093,7 +1093,7 @@ class IG(Broker):
 							}
 						}
 
-						self.handleOnTrade(res)
+						self.handleOnTrade(account_id, res)
 						self._handled[ref] = res
 
 			elif i.get('actionType') == 'STOP_LIMIT_AMENDED':
@@ -1112,7 +1112,7 @@ class IG(Broker):
 							}
 						}
 
-						self.handleOnTrade(res)
+						self.handleOnTrade(account_id, res)
 						self._handled[ref] = res
 
 			if ref is not None and deal_reference == ref:
@@ -1334,7 +1334,7 @@ class IG(Broker):
 								'item': order
 							}
 						}
-						self.handleOnTrade(res)
+						self.handleOnTrade(account_id, res)
 
 						self._handled[ref] = res
 						self._last_transaction_ts = open_time
@@ -1406,7 +1406,7 @@ class IG(Broker):
 								'item': pos
 							}
 						}
-						self.handleOnTrade(res)
+						self.handleOnTrade(account_id, res)
 						self._handled[ref] = res
 						self._last_transaction_ts = open_time
 
@@ -1438,7 +1438,7 @@ class IG(Broker):
 								}
 							}
 
-							self.handleOnTrade(res)
+							self.handleOnTrade(account_id, res)
 							self._handled[ref] = res
 							self._last_transaction_ts = order.close_time
 
@@ -1470,7 +1470,7 @@ class IG(Broker):
 								}
 							}
 
-							self.handleOnTrade(res)
+							self.handleOnTrade(account_id, res)
 							self._handled[ref] = res
 							self._last_transaction_ts = pos.close_time
 
@@ -1523,7 +1523,7 @@ class IG(Broker):
 								}
 							}
 
-							self.handleOnTrade(res)
+							self.handleOnTrade(account_id, res)
 							self._handled[ref] = res
 							self._last_transaction_ts = math.floor(time.time())
 
@@ -1555,7 +1555,7 @@ class IG(Broker):
 									}
 								}
 
-								self.handleOnTrade(res)
+								self.handleOnTrade(account_id, res)
 								self._handled[ref] = res
 								self._last_transaction_ts = cpy.close_time
 
@@ -1596,7 +1596,7 @@ class IG(Broker):
 									}
 								}
 
-								self.handleOnTrade(res)
+								self.handleOnTrade(account_id, res)
 								self._handled[ref] = res
 								self._last_transaction_ts = math.floor(time.time())
 

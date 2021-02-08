@@ -41,11 +41,11 @@ class Oanda(Broker):
 
 	def __init__(self, 
 		ctrl, key, is_demo, 
-		user_account=None, broker_id=None, 
+		user_account=None, strategy_id=None, broker_id=None, 
 		accounts={}, display_name=None,
 		is_dummy=False, is_parent=False
 	):
-		super().__init__(ctrl, user_account, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
 
 		self.dl = tl.DataLoader(broker=self)
 		self.data_saver = tl.DataSaver(broker=self)
@@ -1584,7 +1584,7 @@ class Oanda(Broker):
 				if not message.strip():
 					sub.receive = False
 				else:
-					sub.listener(json.loads(message))
+					sub.listener(sub.args[0], json.loads(message))
 
 			except Exception as e:
 				print(traceback.format_exc())
@@ -1605,7 +1605,7 @@ class Oanda(Broker):
 		self._perform_account_connection(sub)
 
 
-	def _on_account_update(self, update):
+	def _on_account_update(self, account_id, update):
 		res = {}
 		if update.get('type') == 'HEARTBEAT':
 			self._last_update = time.time()
@@ -1646,7 +1646,7 @@ class Oanda(Broker):
 				res.update(self._handle_order_cancel(update))
 
 		if len(res):
-			self.handleOnTrade(res)
+			self.handleOnTrade(account_id, res)
 
 
 	def isPeriodCompatible(self, period):

@@ -47,13 +47,14 @@ Parent Broker Class
 class Broker(object):
 
 	__slots__ = (
-		'ctrl', 'userAccount', 'brokerId', 'name', 'backtester', 'acceptLive', 
+		'ctrl', 'userAccount', 'strategyId', 'brokerId', 'name', 'backtester', 'acceptLive', 
 		'accounts', 'charts', 'positions', 'orders', 'is_running', '_handled', 'transactions',
 		'ontrade_subs', 'display_name'
 	)
-	def __init__(self, ctrl, user_account, broker_id, name, accounts, display_name):
+	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name):
 		self.ctrl = ctrl
 		self.userAccount = user_account
+		self.strategyId = strategy_id
 		self.brokerId = broker_id
 		self.name = name
 		self.display_name = display_name
@@ -426,13 +427,13 @@ class Broker(object):
 			}
 		}
 
-		self.handleOnTrade(res)
+		# self.handleOnTrade(res)
 
 
 	# Private
 
 	# Update Handlers
-	def handleOnTrade(self, res):
+	def handleOnTrade(self, account_id, res):
 		# Handle stream subscriptions
 		for func in self.ontrade_subs.values():
 			func(res)
@@ -444,6 +445,11 @@ class Broker(object):
 		)
 
 		# Save transaction to storage
+		account_code = '.'.join((self.brokerId, account_id))
+		self.userAccount.appendAccountGui(
+			self.strategyId, account_code,
+			{ 'transactions': res }
+		)
 
 
 	# Update Handlers

@@ -20,11 +20,11 @@ class Spotware(Broker):
 
 	def __init__(self,
 		ctrl, is_demo, access_token=None,
-		user_account=None, broker_id=None, accounts={}, 
+		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
 		if not is_parent:
-			super().__init__(ctrl, user_account, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
 
 		self.is_demo = is_demo
 		self._spotware_connected = False
@@ -898,14 +898,17 @@ class Spotware(Broker):
 								order_type = tl.LIMIT_ENTRY
 							del self.orders[i]
 
-							self.handleOnTrade({
-								self.generateReference(): {
-									'timestamp': order.close_time,
-									'type': tl.ORDER_CANCEL,
-									'accepted': True,
-									'item': order
+							self.handleOnTrade(
+								account_id,
+								{
+									self.generateReference(): {
+										'timestamp': order.close_time,
+										'type': tl.ORDER_CANCEL,
+										'accepted': True,
+										'item': order
+									}
 								}
-							})
+							)
 							break
 
 					# Create
@@ -1040,7 +1043,7 @@ class Spotware(Broker):
 							})
 
 			if len(result):
-				self.handleOnTrade(result)
+				self.handleOnTrade(account_id, result)
 				return result
 			else:
 				return None
