@@ -89,7 +89,7 @@ class FXCM(Broker):
 			self._get_offers_listener()
 			# Load Charts
 			CHARTS = ['EUR_USD']
-			PERIODS = [tl.period.TICK, tl.period.ONE_MINUTE]
+			PERIODS = [tl.period.ONE_MINUTE]
 			for instrument in CHARTS:
 				chart = self.createChart(instrument, await_completion=True)
 				self.data_saver.subscribe(chart, PERIODS)
