@@ -46,14 +46,6 @@ def isWeekend(dt):
 	FRI = 4
 	SAT = 5
 	SUN = 6
-
-	# isw = (
-	# 	(dt.weekday() == FRI and dt.hour >= 17) or
-	# 	dt.weekday() == SAT or
-	# 	(dt.weekday() == SUN and dt.hour < 17)
-	# )
-	# if isw:
-	# 	print(f'{dt} -> {isw}')
 	
 	return (
 		(dt.weekday() == FRI and dt.hour >= 17) or
@@ -132,10 +124,10 @@ def getCountDate(period, count, start=None, end=None):
 		return date + timedelta(seconds=off*i*direction)
 
 def getDateCount(period, start, end):
-		off = tl.period.getPeriodOffsetSeconds(period)
+	off = tl.period.getPeriodOffsetSeconds(period)
 
-		week_off = getWeeklySecondsOffset(start, end)
-		return math.floor(week_off / off)
+	week_off = getWeeklySecondsOffset(start, end)
+	return math.floor(week_off / off)
 
 def isCurrentBar(period, ts, off=1):
 	# `off` = 1, for current incomplete bar check

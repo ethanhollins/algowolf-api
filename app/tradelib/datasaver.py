@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from app import tradelib as tl
 from app import ROOT_DIR
 
-SAVE_DELAY = 60 * 60
+SAVE_DELAY = 60 * 5
 
 class DataSaver(object):
 
@@ -90,6 +90,12 @@ class DataSaver(object):
 
 		# Add any current relevant memory data
 		if product in self.data and load_period in self.data[product]:
+			print('Mem: {}'.format(
+				self.data[product][load_period].loc[
+					(self.data[product][load_period].index >= start.timestamp()) & 
+					(self.data[product][load_period].index < end.timestamp())
+				].index.values
+			))
 			frags.append(self.data[product][load_period].loc[
 				(self.data[product][load_period].index >= start.timestamp()) & 
 				(self.data[product][load_period].index < end.timestamp())
@@ -112,6 +118,15 @@ class DataSaver(object):
 			]]
 
 			if load_period == tl.period.ONE_MINUTE:
+				if period == tl.period.TWO_MINUTES:
+					print('constructing 2m')
+				if period == tl.period.FIVE_MINUTES:
+					print('constructing 5m')
+				if period == tl.period.TEN_MINUTES:
+					print('constructing 10m')
+				print(result.tail(11))
+
+				print(f'end: {end}, time: {datetime.utcnow()}')
 				result = self._construct_bars(period, result)
 				result = result.loc[~(result==0).all(axis=1)]
 
@@ -160,6 +175,34 @@ class DataSaver(object):
 						(item['item']['ask'], item['item']['bid'])
 					)]
 				))
+
+			# elif self.data[item['product']][item['period']].shape[0] == 0:
+			# 	timestamp = self.broker.getChart(item['product']).lastTs[item['period']]
+			# 	print(f'set {timestamp}')
+			# 	self.data[item['product']][item['period']] = data.append(pd.DataFrame(
+			# 		index=pd.Index(data=[timestamp], name='timestamp'),
+			# 		columns=[
+			# 			'ask_open', 'ask_high', 'ask_low', 'ask_close',
+			# 			'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			# 		],
+			# 		data=[np.concatenate(
+			# 			(item['item']['ask'], item['item']['bid'])
+			# 		)]
+			# 	))
+
+			# else:
+			# 	self.data[item['product']][item['period']].iloc[-1] = np.concatenate(
+			# 		(item['item']['ask'], item['item']['bid'])
+			# 	)
+
+			if time.time() - self.timer >= SAVE_DELAY:
+				self.timer = time.time()
+				print(f'Saving {data.shape[0]} bars.')
+				# Reset DF
+				self.data[item['product']][item['period']] = self._create_empty_df(item['period'])
+				# Save Data
+				self._save_data(item['product'], item['period'], data.copy())
+
 		# 	if item['bar_end']:
 		# 		data.loc[item['timestamp']] = np.concatenate(
 		# 			(item['item']['ask'], item['item']['bid'])
@@ -168,7 +211,6 @@ class DataSaver(object):
 
 	def _construct_bars(self, period, data, smooth=True):
 		''' Construct other period bars from appropriate saved data '''
-
 		if data.size > 0:
 			first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
 				hour=0, minute=0, second=0, microsecond=0
@@ -176,8 +218,11 @@ class DataSaver(object):
 			first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
 			data = data.loc[data.index >= first_ts]
 
-			bar_ends = data.index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
-			indicies = np.arange(data.shape[0])[bar_ends.values.astype(bool)]
+			index = data.index.copy().append(pd.Index(
+				[data.index.values[-1] + tl.period.getPeriodOffsetSeconds(tl.period.ONE_MINUTE)]
+			))
+			bar_ends = index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
+			indicies = np.arange(bar_ends.shape[0])[bar_ends.values.astype(bool)]
 			result = np.zeros((indicies.shape[0]-1, 12), dtype=float)
 
 			for i in range(1, indicies.shape[0]):
@@ -203,14 +248,28 @@ class DataSaver(object):
 						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
 					]
 
-			return pd.DataFrame(
-				index=data[bar_ends][:-1].index, data=result, 
-				columns=[ 
-					'ask_open', 'ask_high', 'ask_low', 'ask_close',
-					'mid_open', 'mid_high', 'mid_low', 'mid_close',
-					'bid_open', 'bid_high', 'bid_low', 'bid_close'
-				]
-			)
+			if bar_ends[-1]:
+				data = data[bar_ends[:-1]]
+				return pd.DataFrame(
+					index=data.iloc[data.shape[0] - result.shape[0]:].index,
+					data=result, 
+					columns=[ 
+						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'mid_open', 'mid_high', 'mid_low', 'mid_close',
+						'bid_open', 'bid_high', 'bid_low', 'bid_close'
+					]
+				)
+			else:
+				data = data[bar_ends[:-1]]
+				return pd.DataFrame(
+					index=data.iloc[data.shape[0] - result.shape[0]:].index - tl.period.getPeriodOffsetSeconds(period), 
+					data=result, 
+					columns=[ 
+						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'mid_open', 'mid_high', 'mid_low', 'mid_close',
+						'bid_open', 'bid_high', 'bid_low', 'bid_close'
+					]
+				)
 			
 		else:
 			return data
@@ -264,18 +323,23 @@ class DataSaver(object):
 			print(tl.convertTimestampToTime(last_ts))
 
 			# Retrieve new data
-			data = self.broker._download_historical_data(
+			current_ts = self.broker.getChart(product).lastTs[period]
+			print(f'current ts: {current_ts}')
+
+			data = self.broker._download_historical_data_broker(
 				product, period,
 				start=tl.convertTimestampToTime(last_ts),
 				end=datetime.utcnow()
 			)
-			data = data.loc[data.index > last_ts]
+			data = data.loc[(data.index > last_ts) & (data.index < current_ts)]
 			print(data)
 
 			# Delete duplicate memory data
 			if product in self.data and period in self.data[product]:
 				mem_data = self.data[product][period]
+				print(f'MEM BEFORE: {mem_data.shape}')
 				self.data[product][period] = mem_data.loc[mem_data.index > data.index.values[-1]]
+				print(f'MEM AFTER: {mem_data.shape}')
 
 			# Save new data
 			self._save_data(

@@ -13,7 +13,8 @@ class Chart(object):
 		'ctrl', 'broker', 'product', 'ask', 'mid', 'bid', 'barReset',
 		'lastTs', '_subscriptions', '_unsubscriptions', '_tick_queue'
 	)
-	def __init__(self, ctrl, broker, product):
+	def __init__(self, ctrl, broker, product, await_completion=False):
+		print(f'AWAIT: {await_completion}')
 		self.ctrl = ctrl
 		self.broker = broker
 		self.product = product
@@ -27,10 +28,10 @@ class Chart(object):
 		self._unsubscriptions = []
 		self._tick_queue = []
 
-		self.start()
+		self.start(await_completion)
 
 
-	def start(self):
+	def start(self, await_completion):
 		# Handle live connection
 		self.broker._subscribe_chart_updates(self.product, self._on_chart_update)
 
@@ -47,12 +48,13 @@ class Chart(object):
 		self._subscriptions[tl.period.TICK] = {}
 
 		# Finish other bars
-		Thread(
-			target=self._load_current_bars,
-			args=([period for period in self.ask if period != tl.period.TICK],)
-		).start()
-
-		# self.ctrl.continuousThreadHandler.addJob(self._mock_ticks)
+		if not await_completion:
+			Thread(
+				target=self._load_current_bars,
+				args=([period for period in self.ask if period != tl.period.TICK],)
+			).start()
+		else:
+			self._load_current_bars([period for period in self.ask if period != tl.period.TICK])
 
 
 	def getActivePeriods(self):
@@ -92,16 +94,16 @@ class Chart(object):
 
 
 	def _load_data(self, period, start=None, end=None, count=None, force_download=False):
-		# if self.broker.name == 'fxcm':
-		# 	df = self.broker._download_historical_data_broker(
-		# 		self.product, period, start=start, end=end,
-		# 		count=count, force_download=force_download
-		# 	)
-		# else:
-		df = self.broker._download_historical_data(
-			self.product, period, start=start, end=end,
-			count=count, force_download=force_download
-		)
+		if self.broker.name == 'fxcm':
+			df = self.broker._download_historical_data_broker(
+				self.product, period, start=start, end=end,
+				count=count, force_download=force_download
+			)
+		else:
+			df = self.broker._download_historical_data(
+				self.product, period, start=start, end=end,
+				count=count, force_download=force_download
+			)
 		df = df[~df.index.duplicated(keep='first')]
 		return df
 

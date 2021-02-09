@@ -76,16 +76,23 @@ class FXCM(Broker):
 		self._subscriptions = {}
 		self.session = None
 		self._initialized = False
+		self.job_queue = []
 
 		self.fx = ForexConnect()
-		self.offers_listener = None
 		self._login()
+		self.offers_listener = None
 
-		while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
-			time.sleep(0.01)
+		if is_parent:
+			while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
+				time.sleep(0.01)
 
-		self._get_offers_listener()
-		self.job_queue = []
+			self._get_offers_listener()
+			# Load Charts
+			CHARTS = ['EUR_USD']
+			PERIODS = [tl.period.TICK, tl.period.ONE_MINUTE]
+			for instrument in CHARTS:
+				chart = self.createChart(instrument, await_completion=True)
+				self.data_saver.subscribe(chart, PERIODS)
 
 		self._initialized = True
 
@@ -98,14 +105,7 @@ class FXCM(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
-		# if is_parent:
-		# 	# Load Charts
-		# 	CHARTS = ['EUR_USD']
-		# 	PERIODS = [tl.period.TICK, tl.period.ONE_MINUTE]
-		# 	for instrument in CHARTS:
-		# 		chart = self.getChart(instrument)
-		# 		self.data_saver.subscribe(chart, PERIODS)
-		# self.data_saver.fill_all_missing_data()	
+		
 
 
 	def _is_logged_in(self):
@@ -165,7 +165,7 @@ class FXCM(Broker):
 			print('[FXCM] Logged in.')
 			if self._initialized and self.offers_listener is None:
 				self._get_offers_listener()
-
+				self.data_saver.fill_all_missing_data()
 
 	def _get_offers_listener(self):
 		offers = self.fx.get_table(ForexConnect.OFFERS)
@@ -183,7 +183,7 @@ class FXCM(Broker):
 	Broker functions
 	'''
 
-	def _download_historical_data_asd(self, 
+	def _download_historical_data(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
@@ -192,50 +192,28 @@ class FXCM(Broker):
 
 		start = start.replace(tzinfo=None)
 		end = end.replace(tzinfo=None)
-		
-		# Count
-		# if not count is None:
-		# 	res = self._handle_job(
-		# 		self.fx.get_history,
-		# 		self._convert_product(product), 
-		# 		self._convert_period(period), 
-		# 		quotes_count=count
-		# 	)
 
-		# # Start -> End
-		# else:
-		# 	res = self._handle_job(
-		# 		self.fx.get_history,
-		# 		self._convert_product(product), 
-		# 		self._convert_period(period), 
-		# 		start, end
-		# 	)
+		chart = self.getChart(product)
+		timestamp = chart.lastTs[period]
+		current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
 
-		# # Convert to result DF
-		# res = np.array(list(map(lambda x: list(x), res)))
-
-		# mid_prices = np.around((res[:, 1:5].astype(float) + res[:, 5:9].astype(float))/2, decimals=5)
-		# res = np.concatenate((res[:, :1], res[:, 5:9].astype(float), mid_prices.astype(float), res[:, 1:5].astype(float)), axis=1)
-
-		# result = pd.DataFrame(
-		# 	index=pd.Index(res[:,0]).map(
-		# 		lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
-		# 	).rename('timestamp'),
-		# 	columns=[
-		# 		'ask_open', 'ask_high', 'ask_low', 'ask_close',
-		# 		'mid_open', 'mid_high', 'mid_low', 'mid_close',
-		# 		'bid_open', 'bid_high', 'bid_low', 'bid_close'
-		# 	],
-		# 	data=res[:,1:]
-		# )
-
-		result = self.data_saver.get(product, period , start, end)
-
+		result = self.data_saver.get(product, period, start, end)
+		print(f'prev: {result.index.values[-5:]}')
+		print(f'current: {timestamp}')
+		result.append(pd.DataFrame(
+			index=pd.Index(data=[timestamp], name='timestamp'),
+			columns=[
+				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			],
+			data=[current_bars]
+		))
 
 		return result
 
 
-	def _download_historical_data(self, 
+	def _download_historical_data_broker(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
 		force_download=False
@@ -265,11 +243,14 @@ class FXCM(Broker):
 		# Convert to result DF
 		res = np.array(list(map(lambda x: list(x), res)))
 
-		mid_prices = np.around((res[:, 1:5].astype(float) + res[:, 5:9].astype(float))/2, decimals=5)
-		res = np.concatenate((res[:, :1], res[:, 5:9].astype(float), mid_prices.astype(float), res[:, 1:5].astype(float)), axis=1)
+		ask_prices = res[:, 5:9].astype(float)
+		bid_prices = res[:, 1:5].astype(float)
+		mid_prices = (ask_prices + bid_prices)/2
+		timestamps = res[:, 0]
+		prices = np.around(np.concatenate((ask_prices, mid_prices, bid_prices), axis=1), decimals=5)
 
 		result = pd.DataFrame(
-			index=pd.Index(res[:,0]).map(
+			index=pd.Index(timestamps).map(
 				lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
 			).rename('timestamp'),
 			columns=[
@@ -277,7 +258,7 @@ class FXCM(Broker):
 				'mid_open', 'mid_high', 'mid_low', 'mid_close',
 				'bid_open', 'bid_high', 'bid_low', 'bid_close'
 			],
-			data=res[:,1:]
+			data=prices
 		)
 
 		return result

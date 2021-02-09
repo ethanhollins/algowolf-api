@@ -196,16 +196,16 @@ class Charts(dict):
 		self[broker] = {}
 
 
-	def createChart(self, broker, product):
+	def createChart(self, broker, product, await_completion):
 		if product not in self[broker.name]:
-			chart = tl.Chart(self.ctrl, broker, product)
+			chart = tl.Chart(self.ctrl, broker, product, await_completion=await_completion)
 			self[broker.name][product] = chart
 			return chart
 		else:
 			return self[broker.name][product]
 
 
-	def getChart(self, broker, product):
+	def getChart(self, broker, product, await_completion):
 		if broker.name in self:
 			if product in self[broker.name]:
 				return self[broker.name][product]
@@ -213,7 +213,8 @@ class Charts(dict):
 				return self.queue.handle(
 					f'{broker.name}:{product}',
 					self.createChart,
-					broker, product
+					broker, product,
+					await_completion
 				)
 
 		raise abort(404, 'Broker does not exist.')

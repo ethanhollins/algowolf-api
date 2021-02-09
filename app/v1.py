@@ -1315,6 +1315,9 @@ def create_chart_ept(strategy_id):
 	account = g.user
 
 	body = getJson()
+
+	print(ctrl.brokers)
+	print(body.get('broker'))
 	broker = ctrl.brokers.getBroker(body.get('broker'))
 	# broker = account.getStrategyBroker(strategy_id)
 
