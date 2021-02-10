@@ -762,6 +762,8 @@ class Account(object):
 	def getBacktestGui(self, strategy_id, backtest_id):
 		return self.ctrl.getDb().getStrategyBacktestGui(self.userId, strategy_id, backtest_id)
 
+	def getBacktestChartInfo(self, strategy_id, backtest_id):
+		return self.ctrl.getDb().getStrategyBacktestInfo(self.userId, strategy_id, backtest_id)
 
 	def getBacktestTransactions(self, strategy_id, backtest_id):
 		return self.ctrl.getDb().getStrategyBacktestTransactions(self.userId, strategy_id, backtest_id)

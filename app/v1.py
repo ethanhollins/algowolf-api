@@ -1260,9 +1260,11 @@ def get_backtest_transactions_ept(strategy_id, backtest_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
 	account = ctrl.accounts.getAccount(user_id)
 
-	transactions = account.getBacktestTransactions(strategy_id, backtest_id)
+	result = {}
+	result.update(account.getBacktestChartInfo(strategy_id, backtest_id))
+	result.update(account.getBacktestTransactions(strategy_id, backtest_id))
 	return Response(
-		json.dumps(transactions, indent=2),
+		json.dumps(result, indent=2),
 		status=200, content_type='application/json'
 	)
 

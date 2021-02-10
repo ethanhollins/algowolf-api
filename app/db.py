@@ -1014,6 +1014,19 @@ class Database(object):
 			return None
 
 
+	def getStrategyBacktestInfo(self, user_id, strategy_id, backtest_id):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{strategy_id}/backtests/{backtest_id}/info.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+
+		except Exception:
+			return None
+
+
 	def updateStrategyBacktestTransactions(self, user_id, strategy_id, backtest_id, obj):
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
