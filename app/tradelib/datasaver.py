@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from app import tradelib as tl
 from app import ROOT_DIR
 
-SAVE_DELAY = 60 * 5
+SAVE_DELAY = 60 * 120
 
 class DataSaver(object):
 
