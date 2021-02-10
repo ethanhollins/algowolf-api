@@ -14,6 +14,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def create_app(test_config=None):
 
+	print(os.listdir(os.path.abspath(os.getcwd())))
 	# Create and configure app
 	instance_path = os.path.join(os.path.abspath(os.getcwd()), 'instance')
 	app = Flask(__name__, instance_relative_config=True, instance_path=instance_path)
