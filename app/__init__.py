@@ -15,8 +15,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def create_app(test_config=None):
 
 	# Create and configure app
-	instance_path = os.path.join(ROOT_DIR, 'instance')
-	print(instance_path)
+	instance_path = os.path.join(os.path.abspath(os.getcwd()), 'instance')
 	app = Flask(__name__, instance_relative_config=True, instance_path=instance_path)
 
 	app.config.from_mapping(
