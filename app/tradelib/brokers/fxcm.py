@@ -11,6 +11,7 @@ from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
 from app.error import OrderException, BrokerException
 from forexconnect import ForexConnect, fxcorepy, Common
+from threading import Thread
 
 
 class OffersTableListener(object):
@@ -77,6 +78,7 @@ class FXCM(Broker):
 		self.session = None
 		self._initialized = False
 		self.job_queue = []
+		self._price_queue = []
 
 		self.fx = ForexConnect()
 		self._login()
@@ -105,7 +107,8 @@ class FXCM(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
-		
+		t = Thread(target=self._handle_chart_update)
+		t.start()
 
 
 	def _is_logged_in(self):
@@ -386,106 +389,116 @@ class FXCM(Broker):
 		self.offers_listener.addInstrument(self._convert_product(instrument), listener)
 
 
-	def onChartUpdate(self, chart, time, bid, ask, volume):
+	def _handle_chart_update(self):
+		while True:
+			if len(self._price_queue):
+				chart, update_time, bid, ask, volume = self._price_queue[0]
+				del self._price_queue[0]
 
-		if time is not None:
-			# Convert time to datetime
-			c_ts = tl.convertTimeToTimestamp(time)
-			result = []
-			# Iterate periods
-			for period in chart.getActivePeriods():
-				if (isinstance(chart.bid.get(period), np.ndarray) and 
-					isinstance(chart.ask.get(period), np.ndarray)):
+				if update_time is not None:
+					# Convert time to datetime
+					c_ts = tl.convertTimeToTimestamp(update_time)
+					result = []
+					# Iterate periods
+					for period in chart.getActivePeriods():
+						if (isinstance(chart.bid.get(period), np.ndarray) and 
+							isinstance(chart.ask.get(period), np.ndarray)):
 
-					# Handle period bar end
-					if period != tl.period.TICK:
-						is_new_bar = chart.isNewBar(period, c_ts)
-						if is_new_bar:
-							bar_ts = chart.lastTs[period]
+							# Handle period bar end
+							if period != tl.period.TICK:
+								is_new_bar = chart.isNewBar(period, c_ts)
+								if is_new_bar:
+									bar_ts = chart.lastTs[period]
+									result.append({
+										'broker': self.name,
+										'product': chart.product,
+										'period': period,
+										'bar_end': True,
+										'timestamp': chart.lastTs[period],
+										'item': {
+											'ask': chart.ask[period].tolist(),
+											'mid': chart.mid[period].tolist(),
+											'bid': chart.bid[period].tolist()
+										}
+									})
+									chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
+									print(f'[FXCM] ({period}) Prev: {bar_ts}, Next: {chart.lastTs[period]}')
+									chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
+									chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
+									chart.mid[period] = np.array(
+										[np.around(
+											(chart.ask[period][3] + chart.bid[period][3])/2,
+											decimals=5
+										)]*4, 
+									dtype=np.float64)
+
+							# Ask
+							if ask is not None:
+								chart.ask[period][1] = ask if ask > chart.ask[period][1] else chart.ask[period][1]
+								chart.ask[period][2] = ask if ask < chart.ask[period][2] else chart.ask[period][2]
+								chart.ask[period][3] = ask
+
+							# Bid
+							if bid is not None:
+								chart.bid[period][1] = bid if bid > chart.bid[period][1] else chart.bid[period][1]
+								chart.bid[period][2] = bid if bid < chart.bid[period][2] else chart.bid[period][2]
+								chart.bid[period][3] = bid
+
+							# Mid
+							if ask is not None and bid is not None:
+								new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
+								new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
+								new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
+
+								chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
+								chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
+								chart.mid[period][3] = new_close
+
+							# Handle period bar info
 							result.append({
 								'broker': self.name,
 								'product': chart.product,
 								'period': period,
-								'bar_end': True,
-								'timestamp': chart.lastTs[period],
+								'bar_end': False,
+								'timestamp': c_ts,
 								'item': {
 									'ask': chart.ask[period].tolist(),
 									'mid': chart.mid[period].tolist(),
 									'bid': chart.bid[period].tolist()
 								}
 							})
-							chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
-							print(f'[FXCM] ({period}) Prev: {bar_ts}, Next: {chart.lastTs[period]}')
-							chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
-							chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
-							chart.mid[period] = np.array(
-								[np.around(
-									(chart.ask[period][3] + chart.bid[period][3])/2,
-									decimals=5
-								)]*4, 
-							dtype=np.float64)
 
-					# Ask
-					if ask is not None:
-						chart.ask[period][1] = ask if ask > chart.ask[period][1] else chart.ask[period][1]
-						chart.ask[period][2] = ask if ask < chart.ask[period][2] else chart.ask[period][2]
-						chart.ask[period][3] = ask
+						elif period == tl.period.TICK:
+							if ask is not None:
+								chart.ask[period] = ask
+							if bid is not None:
+								chart.bid[period] = bid
+							if bid is not None and ask is not None:
+								chart.mid[period] = np.around((ask + bid)/2, decimals=5)
 
-					# Bid
-					if bid is not None:
-						chart.bid[period][1] = bid if bid > chart.bid[period][1] else chart.bid[period][1]
-						chart.bid[period][2] = bid if bid < chart.bid[period][2] else chart.bid[period][2]
-						chart.bid[period][3] = bid
+							result.append({
+								'broker': self.name,
+								'product': chart.product,
+								'period': period,
+								'bar_end': False,
+								'timestamp': c_ts,
+								'item': {
+									'ask': chart.ask[period],
+									'mid': chart.mid[period],
+									'bid': chart.bid[period]
+								}
+							})
 
-					# Mid
-					if ask is not None and bid is not None:
-						new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
-						new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
-						new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
+				# print(result)
 
-						chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
-						chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
-						chart.mid[period][3] = new_close
+				if len(result):
+					chart.handleTick(result)
 
-					# Handle period bar info
-					result.append({
-						'broker': self.name,
-						'product': chart.product,
-						'period': period,
-						'bar_end': False,
-						'timestamp': c_ts,
-						'item': {
-							'ask': chart.ask[period].tolist(),
-							'mid': chart.mid[period].tolist(),
-							'bid': chart.bid[period].tolist()
-						}
-					})
+			time.sleep(0.001)
 
-				elif period == tl.period.TICK:
-					if ask is not None:
-						chart.ask[period] = ask
-					if bid is not None:
-						chart.bid[period] = bid
-					if bid is not None and ask is not None:
-						chart.mid[period] = np.around((ask + bid)/2, decimals=5)
 
-					result.append({
-						'broker': self.name,
-						'product': chart.product,
-						'period': period,
-						'bar_end': False,
-						'timestamp': c_ts,
-						'item': {
-							'ask': chart.ask[period],
-							'mid': chart.mid[period],
-							'bid': chart.bid[period]
-						}
-					})
-
-		# print(result)
-
-		if len(result):
-			chart.handleTick(result)
+	def onChartUpdate(self, *args):
+		self._price_queue.append(args)
 
 
 	def isPeriodCompatible(self, period):

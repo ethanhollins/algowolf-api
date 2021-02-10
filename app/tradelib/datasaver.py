@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta
 from app import tradelib as tl
 from app import ROOT_DIR
+from threading import Thread
 
 SAVE_DELAY = 60 * 120
 
@@ -13,9 +14,12 @@ class DataSaver(object):
 	def __init__(self, broker):
 		self.broker = broker
 		self.data = {}
+		self._price_queue = []
 		self._save_periods = [tl.period.ONE_MINUTE]
 
 		self.timer = time.time()
+		# t = Thread(target=self._handle_price_data)
+		# t.start()
 
 
 	def _init_data_csv(self, chart, period):
@@ -128,9 +132,20 @@ class DataSaver(object):
 		return result
 
 
+	def queue_price_data(self, item):
+		self._price_queue.append(item)
+
+
 	def _handle_price_data(self, item):
 		''' Handle live data feed '''
 
+		# while True:
+		# 	if len(self._price_queue):
+		# 		# Pop item
+		# 		item = self._price_queue[0]
+		# 		del self._price_queue[0]
+
+		# 		print(f'handle {item}')
 		data = self.data[item['product']][item['period']]
 		# if item['period'] == tl.period.TICK:
 		# 	self.data[item['product']][item['period']] = data.append(pd.DataFrame(
