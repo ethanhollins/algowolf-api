@@ -18,9 +18,6 @@ def create_app(test_config=None):
 	instance_path = os.path.join(os.path.abspath(os.getcwd()), 'instance')
 	app = Flask(__name__, instance_relative_config=True, instance_path=instance_path)
 
-	print(os.path.join(app.instance_path, 'brokers.json'))
-	print(os.path.exists(os.path.join(app.instance_path, 'brokers.json')))
-	print(os.listdir('/app'))
 	app.config.from_mapping(
 		SECRET_KEY='dev',
 		BROKERS=os.path.join(app.instance_path, 'brokers.json')

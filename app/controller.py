@@ -152,7 +152,6 @@ class Brokers(dict):
 
 	def _get_options(self):
 		path = self.ctrl.app.config['BROKERS']
-		print(path)
 		if os.path.exists(path):
 			with open(path, 'r') as f:
 				return json.load(f)
