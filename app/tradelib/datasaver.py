@@ -13,7 +13,7 @@ class DataSaver(object):
 	def __init__(self, broker):
 		self.broker = broker
 		self.data = {}
-		self._save_periods = [tl.period.TICK, tl.period.ONE_MINUTE]
+		self._save_periods = [tl.period.ONE_MINUTE]
 
 		self.timer = time.time()
 
@@ -90,12 +90,6 @@ class DataSaver(object):
 
 		# Add any current relevant memory data
 		if product in self.data and load_period in self.data[product]:
-			print('Mem: {}'.format(
-				self.data[product][load_period].loc[
-					(self.data[product][load_period].index >= start.timestamp()) & 
-					(self.data[product][load_period].index < end.timestamp())
-				].index.values
-			))
 			frags.append(self.data[product][load_period].loc[
 				(self.data[product][load_period].index >= start.timestamp()) & 
 				(self.data[product][load_period].index < end.timestamp())
@@ -118,15 +112,6 @@ class DataSaver(object):
 			]]
 
 			if load_period == tl.period.ONE_MINUTE:
-				if period == tl.period.TWO_MINUTES:
-					print('constructing 2m')
-				if period == tl.period.FIVE_MINUTES:
-					print('constructing 5m')
-				if period == tl.period.TEN_MINUTES:
-					print('constructing 10m')
-				print(result.tail(11))
-
-				print(f'end: {end}, time: {datetime.utcnow()}')
 				result = self._construct_bars(period, result)
 				result = result.loc[~(result==0).all(axis=1)]
 
@@ -147,23 +132,24 @@ class DataSaver(object):
 		''' Handle live data feed '''
 
 		data = self.data[item['product']][item['period']]
-		if item['period'] == tl.period.TICK:
-			self.data[item['product']][item['period']] = data.append(pd.DataFrame(
-				index=pd.Index(data=[item['timestamp']], name='timestamp'),
-				columns=['ask', 'bid'],
-				data=[[item['item']['ask'], item['item']['bid']]]
-			))
-			# data.loc[item['timestamp']] = [item['item']['ask'], item['item']['bid']]
+		# if item['period'] == tl.period.TICK:
+		# 	self.data[item['product']][item['period']] = data.append(pd.DataFrame(
+		# 		index=pd.Index(data=[item['timestamp']], name='timestamp'),
+		# 		columns=['ask', 'bid'],
+		# 		data=[[item['item']['ask'], item['item']['bid']]]
+		# 	))
+		# 	# data.loc[item['timestamp']] = [item['item']['ask'], item['item']['bid']]
 
-			if time.time() - self.timer >= SAVE_DELAY:
-				self.timer = time.time()
-				print(f'Saving {data.shape[0]} ticks.')
-				# Reset DF
-				self.data[item['product']][item['period']] = self._create_empty_df(item['period'])
-				# Save Data
-				self._save_data(item['product'], item['period'], data.copy())
+		# 	if time.time() - self.timer >= SAVE_DELAY:
+		# 		self.timer = time.time()
+		# 		print(f'Saving {data.shape[0]} ticks.')
+		# 		# Reset DF
+		# 		self.data[item['product']][item['period']] = self._create_empty_df(item['period'])
+		# 		# Save Data
+		# 		self._save_data(item['product'], item['period'], data.copy())
 
-		else:
+		# else:
+		if item['period'] == tl.period.ONE_MINUTE:
 			if item['bar_end']:
 				self.data[item['product']][item['period']] = data.append(pd.DataFrame(
 					index=pd.Index(data=[item['timestamp']], name='timestamp'),
@@ -197,7 +183,6 @@ class DataSaver(object):
 
 			if time.time() - self.timer >= SAVE_DELAY:
 				self.timer = time.time()
-				print(f'Saving {data.shape[0]} bars.')
 				# Reset DF
 				self.data[item['product']][item['period']] = self._create_empty_df(item['period'])
 				# Save Data
