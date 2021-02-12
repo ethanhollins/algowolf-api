@@ -3,6 +3,8 @@ import traceback
 import numpy as np
 import pandas as pd
 import dateutil.parser
+import ntplib
+import os
 from datetime import datetime
 from copy import copy
 from threading import Thread
@@ -106,6 +108,10 @@ class FXCM(Broker):
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
+
+		client = ntplib.NTPClient()
+		response = client.request('pool.ntp.org')
+		self.time_off = response.tx_time - time.time()
 
 		t = Thread(target=self._handle_chart_update)
 		t.start()
@@ -391,6 +397,7 @@ class FXCM(Broker):
 
 	def _handle_chart_update(self):
 		while True:
+			result = []
 			if len(self._price_queue):
 				chart, update_time, bid, ask, volume = self._price_queue[0]
 				del self._price_queue[0]
@@ -398,7 +405,6 @@ class FXCM(Broker):
 				if update_time is not None:
 					# Convert time to datetime
 					c_ts = tl.convertTimeToTimestamp(update_time)
-					result = []
 					# Iterate periods
 					for period in chart.getActivePeriods():
 						if (isinstance(chart.bid.get(period), np.ndarray) and 
@@ -408,21 +414,23 @@ class FXCM(Broker):
 							if period != tl.period.TICK:
 								is_new_bar = chart.isNewBar(period, c_ts)
 								if is_new_bar:
-									bar_ts = chart.lastTs[period]
-									result.append({
-										'broker': self.name,
-										'product': chart.product,
-										'period': period,
-										'bar_end': True,
-										'timestamp': chart.lastTs[period],
-										'item': {
-											'ask': chart.ask[period].tolist(),
-											'mid': chart.mid[period].tolist(),
-											'bid': chart.bid[period].tolist()
-										}
-									})
+									if chart.volume[period] > 0:
+										chart.volume[period] = 0
+										result.append({
+											'broker': self.name,
+											'product': chart.product,
+											'period': period,
+											'bar_end': True,
+											'timestamp': chart.lastTs[period],
+											'item': {
+												'ask': chart.ask[period].tolist(),
+												'mid': chart.mid[period].tolist(),
+												'bid': chart.bid[period].tolist()
+											}
+										})
+
 									chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
-									print(f'[FXCM] ({period}) Prev: {bar_ts}, Next: {chart.lastTs[period]}')
+									print(f'[FXCM] ({period}) Prev: {chart.lastTs[period]}, Next: {chart.lastTs[period]}')
 									chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
 									chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
 									chart.mid[period] = np.array(
@@ -431,6 +439,8 @@ class FXCM(Broker):
 											decimals=5
 										)]*4, 
 									dtype=np.float64)
+
+							chart.volume[period] += 1
 
 							# Ask
 							if ask is not None:
@@ -491,10 +501,42 @@ class FXCM(Broker):
 
 				# print(result)
 
-				if len(result):
-					chart.handleTick(result)
+			else:
+				for chart in self.charts:
+					c_ts = time.time()+self.time_off
+					for period in chart.getActivePeriods():
+						if period != tl.period.TICK and chart.volume[period] > 0:
+							# Handle period bar end
+							is_new_bar = chart.isNewBar(period, c_ts)
+							if is_new_bar:
+								chart.volume[period] = 0
+								result.append({
+									'broker': self.name,
+									'product': chart.product,
+									'period': period,
+									'bar_end': True,
+									'timestamp': chart.lastTs[period],
+									'item': {
+										'ask': chart.ask[period].tolist(),
+										'mid': chart.mid[period].tolist(),
+										'bid': chart.bid[period].tolist()
+									}
+								})
+								chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
+								print(f'[FXCM] ({period}) Prev: {chart.lastTs[period]}, Next: {chart.lastTs[period]}')
+								chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
+								chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
+								chart.mid[period] = np.array(
+									[np.around(
+										(chart.ask[period][3] + chart.bid[period][3])/2,
+										decimals=5
+									)]*4, 
+								dtype=np.float64)
 
-			time.sleep(0.001)
+			if len(result):
+				chart.handleTick(result)
+
+			time.sleep(0.01)
 
 
 	def onChartUpdate(self, *args):

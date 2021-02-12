@@ -10,7 +10,7 @@ from copy import copy
 class Chart(object):
 
 	__slots__ = (
-		'ctrl', 'broker', 'product', 'ask', 'mid', 'bid', 'barReset',
+		'ctrl', 'broker', 'product', 'ask', 'mid', 'bid', 'volume', 'barReset',
 		'lastTs', '_subscriptions', '_unsubscriptions', '_tick_queue'
 	)
 	def __init__(self, ctrl, broker, product, await_completion=False):
@@ -22,6 +22,7 @@ class Chart(object):
 		self.ask = self._generate_period_dict()
 		self.mid = self._generate_period_dict()
 		self.bid = self._generate_period_dict()
+		self.volume = { period:0 for period in self._generate_period_dict() }
 		self.barReset = self._generate_period_dict()
 		self.lastTs = self._generate_period_dict()
 		self._subscriptions = self._generate_period_dict()

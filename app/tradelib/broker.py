@@ -434,6 +434,11 @@ class Broker(object):
 
 	# Update Handlers
 	def handleOnTrade(self, account_id, res):
+		transactions = []
+		for i in res:
+			res[i]['brokerId'] = self.brokerId
+			transactions.append(res[i])
+
 		# Handle stream subscriptions
 		for func in self.ontrade_subs.values():
 			func(res)
@@ -446,11 +451,11 @@ class Broker(object):
 		)
 
 		# Save transaction to storage
-		# account_code = '.'.join((self.brokerId, account_id))
-		# self.userAccount.appendAccountGui(
-		# 	self.strategyId, account_code,
-		# 	{ 'transactions': res }
-		# )
+		account_code = '.'.join((self.brokerId, str(account_id)))
+		self.userAccount.appendAccountGui(
+			self.strategyId, account_code,
+			{ 'transactions': transactions }
+		)
 
 
 	# Update Handlers
