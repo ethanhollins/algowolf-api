@@ -172,9 +172,9 @@ class FXCM(Broker):
 
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')
-			if self._initialized and self.offers_listener is None:
-				self._get_offers_listener()
-				self.data_saver.fill_all_missing_data()
+			# if self._initialized and self.offers_listener is None:
+			# 	self._get_offers_listener()
+			# 	self.data_saver.fill_all_missing_data()
 
 	def _get_offers_listener(self):
 		offers = self.fx.get_table(ForexConnect.OFFERS)
@@ -392,7 +392,8 @@ class FXCM(Broker):
 
 
 	def _subscribe_chart_updates(self, instrument, listener):
-		self.offers_listener.addInstrument(self._convert_product(instrument), listener)
+		# self.offers_listener.addInstrument(self._convert_product(instrument), listener)
+		return
 
 
 	def _handle_chart_update(self):
