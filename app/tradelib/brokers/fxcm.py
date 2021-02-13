@@ -86,7 +86,7 @@ class FXCM(Broker):
 		self._login()
 		self.offers_listener = None
 
-		if is_parent:
+		if is_parent and not tl.isWeekend(datetime.utcnow()):
 			while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
 				time.sleep(0.01)
 

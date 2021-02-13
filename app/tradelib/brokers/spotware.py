@@ -850,39 +850,70 @@ class Spotware(Broker):
 						pos = self.positions[i]
 						if str(update.position.positionId) == pos.order_id:
 							print('FOUND')
-							# Fully Closed
-							if update.position.tradeData.volume == 0:
+							if update.order.orderType == 4:
 								pos.close_price = update.order.executionPrice
 								pos.close_time = update.order.utcLastUpdateTimestamp / 1000
 
 								del self.positions[i]
 
+								if update.order.limitPrice:
+									tp_dist = abs(update.order.executionPrice - update.order.limitPrice)
+								else:
+									tp_dist = None
+
+								if update.order.limitPrice:
+									sl_dist = abs(update.order.executionPrice - update.order.stopPrice)
+								else:
+									sl_dist = None
+
+								if sl_dist is None or tp_dist < sl_dist:
+									order_type = tl.TAKE_PROFIT
+								else:
+									order_type = tl.STOP_LOSS
+
+								print(order_type)
 								result.update({
 									ref_id: {
 										'timestamp': pos.close_time,
-										'type': tl.POSITION_CLOSE,
+										'type': order_type,
 										'accepted': True,
 										'item': pos
 									}
 								})
-
-							# Partially Closed
 							else:
-								pos.lotsize -= update.order.executedVolume
+								# Fully Closed
+								if update.position.tradeData.volume == 0:
+									pos.close_price = update.order.executionPrice
+									pos.close_time = update.order.utcLastUpdateTimestamp / 1000
 
-								del_pos = tl.Position.fromDict(self, pos)
-								del_pos.lotsize = update.order.executedVolume
-								del_pos.close_price = update.order.executionPrice
-								del_pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+									del self.positions[i]
 
-								result.update({
-									ref_id: {
-										'timestamp': del_pos.close_time,
-										'type': tl.POSITION_CLOSE,
-										'accepted': True,
-										'item': del_pos
-									}
-								})
+									result.update({
+										ref_id: {
+											'timestamp': pos.close_time,
+											'type': tl.POSITION_CLOSE,
+											'accepted': True,
+											'item': pos
+										}
+									})
+
+								# Partially Closed
+								else:
+									pos.lotsize -= update.order.executedVolume
+
+									del_pos = tl.Position.fromDict(self, pos)
+									del_pos.lotsize = update.order.executedVolume
+									del_pos.close_price = update.order.executionPrice
+									del_pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+
+									result.update({
+										ref_id: {
+											'timestamp': del_pos.close_time,
+											'type': tl.POSITION_CLOSE,
+											'accepted': True,
+											'item': del_pos
+										}
+									})
 
 							print(self.positions)
 							break
