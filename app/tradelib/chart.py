@@ -37,7 +37,7 @@ class Chart(object):
 		self.broker._subscribe_chart_updates(self.product, self._on_chart_update)
 
 		# Quickstart
-		self._load_current_bars([tl.period.ONE_MINUTE])
+		# self._load_current_bars([tl.period.ONE_MINUTE])
 
 		# Generate Tick
 		self.ask[tl.period.TICK] = self.ask[tl.period.ONE_MINUTE][3]
