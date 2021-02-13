@@ -49,13 +49,13 @@ class Chart(object):
 		self._subscriptions[tl.period.TICK] = {}
 
 		# Finish other bars
-		if not await_completion:
-			Thread(
-				target=self._load_current_bars,
-				args=([period for period in self.ask if period != tl.period.TICK],)
-			).start()
-		else:
-			self._load_current_bars([period for period in self.ask if period != tl.period.TICK])
+		# if not await_completion:
+		# 	Thread(
+		# 		target=self._load_current_bars,
+		# 		args=([period for period in self.ask if period != tl.period.TICK],)
+		# 	).start()
+		# else:
+		# 	self._load_current_bars([period for period in self.ask if period != tl.period.TICK])
 
 
 	def getActivePeriods(self):
