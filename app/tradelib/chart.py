@@ -37,7 +37,7 @@ class Chart(object):
 		self.broker._subscribe_chart_updates(self.product, self._on_chart_update)
 
 		# Quickstart
-		# self._load_current_bars([tl.period.ONE_MINUTE])
+		self._load_current_bars([tl.period.ONE_MINUTE])
 
 		# Generate Tick
 		self.ask[tl.period.TICK] = self.ask[tl.period.ONE_MINUTE][3]
@@ -49,13 +49,13 @@ class Chart(object):
 		self._subscriptions[tl.period.TICK] = {}
 
 		# Finish other bars
-		# if not await_completion:
-		# 	Thread(
-		# 		target=self._load_current_bars,
-		# 		args=([period for period in self.ask if period != tl.period.TICK],)
-		# 	).start()
-		# else:
-		# 	self._load_current_bars([period for period in self.ask if period != tl.period.TICK])
+		if not await_completion:
+			Thread(
+				target=self._load_current_bars,
+				args=([period for period in self.ask if period != tl.period.TICK],)
+			).start()
+		else:
+			self._load_current_bars([period for period in self.ask if period != tl.period.TICK])
 
 
 	def getActivePeriods(self):

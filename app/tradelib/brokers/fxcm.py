@@ -5,7 +5,7 @@ import pandas as pd
 import dateutil.parser
 import ntplib
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from copy import copy
 from threading import Thread
 from app import tradelib as tl
@@ -197,27 +197,31 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		force_download=False
 	):
-		self._login()
+		# self._login()
 
-		start = start.replace(tzinfo=None)
-		end = end.replace(tzinfo=None)
+		if count is not None:
+			start = datetime.utcnow() - timedelta(days=2)
+			end = datetime.utcnow()
+		else:
+			start = start.replace(tzinfo=None)
+			end = end.replace(tzinfo=None)
 
-		chart = self.getChart(product)
-		timestamp = chart.lastTs[period]
-		current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
+		# chart = self.getChart(product)
+		# timestamp = chart.lastTs[period]
+		# current_bars = np.concatenate((chart.ask[period], chart.mid[period], ch art.bid[period]))
 
 		result = self.data_saver.get(product, period, start, end)
-		print(f'prev: {result.index.values[-5:]}')
-		print(f'current: {timestamp}')
-		result.append(pd.DataFrame(
-			index=pd.Index(data=[timestamp], name='timestamp'),
-			columns=[
-				'ask_open', 'ask_high', 'ask_low', 'ask_close',
-				'mid_open', 'mid_high', 'mid_low', 'mid_close',
-				'bid_open', 'bid_high', 'bid_low', 'bid_close'
-			],
-			data=[current_bars]
-		))
+		# print(f'prev: {result.index.values[-5:]}')
+		# print(f'current: {timestamp}')
+		# result.append(pd.DataFrame(
+		# 	index=pd.Index(data=[timestamp], name='timestamp'),
+		# 	columns=[
+		# 		'ask_open', 'ask_high', 'ask_low', 'ask_close',
+		# 		'mid_open', 'mid_high', 'mid_low', 'mid_close',
+		# 		'bid_open', 'bid_high', 'bid_low', 'bid_close'
+		# 	],
+		# 	data=[current_bars]
+		# ))
 
 		return result
 
