@@ -773,6 +773,10 @@ class Account(object):
 		return self.ctrl.getDb().createStrategyBacktest(self.userId, strategy_id, backtest)
 
 
+	def uploadLiveBacktest(self, strategy_id, broker_id, account_id, backtest):
+		return self.ctrl.getDb().createAccountBacktest(self.userId, strategy_id, broker_id, account_id, backtest)
+
+
 	def performBacktest(self, strategy_id, broker, start, end, auth_key, input_variables, spread):
 		# strategy = self.getStrategyInfo(strategy_id)
 		# backtest_id = strategy.backtest(start, end, mode, input_variables=input_variables)

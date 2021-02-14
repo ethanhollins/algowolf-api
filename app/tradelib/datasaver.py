@@ -7,7 +7,7 @@ from app import tradelib as tl
 from app import ROOT_DIR
 from threading import Thread
 
-SAVE_DELAY = 60 * 120
+SAVE_DELAY = 60 * 60
 
 class DataSaver(object):
 
@@ -30,13 +30,13 @@ class DataSaver(object):
 
 	def _create_empty_df(self, period):
 		if period == tl.period.TICK:
-			return pd.DataFrame(columns=['timestamp', 'ask', 'bid']).set_index('timestamp')
+			return pd.DataFrame(columns=['timestamp', 'ask', 'bid'], dtype=float).set_index('timestamp')
 		else:
 			return pd.DataFrame(columns=[
 				'timestamp', 
 				'ask_open', 'ask_high', 'ask_low', 'ask_close',
 				'bid_open', 'bid_high', 'bid_low', 'bid_close'
-			]).set_index('timestamp')
+			], dtype=float).set_index('timestamp')
 
 
 	def subscribe(self, chart, periods):
@@ -54,9 +54,7 @@ class DataSaver(object):
 			self._fill_missing_data(chart.product, period)
 
 
-	def get(self, product, period, start, end):
-		''' Retrieve from saved data and memory '''
-
+	def _get_dates(self, product, period, start, end):
 		if period != tl.period.TICK:
 			load_period = tl.period.ONE_MINUTE
 		else:
@@ -72,8 +70,9 @@ class DataSaver(object):
 					old_data = pd.read_csv(
 						path, sep=',', 
 						names=['timestamp', 'ask', 'bid'], 
-						index_col='timestamp', compression='gzip'
-					)
+						index_col='timestamp', compression='gzip',
+						dtype=float
+					).round(decimals=5)
 				else:
 					old_data = pd.read_csv(
 						path, sep=',', 
@@ -82,8 +81,9 @@ class DataSaver(object):
 							'ask_open', 'ask_high', 'ask_low', 'ask_close',
 							'bid_open', 'bid_high', 'bid_low', 'bid_close'
 						], 
-						index_col='timestamp', compression='gzip'
-					)
+						index_col='timestamp', compression='gzip',
+						dtype=float
+					).round(decimals=5)
 
 				frags.append(old_data.loc[
 					(old_data.index >= start.timestamp()) & 
@@ -101,13 +101,13 @@ class DataSaver(object):
 
 		if len(frags):
 			result = pd.concat(frags)
-
 			# Create Mid Prices
 			result = pd.concat((
 				result, pd.DataFrame(
 					index=result.index, 
 					columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
-					data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5)
+					data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5),
+					dtype=float
 				)
 			), axis=1)[[
 				'ask_open', 'ask_high', 'ask_low', 'ask_close',
@@ -130,6 +130,88 @@ class DataSaver(object):
 			).set_index('timestamp')
 
 		return result
+
+
+	def _get_count(self, product, period, count):
+		if period != tl.period.TICK:
+			load_period = tl.period.ONE_MINUTE
+		else:
+			load_period = tl.period.TICK
+
+		result = pd.DataFrame(
+			columns=[
+				'timestamp',
+				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			]
+		).set_index('timestamp')
+
+		c_dt = datetime.utcnow()
+		temp_data = pd.DataFrame(
+			columns=[
+				'timestamp',
+				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			]
+		).set_index('timestamp')
+		while result.shape[0] < count:
+			path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{load_period}/{c_dt.strftime("%Y%m%d")}.csv.gz')
+
+			if os.path.exists(path):
+				if period == tl.period.TICK:
+					old_data = pd.read_csv(
+						path, sep=',', 
+						names=['timestamp', 'ask', 'bid'], 
+						index_col='timestamp', compression='gzip',
+						dtype=float
+					).round(decimals=5)
+				else:
+					temp_data = pd.concat((
+						pd.read_csv(
+							path, sep=',', 
+							names=[
+								'timestamp', 
+								'ask_open', 'ask_high', 'ask_low', 'ask_close',
+								'bid_open', 'bid_high', 'bid_low', 'bid_close'
+							], 
+							index_col='timestamp', compression='gzip',
+							dtype=float
+						).round(decimals=5),
+						temp_data
+					))
+
+				construction_data = pd.concat((
+					temp_data, pd.DataFrame(
+						index=temp_data.index, 
+						columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
+						data=np.around((temp_data.values[:, :4] + temp_data.values[:, 4:])/2, decimals=5),
+						dtype=float
+					)
+				), axis=1)[[
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				]]
+
+				complete_data = self._construct_bars(period, construction_data)
+				result = pd.concat((complete_data, result))
+				if complete_data.size > 0:
+					temp_data = temp_data.loc[temp_data.index < complete_data.index.values[0]]
+
+			c_dt -= timedelta(days=1)
+
+		return result.iloc[-count:]
+
+
+
+	def get(self, product, period, start=None, end=None, count=None):
+		''' Retrieve from saved data and memory '''
+
+		if start is not None and end is not None:
+			return self._get_dates(product, period, start, end)
+		elif count is not None:
+			return self._get_count(product, period, count)
 
 
 	def queue_price_data(self, item):
@@ -223,7 +305,7 @@ class DataSaver(object):
 			))
 			bar_ends = index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
 			indicies = np.arange(bar_ends.shape[0])[bar_ends.values.astype(bool)]
-			result = np.zeros((indicies.shape[0]-1, 12), dtype=float)
+			result = np.zeros((max(0, indicies.shape[0]-1), 12), dtype=float)
 
 			for i in range(1, indicies.shape[0]):
 				idx = indicies[i]
@@ -334,21 +416,22 @@ class DataSaver(object):
 			data = data.loc[(data.index > last_ts) & (data.index < current_ts)]
 			print(data)
 
-			# Delete duplicate memory data
-			if product in self.data and period in self.data[product]:
-				mem_data = self.data[product][period]
-				print(f'MEM BEFORE: {mem_data.shape}')
-				self.data[product][period] = mem_data.loc[mem_data.index > data.index.values[-1]]
-				print(f'MEM AFTER: {mem_data.shape}')
+			if data.shape[0] > 0:
+				# Delete duplicate memory data
+				if product in self.data and period in self.data[product]:
+					mem_data = self.data[product][period]
+					print(f'MEM BEFORE: {mem_data.shape}')
+					self.data[product][period] = mem_data.loc[mem_data.index > data.index.values[-1]]
+					print(f'MEM AFTER: {mem_data.shape}')
 
-			# Save new data
-			self._save_data(
-				product, period, 
-				data[[
-					'ask_open', 'ask_high', 'ask_low', 'ask_close',
-					'bid_open', 'bid_high', 'bid_low', 'bid_close'
-				]]
-			)
+				# Save new data
+				self._save_data(
+					product, period, 
+					data[[
+						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'bid_open', 'bid_high', 'bid_low', 'bid_close'
+					]]
+				)
 
 
 	def _save_data(self, product, period, data):

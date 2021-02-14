@@ -14,6 +14,7 @@ from app import auth, tradelib as tl
 from app.error import OrderException, AccountException
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
+from threading import Thread
 
 bp = Blueprint('v1', __name__, url_prefix='/v1')
 
@@ -1244,6 +1245,31 @@ def upload_backtest_ept(strategy_id):
 
 		backtest_id = account.uploadBacktest(strategy_id, backtest)
 		res = { 'backtest_id': backtest_id }
+		os.remove(path)
+	else:
+		res = {'message': 'Chunk upload successful.'}
+
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/<strategy_id>/<broker_id>/<account_id>/backtest', methods=('POST',))
+# @auth.login_required
+def upload_live_backtest_ept(strategy_id, broker_id, account_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+
+	if upload():
+		account = ctrl.accounts.getAccount(user_id)
+
+		filename = request.headers.get('Filename')
+		path = os.path.join(current_app.config['DATA_DIR'], filename)
+		with open(path, 'r') as f:
+			backtest = json.loads(f.read())
+
+		backtest_id = Thread(target=account.uploadLiveBacktest, args=(strategy_id, broker_id, account_id, backtest)).start()
+		res = { 'message': 'successful' }
 		os.remove(path)
 	else:
 		res = {'message': 'Chunk upload successful.'}

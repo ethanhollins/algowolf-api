@@ -58,7 +58,7 @@ class OffersTableListener(object):
 			pass
 
 
-
+ONE_HOUR = 60*60
 
 class FXCM(Broker):
 
@@ -86,17 +86,18 @@ class FXCM(Broker):
 		self._login()
 		self.offers_listener = None
 
-		# if is_parent and not tl.isWeekend(datetime.utcnow()):
-		# 	while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
-		# 		time.sleep(0.01)
+		if is_parent:
+			while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
+				time.sleep(0.01)
+			if self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
+				self._get_offers_listener()
 
-		# 	self._get_offers_listener()
-		# 	# Load Charts
-		# 	CHARTS = ['EUR_USD']
-		# 	PERIODS = [tl.period.ONE_MINUTE]
-		# 	for instrument in CHARTS:
-		# 		chart = self.createChart(instrument, await_completion=True)
-		# 		self.data_saver.subscribe(chart, PERIODS)
+			# Load Charts
+			CHARTS = ['EUR_USD']
+			PERIODS = [tl.period.ONE_MINUTE]
+			for instrument in CHARTS:
+				chart = self.createChart(instrument, await_completion=True)
+				self.data_saver.subscribe(chart, PERIODS)
 
 		self._initialized = True
 
@@ -109,9 +110,7 @@ class FXCM(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
-		client = ntplib.NTPClient()
-		response = client.request('pool.ntp.org')
-		self.time_off = response.tx_time - time.time()
+		self._set_time_off()
 
 		t = Thread(target=self._handle_chart_update)
 		t.start()
@@ -142,10 +141,21 @@ class FXCM(Broker):
 					connection='demo' if self.is_demo else 'real',
 					session_status_callback=self._on_status_change
 				)
+				return True
 
 			except Exception:
 				# print(traceback.format_exc(), flush=True)
 				print('[FXCM] Login failed.')
+				return False
+
+		else:
+			return True
+
+
+	def _set_time_off(self):
+		client = ntplib.NTPClient()
+		response = client.request('pool.ntp.org')
+		self.time_off = response.tx_time - time.time()
 
 
 	def _handle_job(self, func, *args, **kwargs):
@@ -195,33 +205,30 @@ class FXCM(Broker):
 	def _download_historical_data(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
-		force_download=False
+		include_current=True,
+		**kwargs
 	):
-		# self._login()
-
 		if count is not None:
-			start = datetime.utcnow() - timedelta(days=2)
-			end = datetime.utcnow()
+			result = self.data_saver.get(product, period, count=count)
 		else:
 			start = start.replace(tzinfo=None)
 			end = end.replace(tzinfo=None)
+			result = self.data_saver.get(product, period, start=start, end=end)
 
-		# chart = self.getChart(product)
-		# timestamp = chart.lastTs[period]
-		# current_bars = np.concatenate((chart.ask[period], chart.mid[period], ch art.bid[period]))
+		if include_current:
+			chart = self.getChart(product)
+			timestamp = chart.lastTs[period]
+			current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
 
-		result = self.data_saver.get(product, period, start, end)
-		# print(f'prev: {result.index.values[-5:]}')
-		# print(f'current: {timestamp}')
-		# result.append(pd.DataFrame(
-		# 	index=pd.Index(data=[timestamp], name='timestamp'),
-		# 	columns=[
-		# 		'ask_open', 'ask_high', 'ask_low', 'ask_close',
-		# 		'mid_open', 'mid_high', 'mid_low', 'mid_close',
-		# 		'bid_open', 'bid_high', 'bid_low', 'bid_close'
-		# 	],
-		# 	data=[current_bars]
-		# ))
+			result.append(pd.DataFrame(
+				index=pd.Index(data=[timestamp], name='timestamp'),
+				columns=[
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				],
+				data=[current_bars]
+			))
 
 		return result
 
@@ -229,9 +236,14 @@ class FXCM(Broker):
 	def _download_historical_data_broker(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
-		force_download=False
+		**kwargs
 	):
-		self._login()
+		if tl.isWeekend(datetime.utcnow()) or not self._login():
+			return self._download_historical_data(
+				product, period, tz=tz, 
+				start=start, end=end, count=count,
+				include_current=False
+			)
 
 		# Count
 		if not count is None:
@@ -396,11 +408,13 @@ class FXCM(Broker):
 
 
 	def _subscribe_chart_updates(self, instrument, listener):
-		# self.offers_listener.addInstrument(self._convert_product(instrument), listener)
-		return
+		if not tl.isWeekend(datetime.utcnow()) and self._login():
+			self.offers_listener.addInstrument(self._convert_product(instrument), listener)
 
 
 	def _handle_chart_update(self):
+		time_off_timer = time.time()
+
 		while True:
 			result = []
 			if len(self._price_queue):
@@ -460,14 +474,13 @@ class FXCM(Broker):
 								chart.bid[period][3] = bid
 
 							# Mid
-							if ask is not None and bid is not None:
-								new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
-								new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
-								new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
+							new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
+							new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
+							new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
 
-								chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
-								chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
-								chart.mid[period][3] = new_close
+							chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
+							chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
+							chart.mid[period][3] = new_close
 
 							# Handle period bar info
 							result.append({
@@ -540,6 +553,9 @@ class FXCM(Broker):
 
 			if len(result):
 				chart.handleTick(result)
+
+			if time.time() - time_off_timer > ONE_HOUR:
+				self._set_time_off()
 
 			time.sleep(0.01)
 

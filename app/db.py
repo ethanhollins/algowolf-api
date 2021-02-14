@@ -793,6 +793,15 @@ class Database(object):
 
 				gui['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
 
+			if len(gui['info'][i['product']][i['period']]) > MAX_GUI:
+				gui['info'][i['product']][i['period']] = dict(
+					sorted(
+						gui['info'][i['product']][i['period']].items(), 
+						key=lambda x: int(x[0])
+					)[-MAX_GUI:]
+				)
+
+
 		# Handle Transactions
 		if 'transactions' in obj:
 			result = self.getAccountTransactions(user_id, strategy_id, account_code)
@@ -1039,6 +1048,21 @@ class Database(object):
 		)
 		return True
 
+
+	def createAccountBacktest(self, user_id, strategy_id, broker_id, account_id, backtest):
+		account_code = '.'.join((broker_id, account_id))
+		# Clear Previous GUI
+		self.updateAccountGui(
+			user_id, strategy_id, account_code, 
+			{ 'info': {} }
+		)
+		self.updateAccountTransactions(
+			user_id, strategy_id, account_code, 
+			{ 'transactions': {} }
+		)
+
+		# Upload New GUI
+		self.appendAccountGui(user_id, strategy_id, account_code, backtest)
 
 	# Reports
 	def getStrategyAccountReport(self, user_id, strategy_id, account_code, name):
