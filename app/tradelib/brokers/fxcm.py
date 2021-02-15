@@ -559,6 +559,7 @@ class FXCM(Broker):
 				chart.handleTick(result)
 
 			if time.time() - time_off_timer > ONE_HOUR:
+				time_off_timer = time.time()
 				self._set_time_off()
 
 			time.sleep(0.01)
