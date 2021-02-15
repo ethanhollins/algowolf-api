@@ -110,6 +110,7 @@ class FXCM(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
+		self.time_off = 0
 		self._set_time_off()
 
 		t = Thread(target=self._handle_chart_update)
@@ -153,9 +154,12 @@ class FXCM(Broker):
 
 
 	def _set_time_off(self):
-		client = ntplib.NTPClient()
-		response = client.request('pool.ntp.org')
-		self.time_off = response.tx_time - time.time()
+		try:
+			client = ntplib.NTPClient()
+			response = client.request('pool.ntp.org')
+			self.time_off = response.tx_time - time.time()
+		except Exception:
+			pass
 
 
 	def _handle_job(self, func, *args, **kwargs):

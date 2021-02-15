@@ -969,8 +969,20 @@ class Database(object):
 		if 'drawings' in gui:
 			del gui['drawings']
 		gui['properties'] = backtest.get('properties')
-		gui['info'] = backtest.get('info')
 		self.updateStrategyBacktestGui(user_id, strategy_id, backtest_id, gui)
+
+		# Handle Info
+		info = { 'info': {} }
+		for i in backtest['info']:
+			if i['product'] not in info['info']:
+				info['info'][i['product']] = {}
+			if i['period'] not in info['info'][i['product']]:
+				info['info'][i['product']][i['period']] = {}
+			if str(int(i['timestamp'])) not in info['info'][i['product']][i['period']]:
+				info['info'][i['product']][i['period']][str(int(i['timestamp']))] = []
+
+			info['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
+		self.updateStrategyBacktestInfo(user_id, strategy_id, backtest_id, info)
 
 		# Init Backtest Transactions
 		transactions = { 'transactions': backtest.get('transactions') }
@@ -1001,6 +1013,19 @@ class Database(object):
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/backtests/{backtest_id}/gui.json.gz'
+		)
+		gui_object.put(
+			Body=gzip.compress(
+				self._flat_dump(obj, indent=2).encode('utf8')
+			)
+		)
+		return True
+
+
+	def updateStrategyBacktestInfo(self, user_id, strategy_id, backtest_id, obj):
+		gui_object = self._s3_res.Object(
+			self.strategyBucketName,
+			f'{user_id}/{strategy_id}/backtests/{backtest_id}/info.json.gz'
 		)
 		gui_object.put(
 			Body=gzip.compress(
