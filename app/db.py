@@ -718,10 +718,10 @@ class Database(object):
 			if res.get('Body'):
 				return json.loads(gzip.decompress(res['Body'].read()))
 			else:
-				return {}
+				return { 'transactions': [] }
 
 		except Exception:
-			return {}
+			return { 'transactions': [] }
 
 
 	def updateAccountTransactions(self, user_id, strategy_id, account_code, obj):
@@ -1083,11 +1083,27 @@ class Database(object):
 		)
 		self.updateAccountTransactions(
 			user_id, strategy_id, account_code, 
-			{ 'transactions': {} }
+			{ 'transactions': [] }
 		)
 
 		# Upload New GUI
-		self.appendAccountGui(user_id, strategy_id, account_code, backtest)
+		self._handle_append_account_gui(user_id, strategy_id, account_code, backtest)
+
+		try:
+			self.ctrl.sio.emit(
+				'ongui', 
+				{
+					'strategy_id': strategy_id, 
+					'item': {
+						'account_code': account_code,
+						'type': 'live_backtest_uploaded',
+					}
+				}, 
+				namespace='/admin'
+			)
+		except Exception:
+			print(traceback.format_exc(), flush=True)
+
 
 	# Reports
 	def getStrategyAccountReport(self, user_id, strategy_id, account_code, name):
