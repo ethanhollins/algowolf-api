@@ -147,7 +147,7 @@ class Spotware(Broker):
 
 	def message(self, payloadType, payload, msgid):
 
-		if payloadType != 2138:
+		if payloadType != 2138 and payloadType != 2131:
 			print(f'MSG: ({payloadType}) {payload}')
 
 		# Heartbeat
