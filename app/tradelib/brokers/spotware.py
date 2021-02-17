@@ -443,6 +443,7 @@ class Spotware(Broker):
 		
 		sw_product = self._convert_product(product)
 		direction = 1 if direction == tl.LONG else 2
+		lotsize = round(lotsize / 1000000) * 1000000
 
 		# Execute Market Order
 		new_order = o2.ProtoOANewOrderReq(
@@ -479,7 +480,7 @@ class Spotware(Broker):
 
 				result.update(pos_res)
 
-		elif not res is None and res.payloadType == 50:
+		elif not res is None and res.payloadType in (50, 2132):
 			result.update({
 				ref_id: {
 					'timestamp': time.time(),
@@ -522,7 +523,7 @@ class Spotware(Broker):
 		print(res)
 
 		if not isinstance(res, dict):
-			if not res is None and res.payloadType == 50:
+			if not res is None and res.payloadType in (50, 2132):
 				res = {
 					ref_id: {
 						'timestamp': time.time(),
@@ -573,7 +574,7 @@ class Spotware(Broker):
 
 				result.update(pos_res)
 
-		elif not res is None and res.payloadType == 50:
+		elif not res is None and res.payloadType in (50, 2132):
 			result.update({
 				ref_id: {
 					'timestamp': time.time(),
@@ -706,6 +707,7 @@ class Spotware(Broker):
 
 		direction = 1 if direction == tl.LONG else 2
 		sw_order_type = 3 if order_type == tl.STOP_ORDER else 2
+		lotsize = round(lotsize / 1000000) * 1000000
 
 		new_order_req = o2.ProtoOANewOrderReq(
 			ctidTraderAccountId=int(account_id),
@@ -717,7 +719,7 @@ class Spotware(Broker):
 		res = self.parent._wait(ref_id)
 
 		if not isinstance(res, dict):
-			if not res is None and res.payloadType == 50:
+			if not res is None and res.payloadType in (50, 2132):
 				res = {
 					ref_id: {
 						'timestamp': time.time(),
@@ -772,7 +774,7 @@ class Spotware(Broker):
 		res = self.parent._wait(ref_id)
 
 		if not isinstance(res, dict):
-			if not res is None and res.payloadType == 50:
+			if not res is None and res.payloadType in (50, 2132):
 				res = {
 					ref_id: {
 						'timestamp': time.time(),
@@ -812,7 +814,7 @@ class Spotware(Broker):
 		res = self.parent._wait(ref_id)
 
 		if not isinstance(res, dict):
-			if not res is None and res.payloadType == 50:
+			if not res is None and res.payloadType in (50, 2132):
 				res = {
 					ref_id: {
 						'timestamp': time.time(),
