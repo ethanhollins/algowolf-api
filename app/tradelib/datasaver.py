@@ -291,68 +291,133 @@ class DataSaver(object):
 		# 		)
 
 
+	# def _construct_bars(self, period, data, smooth=True):
+	# 	''' Construct other period bars from appropriate saved data '''
+	# 	if data.size > 0:
+	# 		first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
+	# 			hour=0, minute=0, second=0, microsecond=0
+	# 		).timestamp()
+	# 		first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
+	# 		data = data.loc[data.index >= first_ts]
+
+	# 		index = data.index.copy().append(pd.Index(
+	# 			[data.index.values[-1] + tl.period.getPeriodOffsetSeconds(tl.period.ONE_MINUTE)]
+	# 		))
+	# 		bar_ends = index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
+	# 		indicies = np.arange(bar_ends.shape[0])[bar_ends.values.astype(bool)]
+	# 		result = np.zeros((max(0, indicies.shape[0]-1), 12), dtype=float)
+
+	# 		for i in range(1, indicies.shape[0]):
+	# 			idx = indicies[i]
+	# 			passed_count = indicies[i] - indicies[i-1]
+
+	# 			if idx - passed_count == 0:
+	# 				result[i-1] = [
+	# 					data.values[idx-passed_count, 0], np.amax(data.values[idx-passed_count:idx, 1]), 
+	# 					np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
+	# 					data.values[idx-passed_count, 4], np.amax(data.values[idx-passed_count:idx, 5]), 
+	# 					np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
+	# 					data.values[idx-passed_count, 8], np.amax(data.values[idx-passed_count:idx, 9]), 
+	# 					np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+	# 				]
+	# 			else:
+	# 				result[i-1] = [
+	# 					data.values[idx-passed_count-1, 3], np.amax(data.values[idx-passed_count:idx, 1]), 
+	# 					np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
+	# 					data.values[idx-passed_count-1, 7], np.amax(data.values[idx-passed_count:idx, 5]), 
+	# 					np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
+	# 					data.values[idx-passed_count-1, 11], np.amax(data.values[idx-passed_count:idx, 9]), 
+	# 					np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
+	# 				]
+
+	# 		if bar_ends[-1]:
+	# 			data = data[bar_ends[:-1]]
+	# 			return pd.DataFrame(
+	# 				index=data.iloc[data.shape[0] - result.shape[0]:].index,
+	# 				data=result, 
+	# 				columns=[ 
+	# 					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+	# 					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+	# 					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+	# 				]
+	# 			)
+	# 		else:
+	# 			data = data[bar_ends[:-1]]
+	# 			return pd.DataFrame(
+	# 				index=data.iloc[data.shape[0] - result.shape[0]:].index - tl.period.getPeriodOffsetSeconds(period), 
+	# 				data=result, 
+	# 				columns=[ 
+	# 					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+	# 					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+	# 					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+	# 				]
+	# 			)
+			
+	# 	else:
+	# 		return data
+
+
 	def _construct_bars(self, period, data, smooth=True):
 		''' Construct other period bars from appropriate saved data '''
-		if data.size > 0:
+		if data.size > 0 and period != tl.period.ONE_MINUTE:
 			first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
 				hour=0, minute=0, second=0, microsecond=0
 			).timestamp()
 			first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
+			next_ts = tl.utils.getNextTimestamp(period, first_ts, now=data.index.values[0])
 			data = data.loc[data.index >= first_ts]
+			timestamps = np.zeros((data.shape[0],), dtype=float)
+			result = np.zeros(data.shape, dtype=float)
 
-			index = data.index.copy().append(pd.Index(
-				[data.index.values[-1] + tl.period.getPeriodOffsetSeconds(tl.period.ONE_MINUTE)]
-			))
-			bar_ends = index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
-			indicies = np.arange(bar_ends.shape[0])[bar_ends.values.astype(bool)]
-			result = np.zeros((max(0, indicies.shape[0]-1), 12), dtype=float)
+			idx = 0
+			passed_count = 1
+			for i in range(1, data.shape[0]):
+				# idx = indicies[i]
+				# passed_count = indicies[i] - indicies[i-1]
+				ts = data.index.values[i]
 
-			for i in range(1, indicies.shape[0]):
-				idx = indicies[i]
-				passed_count = indicies[i] - indicies[i-1]
+				if ts >= next_ts:
+					timestamps[idx] = next_ts - tl.period.getPeriodOffsetSeconds(period)
+					next_ts = tl.utils.getNextTimestamp(period, next_ts, now=ts)
 
-				if idx - passed_count == 0:
-					result[i-1] = [
-						data.values[idx-passed_count, 0], np.amax(data.values[idx-passed_count:idx, 1]), 
-						np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
-						data.values[idx-passed_count, 4], np.amax(data.values[idx-passed_count:idx, 5]), 
-						np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
-						data.values[idx-passed_count, 8], np.amax(data.values[idx-passed_count:idx, 9]), 
-						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
-					]
+					if i - passed_count == 0:
+						result[idx] = [
+							data.values[i-passed_count, 0], np.amax(data.values[i-passed_count:i, 1]), 
+							np.amin(data.values[i-passed_count:i, 2]), data.values[i-1, 3],
+							data.values[i-passed_count, 4], np.amax(data.values[i-passed_count:i, 5]), 
+							np.amin(data.values[i-passed_count:i, 6]), data.values[i-1, 7],
+							data.values[i-passed_count, 8], np.amax(data.values[i-passed_count:i, 9]), 
+							np.amin(data.values[i-passed_count:i, 10]), data.values[i-1, 11]
+						]
+					else:
+						result[idx] = [
+							data.values[i-passed_count-1, 3], np.amax(data.values[i-passed_count:i, 1]), 
+							np.amin(data.values[i-passed_count:i, 2]), data.values[i-1, 3],
+							data.values[i-passed_count-1, 7], np.amax(data.values[i-passed_count:i, 5]), 
+							np.amin(data.values[i-passed_count:i, 6]), data.values[i-1, 7],
+							data.values[i-passed_count-1, 11], np.amax(data.values[i-passed_count:i, 9]), 
+							np.amin(data.values[i-passed_count:i, 10]), data.values[i-1, 11]
+						]
+
+					idx += 1
+					passed_count = 1
 				else:
-					result[i-1] = [
-						data.values[idx-passed_count-1, 3], np.amax(data.values[idx-passed_count:idx, 1]), 
-						np.amin(data.values[idx-passed_count:idx, 2]), data.values[idx-1, 3],
-						data.values[idx-passed_count-1, 7], np.amax(data.values[idx-passed_count:idx, 5]), 
-						np.amin(data.values[idx-passed_count:idx, 6]), data.values[idx-1, 7],
-						data.values[idx-passed_count-1, 11], np.amax(data.values[idx-passed_count:idx, 9]), 
-						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
-					]
+					passed_count += 1
 
-			if bar_ends[-1]:
-				data = data[bar_ends[:-1]]
-				return pd.DataFrame(
-					index=data.iloc[data.shape[0] - result.shape[0]:].index,
-					data=result, 
-					columns=[ 
-						'ask_open', 'ask_high', 'ask_low', 'ask_close',
-						'mid_open', 'mid_high', 'mid_low', 'mid_close',
-						'bid_open', 'bid_high', 'bid_low', 'bid_close'
-					]
-				)
-			else:
-				data = data[bar_ends[:-1]]
-				return pd.DataFrame(
-					index=data.iloc[data.shape[0] - result.shape[0]:].index - tl.period.getPeriodOffsetSeconds(period), 
-					data=result, 
-					columns=[ 
-						'ask_open', 'ask_high', 'ask_low', 'ask_close',
-						'mid_open', 'mid_high', 'mid_low', 'mid_close',
-						'bid_open', 'bid_high', 'bid_low', 'bid_close'
-					]
-				)
-			
+
+			timestamps = timestamps[:idx]
+			result = result[:idx]
+
+			return pd.DataFrame(
+				index=pd.Index(data=timestamps, name='timestamp'),
+				data=result, 
+				columns=[ 
+					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				]
+			)
+
 		else:
 			return data
 
