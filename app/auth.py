@@ -330,7 +330,7 @@ def spotware_broker_auth():
 			params={
 				'grant_type': 'authorization_code',
 				'code': code,
-				'redirect_uri': 'http://127.0.0.1:3004/auth/spotware',
+				'redirect_uri': 'http://3.25.145.195:3002/auth/spotware',
 				'client_id': '2096_sEzU1jyvCjvNMo2ViU8YnZha8UQmuHokkaXJDVD7fVEoIc1wx3',
 				'client_secret': '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
 			}
