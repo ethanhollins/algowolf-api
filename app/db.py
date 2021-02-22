@@ -136,18 +136,29 @@ class Database(object):
 	User DB Functions
 	'''
 
-	def registerUser(self, username, password):
+	def registerUser(self, first_name, last_name, email, password):
 		user_id = shortuuid.uuid()
 
 		res = self.userTable.put_item(
 			Item={
 				'user_id': user_id,
-				'username': username,
+				'first_name': first_name,
+				'last_name': last_name,
+				'email': email,
 				'password': password,
+				'email_confirmed': False,
+				'beta_access': False,
 				'brokers': {},
-				'strategies': {}
+				'strategies': {},
+				'metadata': {
+					'current_strategy': '',
+					'open_strategies': []
+				}
 			}
 		)
+
+		self.generateHolyGrailStrategy(user_id)
+
 		return user_id
 
 	def getUser(self, user_id):
@@ -162,6 +173,15 @@ class Database(object):
 	def getUserByUsername(self, username):
 		res = self.userTable.scan(
 			FilterExpression=Key('username').eq(username)
+		)
+		if res.get('Items') and len(res.get('Items')):
+			return self._convert_to_float(res['Items'][0])
+		else:
+			return None
+
+	def getUserByEmail(self, email):
+		res = self.userTable.scan(
+			FilterExpression=Key('email').eq(email)
 		)
 		if res.get('Items') and len(res.get('Items')):
 			return self._convert_to_float(res['Items'][0])
@@ -445,7 +465,7 @@ class Database(object):
 
 			# Set Accounts Information
 			props['accounts'] = {
-				account_id: { 'active': False, 'nickname': '' }
+				account_id: { 'active': True, 'nickname': '' }
 				for account_id in accounts
 			}
 		
@@ -466,7 +486,7 @@ class Database(object):
 
 			# Set Accounts Information
 			props['accounts'] = {
-				account_id: { 'active': False, 'nickname': '' }
+				account_id: { 'active': True, 'nickname': '' }
 				for account_id in accounts
 			}
 
@@ -486,9 +506,17 @@ class Database(object):
 				raise BrokerException('Unable to connect to broker.')
 
 			# Set Accounts Information
+			props['is_demo'] = True
+
 			props['accounts'] = {
-				account_id: { 'active': False, 'nickname': '' }
-				for account_id in accounts
+				account['id']: { 
+					'active': True, 
+					'nickname': '', 
+					'is_demo': account['is_demo'],
+					'account_id': account.get('account_id'), 
+					'broker': account.get('broker')
+				}
+				for account in accounts
 			}
 
 		# Upload new broker info
@@ -509,13 +537,18 @@ class Database(object):
 
 
 		# Upload new broker info
-		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
-		user['brokers'][broker_id] = key
+		if 'brokers' in user and broker_id in user['brokers']:
+			prev_broker = jwt.decode(user['brokers'][broker_id], self.ctrl.app.config['SECRET_KEY'], algorithms=['HS256'])
+			new_broker = { **prev_broker, **props }
 
-		# Update changes
-		update = { 'brokers': user.get('brokers') }
-		result = self.updateUser(user_id, update)
-		return props
+			print(f'NEW BROKER: {new_broker}')
+			key = jwt.encode(new_broker, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+			user['brokers'][broker_id] = key
+
+			# Update changes
+			update = { 'brokers': user.get('brokers') }
+			result = self.updateUser(user_id, update)
+			return props
 
 
 	def updateBrokerName(self, user_id, old_name, new_name):
@@ -1255,3 +1288,50 @@ class Database(object):
 		return True
 
 	
+	'''
+	Temp Functions
+	'''
+
+	def generateHolyGrailJSON(self):
+		return {
+			"name": "Holy Grail",
+			"pages": [
+				"Main",
+				"System Results",
+				"Log"
+			],
+			"windows": [
+				{"id": "SDE32F", "page": 0, "type": "chart", "pos": {"x": 20, "y": 0}, "size": {"width": 40, "height": 100}, "zIndex": 3, "properties": {"layout": "Layout 1", "broker": "fxcm", "product": "EUR_USD", "period": "M2", "price": "mids", "portion": 0.7458112657694993, "overlays": [{"type": "boll", "properties": {"Period": {"type": "number", "value": 20}, "StdDev": {"type": "number", "value": 2}}, "appearance": {"colors": [[[155, 89, 182], [155, 89, 182]]]}}, {"type": "ema", "properties": {"Period": {"type": "number", "value": 8}}, "appearance": {"colors": [[[255, 82, 82]]]}}, {"type": "ema", "properties": {"Period": {"type": "number", "value": 21}}, "appearance": {"colors": [[[255, 177, 66]]]}}], "studies": [{"type": "tr", "portion": 0.25418873423050037, "properties": {"Period": {"type": "number", "value": 14}}, "appearance": {"colors": [[[30, 144, 255]]]}}], "drawing_layers": ["main", "main_a", "dv_a", "entry_rtv_long", "entry_rtv_short", "ht_rtv_long", "ht_rtv_short", "active_rtv_long", "active_rtv_short", "entry_rtc_long", "entry_rtc_short", "ht_rtc_long", "ht_rtc_short", "active_rtc_long", "active_rtc_short", "entry_dv_long", "entry_dv_short", "active_dv_long", "active_dv_short"], "chart": {"background": [255, 255, 255], "horizontalGrid": [240, 240, 240], "verticalGrid": [240, 240, 240], "priceLabel": [80, 80, 80], "priceLine": [80, 80, 80], "crosshair": [80, 80, 80]}, "bars": {"bodyLong": [255, 255, 255], "outlineLong": [0, 0, 0], "wickLong": [0, 0, 0], "bodyShort": [0, 0, 0], "outlineShort": [0, 0, 0], "wickShort": [0, 0, 0]}, "trading": {}}, "maximised": False, "metadata": {"pos": {"x": -26.07769079645013, "y": 1.221433804088952}, "scale": {"x": 196.85220147795633, "y": 0.0068549999999999445}}},
+				{"id": "SGHFDS", "page": 0, "type": "chart", "pos": {"x": 60, "y": 0}, "size": {"width": 40, "height": 50}, "zIndex": 1, "properties": {"layout": "Layout 1", "broker": "fxcm", "product": "EUR_USD", "period": "M5", "price": "mids", "portion": 0.8585202863961816, "overlays": [{"type": "boll", "properties": {"Period": {"type": "number", "value": 20}, "StdDev": {"type": "number", "value": 2}}, "appearance": {"colors": [[[155, 89, 182], [155, 89, 182]]]}}, {"type": "ema", "properties": {"Period": {"type": "number", "value": 8}}, "appearance": {"colors": [[[255, 82, 82]]]}}, {"type": "ema", "properties": {"Period": {"type": "number", "value": 21}}, "appearance": {"colors": [[[255, 177, 66]]]}}], "studies": [{"type": "tr", "portion": 0.1414797136038186, "properties": {"Period": {"type": "number", "value": 14}}, "appearance": {"colors": [[[30, 144, 255]]]}}], "drawing_layers": ["main", "main_b", "dv_b"], "chart": {"background": [255, 255, 255], "horizontalGrid": [240, 240, 240], "verticalGrid": [240, 240, 240], "priceLabel": [80, 80, 80], "priceLine": [80, 80, 80], "crosshair": [80, 80, 80]}, "bars": {"bodyLong": [255, 255, 255], "outlineLong": [0, 0, 0], "wickLong": [0, 0, 0], "bodyShort": [0, 0, 0], "outlineShort": [0, 0, 0], "wickShort": [0, 0, 0]}, "trading": {}}, "maximised": False, "metadata": {"pos": {"x": -20.1123976031434, "y": 1.2214263289687777}, "scale": {"x": 57.28933979999999, "y": 0.003210000000000046}}},
+				{"id": "XCBVDS", "page": 0, "type": "chart", "pos": {"x": 60, "y": 50}, "size": {"width": 40, "height": 50}, "zIndex": 2, "properties": {"layout": "Layout 1", "broker": "fxcm", "product": "EUR_USD", "period": "M10", "price": "mids", "portion": 0.8, "overlays": [{"type": "boll", "properties": {"Period": {"type": "number", "value": 20}, "StdDev": {"type": "number", "value": 2}}, "appearance": {"colors": [[[155, 89, 182], [155, 89, 182]]]}}, {"type": "ema", "properties": {"Period": {"type": "number", "value": 8}}, "appearance": {"colors": [[[255, 82, 82]]]}}, {"type": "ema", "properties": {"Period": {"type": "number", "value": 21}}, "appearance": {"colors": [[[255, 177, 66]]]}}], "studies": [{"type": "tr", "portion": 0.2, "properties": {"Period": {"type": "number", "value": 14}}, "appearance": {"colors": [[[30, 144, 255]]]}}], "drawing_layers": ["main", "main_c", "dv_c"], "chart": {"background": [255, 255, 255], "horizontalGrid": [240, 240, 240], "verticalGrid": [240, 240, 240], "priceLabel": [80, 80, 80], "priceLine": [80, 80, 80], "crosshair": [80, 80, 80]}, "bars": {"bodyLong": [255, 255, 255], "outlineLong": [0, 0, 0], "wickLong": [0, 0, 0], "bodyShort": [0, 0, 0], "outlineShort": [0, 0, 0], "wickShort": [0, 0, 0]}, "trading": {}}, "maximised": False, "metadata": {"pos": {"x": -14.294110410202608, "y": 1.2203216526442304}, "scale": {"x": 45.18872583695999, "y": 0.008879999999999888}}},
+				{"id": "LDV325", "page": 0, "type": "dockable", "opened": "VJFME2", "zIndex": 4, "pos": {"x": 0, "y": 0}, "size": {"width": 20, "height": 100}, "maximised": False, "windows": [{"id": "VJFME2", "type": "info", "properties": {}}]},
+				{"id": "BJROD3", "page": 1, "type": "dockable", "opened": "UJEJN9", "zIndex": 1, "pos": {"x": 0, "y": 0}, "size": {"width": 100, "height": 100}, "maximised": True, "windows": [{"id": "UJEJN9", "type": "report", "properties": {"name": "System Results", "format": {"Time": {"type": "date", "format": "HH:mm:ss"}}}}, {"id": "FGEWJD", "type": "transactions", "properties": {"format": {"Time": {"type": "date", "format": "HH:mm:ss"}}}}, {"id": "MGH274", "type": "positions", "properties": {"format": {"Time": {"type": "date", "format": "HH:mm:ss"}}}}, {"id": "KJASF2", "type": "orders", "properties": {"format": {"Time": {"type": "date", "format": "HH:mm:ss"}}}}]},
+				{"id": "ASF483", "page": 2, "type": "dockable", "opened": "KDFB21", "zIndex": 1, "pos": {"x": 0, "y": 0}, "size": {"width": 100, "height": 100}, "maximised": True, "windows": [{"id": "KDFB21", "type": "log", "properties": {}}]}
+			],
+			"settings": {"chart-settings": {"current": "Layout 1", "layouts": {"Layout 1": {"general": {"timezone": {"value": "UTC-5"}, "date-format": {"value": "DD MMM `YY  HH:mm"}, "font-size": {"value": 10}, "precision": {"value": "1/100000"}}, "appearance": {"body": {"enabled": True, "long": "#ffffff", "short": "#000000"}, "outline": {"enabled": True, "long": "#000000", "short": "#000000"}, "wick": {"enabled": True, "long": "#000000", "short": "#000000"}, "bid-ask-line": {"enabled": True, "ask": "#3498db", "bid": "#f39c12"}, "price-line": {"enabled": True, "value": "#3498db"}, "vert-grid-lines": {"enabled": True, "value": "#f0f0f0"}, "horz-grid-lines": {"enabled": True, "value": "#f0f0f0"}, "crosshair": {"enabled": True, "value": "#505050"}}, "trading": {"show-positions": {"enabled": True}, "show-orders": {"enabled": True}}}}}},
+			"account": ""
+		}
+
+
+	def generateHolyGrailStrategy(self, user_id):
+		strategy_id = self.createStrategy(
+			user_id, {
+				'name': 'Holy Grail',
+				'brokers': {},
+				'package': 'HolyGrail.v1_0_0'
+			}
+		)
+
+		self.updateStrategyGui(user_id, strategy_id, self.generateHolyGrailJSON())
+		self.updateUser(
+			user_id, 
+			{ 
+				'metadata': {
+					'current_strategy': strategy_id,
+					'open_strategies': [ strategy_id ]
+				} 
+			}
+		)
+
+
+

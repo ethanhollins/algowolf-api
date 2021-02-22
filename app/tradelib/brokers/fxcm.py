@@ -5,6 +5,7 @@ import pandas as pd
 import dateutil.parser
 import ntplib
 import os
+import sys
 from datetime import datetime, timedelta
 from copy import copy
 from threading import Thread
@@ -177,18 +178,31 @@ class FXCM(Broker):
 		print(f"Trading session status: {status}")
 		if status in (
 			fxcorepy.AO2GSessionStatus.O2GSessionStatus.DISCONNECTED,
-			fxcorepy.AO2GSessionStatus.O2GSessionStatus.SESSION_LOST
+			fxcorepy.AO2GSessionStatus.O2GSessionStatus.SESSION_LOST,
+			fxcorepy.AO2GSessionStatus.O2GSessionStatus.RECONNECTING,
+			fxcorepy.AO2GSessionStatus.O2GSessionStatus.PRICE_SESSION_RECONNECTING,
+			fxcorepy.AO2GSessionStatus.O2GSessionStatus.CHART_SESSION_RECONNECTING
 		):
 			print('[FXCM] Disconnected.')
+			try:
+				self.session.logout()
+			except Exception:
+				pass
+			finally:
+				self.session = None
+
 			time.sleep(1)
 			if not tl.isWeekend(datetime.utcnow()):
 				self._login()
+
+			sys.exit()
 
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')
 			# if self._initialized and self.offers_listener is None:
 			# 	self._get_offers_listener()
 			# 	self.data_saver.fill_all_missing_data()
+
 
 	def _get_offers_listener(self):
 		offers = self.fx.get_table(ForexConnect.OFFERS)

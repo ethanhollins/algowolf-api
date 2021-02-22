@@ -33,7 +33,9 @@ class Account(object):
 
 		return {
 			'user_id': user['user_id'],
-			'username': user['username'],
+			'email': user['email'],
+			'beta_access': user['beta_access'],
+			'email_confirmed': user['email_confirmed'],
 			'brokers': list(user['brokers'].keys()),
 			'strategies': list(user['strategies'].keys()),
 			'metadata': user['metadata'],
@@ -82,27 +84,27 @@ class Account(object):
 		if strategy_id not in self.brokers:
 			self.startStrategy(strategy_id)
 			
-		brokers = list(self.ctrl.getDb().getStrategy(self.userId, strategy_id)['brokers'].keys())
-		brokers += [strategy_id]
-		print(brokers)
+		# brokers = list(self.ctrl.getDb().getStrategy(self.userId, strategy_id)['brokers'].keys())
+
+		brokers = self._set_brokers(strategy_id, None)
+		print(f'GET STRAT: {brokers}')
 
 		# Generate broker information
 		broker_info = {
 			broker_id: {
-				'name': self.brokers.get(broker_id).display_name,
-				'broker': self.brokers.get(broker_id).name,
+				'name': brokers[broker_id]['name'],
+				'broker': brokers[broker_id]['broker'],
 				'accounts': {
 					acc: { 
-						'strategy_status': (
-							self.isScriptRunning(broker_id, acc)
-						)
+						'strategy_status': self.isScriptRunning(broker_id, acc),
+						**brokers.get(broker_id)['accounts'][acc]
 					}
-					for acc in self.brokers.get(broker_id).getAccounts()
+					for acc in brokers.get(broker_id)['accounts']
 				},
 				'positions': self.brokers.get(broker_id).getAllPositions(),
 				'orders': self.brokers.get(broker_id).getAllOrders()
 			}
-			for broker_id in brokers
+			for broker_id in brokers if broker_id in self.brokers
 		}
 		return {
 			'strategy_id': strategy_id,
@@ -578,11 +580,31 @@ class Account(object):
 
 
 	def _set_brokers(self, strategy_id, strategy_info):
-		brokers = {
-			**strategy_info['brokers'],
-			**{ strategy_id: [tl.broker.PAPERTRADER_NAME] }
-		}
+		# brokers = {
+		# 	**strategy_info['brokers'],
+		# 	**{ strategy_id: [tl.broker.PAPERTRADER_NAME] }
+		# }
 
+		# print(brokers)
+
+		# brokers = { k: list(v['accounts'].keys()) for k, v in self.getAllBrokers().items()}
+		brokers = self.getAllBrokers()
+		brokers = {
+			**brokers,
+			**{ 
+				strategy_id: { 
+					'name': 'Paper Trader',
+					'broker': 'papertrader',
+					'accounts': {
+						tl.broker.PAPERTRADER_NAME: {
+							'active': True,
+							'nickname': ''
+						} 
+					}
+				} 
+			}
+		}
+		print(f'BROKERS: {brokers}')
 		for broker_id in brokers:
 			self._set_broker_queue.handle(
 				broker_id,
@@ -591,7 +613,7 @@ class Account(object):
 				brokers[broker_id]
 			)
 
-		return brokers.keys()
+		return brokers
 
 
 	def _perform_set_broker(self, strategy_id, broker_id, broker_info):
@@ -601,7 +623,7 @@ class Account(object):
 				'user_account': self,
 				'strategy_id': strategy_id,
 				'broker_id': broker_id,
-				'accounts': broker_info
+				'accounts': list(broker_info['accounts'].keys())
 			}
 
 			# Update relevant broker info items
@@ -609,7 +631,7 @@ class Account(object):
 				broker_name = tl.broker.PAPERTRADER_NAME
 				broker_args.update({
 					'name': tl.broker.OANDA_NAME,
-					'display_name': None
+					'display_name': 'Paper Trader'
 				})
 				self._init_broker(broker_name, broker_args)
 

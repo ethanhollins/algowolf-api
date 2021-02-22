@@ -19,18 +19,40 @@ def start_session(user_id):
 @bp.route('/register', methods=('POST',))
 def register():
 	body = request.get_json(force=True)
-	username = body.get('username')
+	first_name = body.get('first_name')
+	last_name = body.get('last_name')
+	email = body.get('email')
 	password = body.get('password')
 	db = ctrl.getDb()
 
-	if not username:
+	if not first_name:
 		error = {
 			'error': 'ValueError',
-			'message': 'Username is required.'
+			'message': 'First name is required.'
 		}
 		return Response(
 			json.dumps(error, indent=2), 
-			status=400, content_type='applcation/json'
+			status=400, content_type='application/json'
+		)
+
+	elif not last_name:
+		error = {
+			'error': 'ValueError',
+			'message': 'Last name is required.'
+		}
+		return Response(
+			json.dumps(error, indent=2), 
+			status=400, content_type='application/json'
+		)
+
+	elif not email:
+		error = {
+			'error': 'ValueError',
+			'message': 'Email is required.'
+		}
+		return Response(
+			json.dumps(error, indent=2), 
+			status=400, content_type='application/json'
 		)
 
 	elif not password:
@@ -40,20 +62,20 @@ def register():
 		}
 		return Response(
 			json.dumps(error, indent=2), 
-			status=400, content_type='applcation/json'
+			status=400, content_type='application/json'
 		)
 
-	elif db.getUserByUsername(username) is not None:
+	elif db.getUserByEmail(email) is not None:
 		error = {
 			'error': 'ValueError',
-			'message': 'Username {} is already registered.'.format(username)
+			'message': 'Email {} is already registered.'.format(email)
 		}
 		return Response(
 			json.dumps(error, indent=2), 
 			status=400, content_type='applcation/json'
 		)
 
-	user_id = db.registerUser(username, generate_password_hash(password))
+	user_id = db.registerUser(first_name, last_name, email, generate_password_hash(password))
 	msg = {
 		'user_id': user_id
 	}
@@ -63,16 +85,16 @@ def register():
 @bp.route('/login', methods=('POST',))
 def login():
 	body = request.get_json(force=True)
-	username = body.get('username')
+	email = body.get('email')
 	password = body.get('password')
 	db = ctrl.getDb()
 	
-	user = db.getUserByUsername(username)
+	user = db.getUserByEmail(email)
 
 	if user is None:
 		error = {
 			'error': 'AuthorizationException',
-			'message': 'Incorrect username.'
+			'message': 'Incorrect email.'
 		}
 		return error, 403
 
@@ -332,8 +354,7 @@ def spotware_broker_auth():
 					"access_token": access_token,
 					"refresh_token": refresh_token,
 				}
-				print('PERFORM CREATE BROKER')
-				g.user.createBroker(broker_id, 'Spotware Testing', 'spotware', **props)
+				g.user.createBroker(broker_id, 'My Broker', 'spotware', **props)
 
 
 	res_ = { 'message': 'done' }

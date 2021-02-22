@@ -19,7 +19,7 @@ CLIENT_SECRET = '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
 class Spotware(Broker):
 
 	def __init__(self,
-		ctrl, is_demo, access_token=None,
+		ctrl, is_demo, access_token=None, refresh_token=None,
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
@@ -36,6 +36,7 @@ class Spotware(Broker):
 		}
 
 		self.access_token = access_token
+		self.refresh_token = refresh_token
 
 		'''
 		Setup Spotware Funcs
@@ -195,32 +196,36 @@ class Spotware(Broker):
 	def _refresh_token(self):
 		ref_id = self.generateReference()
 		refresh_req = o2.ProtoOARefreshTokenReq(
-			refreshToken='JXfdVnfhQllQ_L9c1xkFUIRhplKjzt06qq9jVR6UUrg'
+			refreshToken=self.refresh_token
 		)
 		self.client.send(refresh_req, msgid=ref_id)
 		res = self.parent._wait(ref_id)
-
 		if res.payloadType == 2174:
-			print(res)
 			self.access_token = res.accessToken
+			self.refresh_token = res.refreshToken
+			self.ctrl.getDb().updateBroker(
+				self.userAccount.userId, self.brokerId, 
+				{ 
+					'access_token': self.access_token,
+					'refresh_token': self.refresh_token
+				}
+			)
 
 
 	def _authorize_accounts(self, accounts):
-		# self._refresh_token()
+		if self.refresh_token is not None:
+			self._refresh_token()
 
 		for account_id in accounts:
 			ref_id = self.generateReference()
 			acc_auth = o2.ProtoOAAccountAuthReq(
 				ctidTraderAccountId=int(account_id), 
-				accessToken='xAyF-YB0XuDYK1Je8w5M1Uc8mMgm-tM-k32AC0FdKMg'
+				accessToken=self.access_token
 			)
-			print(acc_auth)
 			self.client.send(acc_auth, msgid=ref_id)
 			res = self.parent._wait(ref_id)
-			print(res)
 
 			# if res.payloadType == 2142:
-				
 			# 	return self._authorize_accounts(accounts)
 
 
@@ -623,10 +628,25 @@ class Spotware(Broker):
 
 		res = self.parent._wait(ref_id)
 		if res is not None:
+			self._authorize_accounts([i.ctidTraderAccountId for i in res.ctidTraderAccount])
+
 			result = []
 			for i in res.ctidTraderAccount:
-				if i.isLive != self.is_demo and res.permissionScope == 1:
-					result.append(i.ctidTraderAccountId)
+				if res.permissionScope == 1:
+
+					trader_ref_id = self.generateReference()
+					trader_req = o2.ProtoOATraderReq(
+						ctidTraderAccountId=int(i.ctidTraderAccountId)
+					)
+					self.client.send(trader_req, msgid=trader_ref_id)
+					trader_res = self.parent._wait(trader_ref_id)
+
+					result.append({
+						'id': i.ctidTraderAccountId,
+						'is_demo': not i.isLive,
+						'account_id': i.traderLogin,
+						'broker': trader_res.trader.brokerName
+					})
 
 			return result
 
