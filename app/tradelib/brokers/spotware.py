@@ -2,6 +2,7 @@ import time
 import traceback
 import numpy as np
 import pandas as pd
+import json
 from datetime import datetime
 from copy import copy
 from threading import Thread
@@ -35,9 +36,6 @@ class Spotware(Broker):
 			tl.POSITION_CLOSE: {}
 		}
 
-		self.access_token = access_token
-		self.refresh_token = refresh_token
-
 		'''
 		Setup Spotware Funcs
 		'''
@@ -58,10 +56,18 @@ class Spotware(Broker):
 
 			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
 
+			user = self.ctrl.getDb().getUser(self.name)
+			self.access_token = user.get('access_token')
+			self.refresh_token = user.get('refresh_token')
+			self._authorize_accounts(self.accounts, is_parent=True)
+
 			# Start refresh thread
 			Thread(target=self._periodic_refresh).start()
 
 		else:
+			self.access_token = access_token
+			self.refresh_token = refresh_token
+
 			self.parent = ctrl.brokers.getBroker(tl.broker.SPOTWARE_NAME)
 			self.parent.addChild(self)
 			self.client = self.parent.client
@@ -159,8 +165,9 @@ class Spotware(Broker):
 
 		elif payloadType == 2101:
 			self._spotware_connected = True
+
 			for child in self.children:
-				self._authorize_accounts(child.accounts)
+				child._authorize_accounts(child.accounts)
 
 		# Tick
 		elif payloadType == 2131:
@@ -193,7 +200,24 @@ class Spotware(Broker):
 					self._handled[msgid] = result
 
 
-	def _refresh_token(self):
+	def _set_options(self):
+		path = self.ctrl.app.config['BROKERS']
+		with open(path, 'r') as f:
+			options = json.load(f)
+		
+		options[self.name] = {
+			**options[self.name],
+			**{
+				"access_token": self.access_token,
+				"refresh_token": self.refresh_token
+			}
+		}
+
+		with open(path, 'w') as f:
+			f.write(json.dumps(options, indent=2))
+
+
+	def _refresh_token(self, is_parent=False):
 		ref_id = self.generateReference()
 		refresh_req = o2.ProtoOARefreshTokenReq(
 			refreshToken=self.refresh_token
@@ -203,18 +227,28 @@ class Spotware(Broker):
 		if res.payloadType == 2174:
 			self.access_token = res.accessToken
 			self.refresh_token = res.refreshToken
-			self.ctrl.getDb().updateBroker(
-				self.userAccount.userId, self.brokerId, 
-				{ 
-					'access_token': self.access_token,
-					'refresh_token': self.refresh_token
-				}
-			)
+			if is_parent:
+				self.ctrl.getDb().updateUser(
+					self.name,
+					{
+						'access_token': self.access_token,
+						'refresh_token': self.refresh_token
+					}
+				)
+
+			else:
+				self.ctrl.getDb().updateBroker(
+					self.userAccount.userId, self.brokerId, 
+					{ 
+						'access_token': self.access_token,
+						'refresh_token': self.refresh_token
+					}
+				)
 
 
-	def _authorize_accounts(self, accounts):
+	def _authorize_accounts(self, accounts, is_parent=False):
 		if self.refresh_token is not None:
-			self._refresh_token()
+			self._refresh_token(is_parent=is_parent)
 
 		for account_id in accounts:
 			ref_id = self.generateReference()

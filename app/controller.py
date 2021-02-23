@@ -179,6 +179,14 @@ class Brokers(dict):
 	def getBroker(self, name):
 		return self.get(name)
 
+	def setBroker(self, name, obj):
+		options = self._get_options()
+		options[name] = obj
+
+		path = self.ctrl.app.config['BROKERS']
+		with open(path, 'w') as f:
+			f.write(json.dumps(f, indent=2))
+
 
 class Charts(dict):
 

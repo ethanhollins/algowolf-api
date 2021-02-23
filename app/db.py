@@ -1026,6 +1026,8 @@ class Database(object):
 				report_obj = backtest['reports'][name]
 				self.updateStrategyBacktestReport(user_id, strategy_id, backtest_id, name, report_obj)
 
+		print(f'Backtest Uploaded: {backtest_id}')
+
 		return backtest_id
 
 
