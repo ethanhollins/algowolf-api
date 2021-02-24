@@ -87,6 +87,7 @@ def login():
 	body = request.get_json(force=True)
 	email = body.get('email')
 	password = body.get('password')
+	remember_me = body.get('remember_me')
 	db = ctrl.getDb()
 	
 	user = db.getUserByEmail(email)
@@ -109,12 +110,14 @@ def login():
 	user_id = user.get('user_id')
 	account = start_session(user_id)
 
-	# session.clear()
-	# session['user_id'] = user_id
-	# session.permanent = True
+	if remember_me:
+		token = account.generatePermanentToken()
+	else:
+		token = account.generateToken()
+
 	msg = {
 		'user_id': user_id,
-		'token': account.generateToken()
+		'token': token
 	}
 	return msg, 200
 

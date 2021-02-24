@@ -371,10 +371,13 @@ class DataSaver(object):
 
 			idx = 0
 			passed_count = 1
-			for i in range(1, data.shape[0]):
+			for i in range(1, data.shape[0]+1):
 				# idx = indicies[i]
 				# passed_count = indicies[i] - indicies[i-1]
-				ts = data.index.values[i]
+				if i == data.shape[0]:
+					ts = data.index.values[i-1] + tl.period.getPeriodOffsetSeconds(period)
+				else:
+					ts = data.index.values[i]
 
 				if ts >= next_ts:
 					timestamps[idx] = next_ts - tl.period.getPeriodOffsetSeconds(period)

@@ -234,9 +234,12 @@ class FXCM(Broker):
 			result = self.data_saver.get(product, period, start=start, end=end)
 
 		if include_current:
+			print('include_current')
 			chart = self.getChart(product)
 			timestamp = chart.lastTs[period]
 			current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
+
+			print(f'Current: {timestamp}, {current_bars}')
 
 			result.append(pd.DataFrame(
 				index=pd.Index(data=[timestamp], name='timestamp'),
