@@ -54,7 +54,7 @@ class Client(object):
 			sock.settimeout(timeout)
 
 		PEM_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "cert.pem")
-		self.ssock = ssl.wrap_socket(sock, ssl_version=ssl.PROTOCOL_SSLv23, certfile=PEM_PATH, keyfile=PEM_PATH)
+		self.ssock = ssl.wrap_socket(sock, ssl_version=ssl.PROTOCOL_TLS, certfile=PEM_PATH, keyfile=PEM_PATH)
 		self.ssock.connect((self.host, self.port))
 
 		print('[SC] Connected')

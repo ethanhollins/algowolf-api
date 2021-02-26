@@ -200,7 +200,6 @@ class FXCM(Broker):
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')
 			# if self._initialized and self.offers_listener is None:
-			# 	self._get_offers_listener()
 			# 	self.data_saver.fill_all_missing_data()
 
 
@@ -578,6 +577,9 @@ class FXCM(Broker):
 			if time.time() - time_off_timer > ONE_HOUR:
 				time_off_timer = time.time()
 				self._set_time_off()
+
+			if not self._is_logged_in():
+				self._login()
 
 			time.sleep(0.01)
 

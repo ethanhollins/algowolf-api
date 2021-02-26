@@ -344,7 +344,7 @@ class Account(object):
 
 	# Login Token Functions
 	def generateToken(self):
-		EXP_TIME = 60 * 60 * 24
+		EXP_TIME = 60 * 60 * 12
 		payload = { 
 			'sub': self.userId, 'iat': math.floor(time.time()), 'exp': time.time() + EXP_TIME
 		}
