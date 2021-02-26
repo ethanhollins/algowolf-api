@@ -129,7 +129,7 @@ class FXCM(Broker):
 			while self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
 				time.sleep(0.01)
 
-			print(F'[FXCM] Is logged in: {self.session.session_status}')
+			# print(F'[FXCM] Is logged in: {self.session.session_status}')
 			return self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED
 		return False
 
