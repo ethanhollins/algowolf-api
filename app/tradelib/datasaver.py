@@ -375,7 +375,7 @@ class DataSaver(object):
 				# idx = indicies[i]
 				# passed_count = indicies[i] - indicies[i-1]
 				if i == data.shape[0]:
-					ts = data.index.values[i-1] + tl.period.getPeriodOffsetSeconds(period)
+					ts = tl.utils.getNextTimestamp(period, data.index.values[i-1], now=data.index.values[i-1])
 				else:
 					ts = data.index.values[i]
 

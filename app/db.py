@@ -25,9 +25,9 @@ class Database(object):
 		self._generate_db()
 		self._generate_s3()
 		if env == 'development':
-			self.userTable = self._generate_table('brokerlib-user-dev')
+			self.userTable = self._generate_table('algowolf-users-dev')
 			self.scriptTable = self._generate_table('algowolf-scripts-dev')
-			self.strategyBucketName = 'brokerlib-strategies-dev'
+			self.strategyBucketName = 'algowolf-strategies-dev'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 		else:
 			self.userTable = self._generate_table('algowolf-users')
