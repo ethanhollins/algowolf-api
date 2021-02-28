@@ -136,7 +136,7 @@ class Database(object):
 	User DB Functions
 	'''
 
-	def registerUser(self, first_name, last_name, email, password):
+	def registerUser(self, first_name, last_name, email, password, notify_me):
 		user_id = shortuuid.uuid()
 
 		res = self.userTable.put_item(
@@ -146,6 +146,7 @@ class Database(object):
 				'last_name': last_name,
 				'email': email,
 				'password': password,
+				'notify_me': notify_me,
 				'email_confirmed': False,
 				'beta_access': False,
 				'brokers': {},
@@ -190,11 +191,11 @@ class Database(object):
 
 	def updateUser(self, user_id, update):
 		update_values = self._convert_to_decimal(
-			dict([tuple([':{}'.format(i[0][0]), i[1]])
+			dict([tuple([':{}'.format(i[0]), i[1]])
 					for i in update.items()])
 		)
 		update_exp = ('set ' + ' '.join(
-			['{} = :{},'.format(k, k[0]) for k in update.keys()]
+			['{} = :{},'.format(k, k) for k in update.keys()]
 		))[:-1]
 
 		res = self.userTable.update_item(
@@ -933,6 +934,26 @@ class Database(object):
 		)
 
 		return True
+
+
+	def deleteAllUserStrategyStorage(self, user_id):
+		objects_to_delete = self._s3_res.meta.client.list_objects(
+			Bucket=self.strategyBucketName, 
+			Prefix=f'{user_id}'
+		)
+
+		delete_keys = {
+			'Objects': [
+				{'Key' : k} for k in [
+					obj['Key'] for obj in objects_to_delete.get('Contents', [])
+				]
+			]
+		}
+
+		self._s3_res.meta.client.delete_objects(
+			Bucket=self.strategyBucketName,
+			Delete=delete_keys
+		)
 
 
 	def deleteStrategyStorage(self, user_id, strategy_id):

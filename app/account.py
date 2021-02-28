@@ -32,13 +32,16 @@ class Account(object):
 			raise AccountException('User does not exist.')
 
 		return {
-			'user_id': user['user_id'],
-			'email': user['email'],
-			'beta_access': user['beta_access'],
-			'email_confirmed': user['email_confirmed'],
-			'brokers': list(user['brokers'].keys()),
-			'strategies': list(user['strategies'].keys()),
-			'metadata': user['metadata'],
+			'user_id': user.get('user_id'),
+			'email': user.get('email'),
+			'first_name': user.get('first_name'),
+			'last_name': user.get('last_name'),
+			'beta_access': user.get('beta_access'),
+			'notify_me': user.get('notify_me'),
+			'email_confirmed': user.get('email_confirmed'),
+			'brokers': list(user.get('brokers').keys()),
+			'strategies': list(user.get('strategies').keys()),
+			'metadata': user.get('metadata'),
 		}
 
 	def generateId(self):

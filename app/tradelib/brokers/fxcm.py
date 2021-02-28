@@ -184,18 +184,18 @@ class FXCM(Broker):
 			fxcorepy.AO2GSessionStatus.O2GSessionStatus.CHART_SESSION_RECONNECTING
 		):
 			print('[FXCM] Disconnected.')
-			try:
-				self.session.logout()
-			except Exception:
-				pass
-			finally:
-				self.session = None
-
-			time.sleep(1)
 			if not tl.isWeekend(datetime.utcnow()):
+				try:
+					self.session.logout()
+				except Exception:
+					pass
+				finally:
+					self.session = None
+
+				time.sleep(1)
 				self._login()
 
-			sys.exit()
+			# sys.exit()
 
 		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			print('[FXCM] Logged in.')

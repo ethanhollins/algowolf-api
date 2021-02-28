@@ -14,6 +14,7 @@ from app import auth, tradelib as tl
 from app.error import OrderException, AccountException
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
+from werkzeug.security import generate_password_hash
 from threading import Thread
 
 bp = Blueprint('v1', __name__, url_prefix='/v1')
@@ -82,6 +83,46 @@ def upload():
 @auth.login_required
 def get_account_ept():
 	res = g.user.getAccountDetails()
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/account', methods=('POST',))
+@auth.login_required
+def update_account_ept():
+	body = getJson()
+
+	if 'password' in body:
+		body['password'] = generate_password_hash(body['password'])
+
+	if 'email' in body:
+		account = g.user.getAccountDetails()
+		if account.get('email') != body['email']:
+			body['email_confirmed'] = False
+	print(body)
+
+	if len(body):
+		ctrl.getDb().updateUser(g.user.userId, body)
+	res = g.user.getAccountDetails()
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/account', methods=('DELETE',))
+@auth.login_required
+def delete_account_ept():
+	# Delete User Storage
+	ctrl.getDb().deleteUser(g.user.userId)
+	ctrl.getDb().deleteAllUserStrategyStorage(g.user.userId)
+
+	# Remove All user Memory
+
+	
+	res = { 'user_id': g.user.userId }
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'

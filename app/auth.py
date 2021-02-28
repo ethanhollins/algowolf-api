@@ -23,6 +23,7 @@ def register():
 	last_name = body.get('last_name')
 	email = body.get('email')
 	password = body.get('password')
+	notify_me = body.get('notify_me')
 	db = ctrl.getDb()
 
 	if not first_name:
@@ -75,7 +76,7 @@ def register():
 			status=400, content_type='applcation/json'
 		)
 
-	user_id = db.registerUser(first_name, last_name, email, generate_password_hash(password))
+	user_id = db.registerUser(first_name, last_name, email, generate_password_hash(password), notify_me)
 	msg = {
 		'user_id': user_id
 	}
@@ -312,6 +313,8 @@ def change_broker_name(old_name, new_name):
 @bp.route('/broker/<name>', methods=('DELETE',))
 @login_required
 def delete_broker(name):
+	# Check no scripts are running on broker
+
 	res = {
 		'name': g.user.deleteBroker(name)
 	}
@@ -333,7 +336,7 @@ def spotware_broker_auth():
 			params={
 				'grant_type': 'authorization_code',
 				'code': code,
-				'redirect_uri': 'http://3.25.145.195:3002/auth/spotware',
+				'redirect_uri': current_app.config['SPOTWARE_REDIRECT'],
 				'client_id': '2096_sEzU1jyvCjvNMo2ViU8YnZha8UQmuHokkaXJDVD7fVEoIc1wx3',
 				'client_secret': '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
 			}
