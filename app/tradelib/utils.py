@@ -48,7 +48,7 @@ def isWeekend(dt):
 	SUN = 6
 	
 	return (
-		(dt.weekday() == FRI and dt.hour >= 17) or
+		(dt.weekday() == FRI and dt.hour > 17) or
 		dt.weekday() == SAT or
 		(dt.weekday() == SUN and dt.hour < 17)
 	)

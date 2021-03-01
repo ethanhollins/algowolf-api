@@ -115,11 +115,15 @@ def update_account_ept():
 @bp.route('/account', methods=('DELETE',))
 @auth.login_required
 def delete_account_ept():
+	# Check all scripts have been stopped
+
+	# Remove All user Memory
+
+
 	# Delete User Storage
 	ctrl.getDb().deleteUser(g.user.userId)
 	ctrl.getDb().deleteAllUserStrategyStorage(g.user.userId)
 
-	# Remove All user Memory
 
 	
 	res = { 'user_id': g.user.userId }

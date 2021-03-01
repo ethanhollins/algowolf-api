@@ -116,6 +116,7 @@ class DataSaver(object):
 			]]
 
 			if load_period == tl.period.ONE_MINUTE:
+				result = self._remove_weekend_data(result)
 				result = self._construct_bars(period, result)
 				result = result.loc[~(result==0).all(axis=1)]
 
@@ -355,6 +356,17 @@ class DataSaver(object):
 			
 	# 	else:
 	# 		return data
+
+	def _remove_weekend_data(self, df):
+		ts = df.index.values[0] - timedelta(days=7).total_seconds()
+		while ts < df.index.values[-1]:
+			weekend_start = tl.utils.getWeekstartDate(datetime.utcfromtimestamp(ts))
+			weekend_end = tl.utils.getWeekendDate(datetime.utcfromtimestamp(ts))
+
+			df = df.loc[(df.index < weekend_end.timestamp()) | (df.index > weekend_start.timestamp())]
+			ts += timedelta(days=7).total_seconds()
+
+		return df
 
 
 	def _construct_bars(self, period, data, smooth=True):
