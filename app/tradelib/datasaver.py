@@ -86,8 +86,8 @@ class DataSaver(object):
 					).round(decimals=5)
 
 				frags.append(old_data.loc[
-					(old_data.index >= start.timestamp()) & 
-					(old_data.index < end.timestamp())
+					(old_data.index >= tl.convertTimeToTimestamp(start)) & 
+					(old_data.index < tl.convertTimeToTimestamp(end))
 				])
 
 			c_dt += timedelta(days=1)
@@ -95,8 +95,8 @@ class DataSaver(object):
 		# Add any current relevant memory data
 		if product in self.data and load_period in self.data[product]:
 			frags.append(self.data[product][load_period].loc[
-				(self.data[product][load_period].index >= start.timestamp()) & 
-				(self.data[product][load_period].index < end.timestamp())
+				(self.data[product][load_period].index >= tl.convertTimeToTimestamp(start)) & 
+				(self.data[product][load_period].index < tl.convertTimeToTimestamp(end))
 			])
 
 		if len(frags):
@@ -363,7 +363,7 @@ class DataSaver(object):
 			weekend_start = tl.utils.getWeekstartDate(datetime.utcfromtimestamp(ts))
 			weekend_end = tl.utils.getWeekendDate(datetime.utcfromtimestamp(ts))
 
-			df = df.loc[(df.index < weekend_end.timestamp()) | (df.index > weekend_start.timestamp())]
+			df = df.loc[(df.index < tl.convertTimeToTimestamp(weekend_end)) | (df.index > tl.convertTimeToTimestamp(weekend_start))]
 			ts += timedelta(days=7).total_seconds()
 
 		return df
@@ -372,9 +372,9 @@ class DataSaver(object):
 	def _construct_bars(self, period, data, smooth=True):
 		''' Construct other period bars from appropriate saved data '''
 		if data.size > 0 and period != tl.period.ONE_MINUTE:
-			first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
+			first_data_ts = tl.convertTimeToTimestamp(datetime.utcfromtimestamp(data.index.values[0]).replace(
 				hour=0, minute=0, second=0, microsecond=0
-			).timestamp()
+			))
 			first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
 			next_ts = tl.utils.getNextTimestamp(period, first_ts, now=data.index.values[0])
 			data = data.loc[data.index >= first_ts]
@@ -531,8 +531,8 @@ class DataSaver(object):
 
 				# Append data to existing file
 				c_data = data.loc[
-					(data.index >= c_dt.timestamp()) & 
-					(data.index < (c_dt + timedelta(days=1)).timestamp())
+					(data.index >= tl.convertTimeToTimestamp(c_dt)) & 
+					(data.index < tl.convertTimeToTimestamp(c_dt + timedelta(days=1)))
 				]
 				if c_data.shape[0] > 0:
 					c_data.to_csv(path, sep=',', mode='a', header=False, compression='gzip')

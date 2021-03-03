@@ -622,9 +622,9 @@ class FXCM(Broker):
 			return data
 
 		else:
-			first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
+			first_data_ts = tl.convertTimeToTimestamp(datetime.utcfromtimestamp(data.index.values[0]).replace(
 				hour=0, minute=0, second=0, microsecond=0
-			).timestamp()
+			))
 			first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
 			data = data.loc[data.index >= first_ts]
 
