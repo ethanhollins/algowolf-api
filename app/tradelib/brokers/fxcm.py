@@ -510,7 +510,7 @@ class FXCM(Broker):
 								'product': chart.product,
 								'period': period,
 								'bar_end': False,
-								'timestamp': c_ts,
+								'timestamp': max(c_ts, chart.lastTs[period]),
 								'item': {
 									'ask': chart.ask[period].tolist(),
 									'mid': chart.mid[period].tolist(),
@@ -543,7 +543,7 @@ class FXCM(Broker):
 
 			else:
 				for chart in self.charts:
-					c_ts = time.time()+self.time_off
+					c_ts = time.time()+self.time_off-1
 					for period in chart.getActivePeriods():
 						if period != tl.period.TICK and chart.volume[period] > 0:
 							# Handle period bar end
