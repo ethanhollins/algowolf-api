@@ -158,6 +158,14 @@ class Brokers(dict):
 		else:
 			raise Exception('Broker options file does not exist.')
 
+	def _get_spotware_assets(self):
+		path = self.ctrl.app.config['SPOTWARE_ASSETS']
+		if os.path.exists(path):
+			with open(path, 'r') as f:
+				return json.load(f)
+		else:
+			raise Exception('Spotware assets file does not exist.')
+
 	def _init_broker(self, name, options):
 		key = options.get('key')
 		is_demo = options.get('is_demo')
@@ -174,7 +182,8 @@ class Brokers(dict):
 			return tl.broker.IG(self.ctrl, username, password, key, is_demo)
 		elif name == tl.broker.SPOTWARE_NAME:
 			accounts = options.get('accounts')
-			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True)
+			assets = self._get_spotware_assets()
+			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True, assets=assets)
 
 	def getBroker(self, name):
 		return self.get(name)
@@ -205,6 +214,10 @@ class Charts(dict):
 
 
 	def createChart(self, broker, product, await_completion):
+		if 'brokers' in dir(self.ctrl):
+			broker = self.ctrl.brokers[broker.name]
+		print(f'CREATE CTRL: {broker} {broker.name}')
+
 		if product not in self[broker.name]:
 			chart = tl.Chart(self.ctrl, broker, product, await_completion=await_completion)
 			self[broker.name][product] = chart
@@ -214,6 +227,7 @@ class Charts(dict):
 
 
 	def getChart(self, broker, product, await_completion):
+		print(self)
 		if broker.name in self:
 			if product in self[broker.name]:
 				return self[broker.name][product]

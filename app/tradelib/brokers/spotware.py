@@ -22,7 +22,7 @@ class Spotware(Broker):
 	def __init__(self,
 		ctrl, is_demo, access_token=None, refresh_token=None,
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
-		display_name=None, is_dummy=False, is_parent=False
+		display_name=None, is_dummy=False, is_parent=False, assets=None
 	):
 		if not is_parent:
 			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
@@ -35,6 +35,7 @@ class Spotware(Broker):
 			tl.MARKET_ENTRY: {},
 			tl.POSITION_CLOSE: {}
 		}
+		self.assets = assets
 
 		'''
 		Setup Spotware Funcs
@@ -60,6 +61,10 @@ class Spotware(Broker):
 			self.access_token = user.get('access_token')
 			self.refresh_token = user.get('refresh_token')
 			self._authorize_accounts(self.accounts, is_parent=True)
+
+			CHARTS = ['EUR_USD']
+			for instrument in CHARTS:
+				chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
 			Thread(target=self._periodic_refresh).start()
@@ -258,7 +263,7 @@ class Spotware(Broker):
 			)
 			self.client.send(acc_auth, msgid=ref_id)
 			res = self.parent._wait(ref_id)
-
+			
 			# if res.payloadType == 2142:
 			# 	return self._authorize_accounts(accounts)
 
@@ -709,7 +714,7 @@ class Spotware(Broker):
 		if res.payloadType == 2122:
 			result[account_id] = {
 				'currency': 'USD',
-				'balance': res.trader.balance,
+				'balance': res.trader.balance/100,
 				'pl': None,
 				'margin': None,
 				'available': None
@@ -1281,6 +1286,10 @@ class Spotware(Broker):
 			return tl.product.GBPUSD
 		elif product == 1:
 			return tl.product.EURUSD
+
+
+	def _get_deposit_asset_currency(self, deposit_id):
+		return self.assets[str(deposit_id)]['name']
 
 
 	def isPeriodCompatible(self, period):

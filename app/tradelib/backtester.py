@@ -112,7 +112,7 @@ class Backtester(object):
 		open_time = math.floor(time.time())
 
 		order_id = self.broker.generateReference()
-		order = tl.Order(self.broker, tl.broker.PAPERTRADER_NAME,
+		order = tl.Order(self.broker,
 			order_id, account_id, product, order_type, direction, lotsize,
 			entry_price=entry, sl=sl, tp=tp, open_time=open_time
 		)
@@ -178,33 +178,18 @@ class Backtester(object):
 		return result
 
 
-	def modifyOrder(self, order, lotsize, sl_range, tp_range, sl_price, tp_price):
+	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price):
 		if lotsize:
 			order.lotsize = lotsize
 
 		# Convert to price
-		if entry_range:
-			if direction == tl.LONG:
-				order.entry_price = round(order.entry_price + tl.utils.convertToPrice(entry_range), 5)
-			else:
-				order.entry_price = round(order.entry_price - tl.utils.convertToPrice(entry_range), 5)
-		elif entry_price:
+		if entry_price:
 			order.entry_price = entry_price
 
-		if sl_range:
-			if direction == tl.LONG:
-				order.sl = round(self.entry - tl.utils.convertToPrice(sl_range), 5)
-			else:
-				order.sl = round(self.entry + tl.utils.convertToPrice(sl_range), 5)
-		elif sl_price:
+		if sl_price:
 			order.sl = sl_price
 
-		if tp_range:
-			if direction == tl.LONG:
-				order.tp = round(self.entry + tl.utils.convertToPrice(tp_range), 5)
-			else:
-				order.tp = round(self.entry - tl.utils.convertToPrice(tp_range), 5)
-		elif tp_price:
+		if tp_price:
 			order.tp = tp_price
 
 		return order
@@ -255,7 +240,6 @@ class Backtester(object):
 
 
 	def handleOrders(self, product, timestamp, ohlc, is_backtest=False):
-
 		# Block any ticks before position check completed
 		if not is_backtest and not self.broker.acceptLive:
 			return
@@ -289,7 +273,7 @@ class Backtester(object):
 								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 							)
 
-							self.broker.handleOnTrade(res)
+							self.broker.handleOnTrade(order.account_id, res)
 
 						# Update transaction history
 						self.broker.handleTransaction(res)
@@ -330,7 +314,7 @@ class Backtester(object):
 								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 							)
 
-							self.broker.handleOnTrade(res)
+							self.broker.handleOnTrade(order.account_id, res)
 
 						# Update transaction history
 						self.broker.handleTransaction(res)
@@ -356,7 +340,7 @@ class Backtester(object):
 								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 							)
 
-							self.broker.handleOnTrade(res)
+							self.broker.handleOnTrade(order.account_id, res)
 
 						# Update transaction history
 						self.broker.handleTransaction(res)
@@ -394,12 +378,11 @@ class Backtester(object):
 
 				# On Trade
 				if self.broker.acceptLive:
-					self.broker.handleOnTrade(res)
+					self.broker.handleOnTrade(pos.account_id, res)
 				self.handleTransaction(res)
 
 
 	def handleTakeProfit(self, product, timestamp, ohlc, is_backtest=False):
-
 		# Block any ticks before position check completed
 		if not is_backtest and not self.broker.acceptLive:
 			return
@@ -432,7 +415,7 @@ class Backtester(object):
 
 				# On Trade
 				if self.broker.acceptLive:
-					self.broker.handleOnTrade(res)
+					self.broker.handleOnTrade(pos.account_id, res)
 				self.handleTransaction(res)
 
 
@@ -464,7 +447,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(account_id, res)
 		self.handleTransaction(res)
 
 		return res
@@ -492,7 +475,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(account_id, res)
 		self.handleTransaction(res)
 
 		return res
@@ -514,7 +497,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res
@@ -534,15 +517,15 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res
 
 
-	def modifyOrder(self, order, lotsize, sl_range, tp_range, sl_price, tp_price):
+	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price):
 		result = super(IGBacktester, self).modifyOrder(
-			order, lotsize, sl_range, tp_range, sl_price, tp_price
+			order, lotsize, entry_price, sl_price, tp_price
 		)
 
 		res = {
@@ -556,7 +539,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res
@@ -576,7 +559,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res
@@ -638,7 +621,7 @@ class OandaBacktester(Backtester):
 
 			if self.broker.acceptLive:
 				# Handle On Trade
-				self.broker.handleOnTrade(entry_res)
+				self.broker.handleOnTrade(result.account_id, entry_res)
 
 			# Add SL
 			if sl_range or sl_price:
@@ -657,7 +640,7 @@ class OandaBacktester(Backtester):
 
 				if self.broker.acceptLive:
 					# Handle On Trade
-					self.broker.handleOnTrade(sl_res)
+					self.broker.handleOnTrade(t_result.account_id, sl_res)
 
 			# Add TP
 			if tp_range or tp_price:
@@ -676,7 +659,7 @@ class OandaBacktester(Backtester):
 
 				if self.broker.acceptLive:
 					# Handle On Trade
-					self.broker.handleOnTrade(tp_res)
+					self.broker.handleOnTrade(t_result.account_id, tp_res)
 
 			self.handleTransaction(res)
 
@@ -704,7 +687,7 @@ class OandaBacktester(Backtester):
 		}
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res
@@ -729,7 +712,7 @@ class OandaBacktester(Backtester):
 
 			if self.broker.acceptLive:
 				# Handle On Trade
-				self.broker.handleOnTrade(sl_res)
+				self.broker.handleOnTrade(result.account_id, sl_res)
 
 		# Handle tp modify
 		if pos.tp != tp_price:
@@ -748,7 +731,7 @@ class OandaBacktester(Backtester):
 
 			if self.broker.acceptLive:
 				# Handle On Trade
-				self.broker.handleOnTrade(tp_res)
+				self.broker.handleOnTrade(result.account_id, tp_res)
 
 		self.handleTransaction(res)
 
@@ -769,13 +752,13 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res
 
 
-	def modifyOrder(self, order, lotsize, sl_range, tp_range, sl_price, tp_price):
+	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price):
 		new_order = tl.Order.fromDict(self.broker, order)
 		new_order.order_id = self.broker.generateReference()
 
@@ -798,12 +781,14 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(cancel_res)
+			self.broker.handleOnTrade(order.account_id, cancel_res)
 
 		# Modify new order
 		result = super(OandaBacktester, self).modifyOrder(
-			new_order, lotsize, sl_range, tp_range, sl_price, tp_price
+			new_order, lotsize, entry_price, sl_price, tp_price
 		)
+
+		self.broker.orders.append(result)
 
 		modify_res = {
 			self.broker.generateReference(): {
@@ -817,7 +802,7 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(modify_res)
+			self.broker.handleOnTrade(result.account_id, modify_res)
 		self.handleTransaction(res)
 
 		return res
@@ -838,7 +823,7 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(res)
+			self.broker.handleOnTrade(result.account_id, res)
 		self.handleTransaction(res)
 
 		return res

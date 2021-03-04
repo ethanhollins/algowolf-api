@@ -225,6 +225,7 @@ class Broker(object):
 		return self.accounts
 
 	def createChart(self, product, await_completion=False):
+		print(f'CREATE CHART: {self.name}')
 		chart = self.ctrl.charts.getChart(self, product, await_completion=await_completion)
 		self.charts.append(chart)
 
@@ -606,6 +607,21 @@ class Broker(object):
 	def unsubscribeOnTrade(self, sub_id):
 		if sub_id in self.ontrade_subs:
 			del self.ontrade_subs[sub_id]
+
+	'''
+	Other
+	'''
+
+	def isPeriodCompatible(self, period):
+		return period in [
+			tl.period.ONE_MINUTE, tl.period.TWO_MINUTES,
+			tl.period.THREE_MINUTES, tl.period.FOUR_MINUTES,
+			tl.period.FIVE_MINUTES, tl.period.TEN_MINUTES,
+			tl.period.FIFTEEN_MINUTES, tl.period.THIRTY_MINUTES, 
+			tl.period.ONE_HOUR, tl.period.FOUR_HOURS, 
+			tl.period.TWELVE_HOURS, tl.period.DAILY, 
+			tl.period.WEEKLY, tl.period.MONTHLY
+		]
 
 from .brokers import (
 	Oanda, FXCM, IG, Spotware
