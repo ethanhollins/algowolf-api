@@ -27,6 +27,7 @@ class Spotware(Broker):
 		if not is_parent:
 			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
 
+		self.ctrl = ctrl
 		self.is_demo = is_demo
 		self._spotware_connected = False
 		self._last_update = time.time()
@@ -147,8 +148,8 @@ class Spotware(Broker):
 
 		# Application Auth
 		auth_req = o2.ProtoOAApplicationAuthReq(
-			clientId = CLIENT_ID,
-			clientSecret = CLIENT_SECRET
+			clientId = self.ctrl.app.config['SPOTWARE_CLIENT_ID'],
+			clientSecret = self.ctrl.app.config['SPOTWARE_CLIENT_SECRET']
 		)
 		self.client.send(auth_req, msgid=self.generateReference())
 

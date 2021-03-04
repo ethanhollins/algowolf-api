@@ -348,8 +348,8 @@ def spotware_broker_auth():
 				'grant_type': 'authorization_code',
 				'code': code,
 				'redirect_uri': current_app.config['SPOTWARE_REDIRECT'],
-				'client_id': '2096_sEzU1jyvCjvNMo2ViU8YnZha8UQmuHokkaXJDVD7fVEoIc1wx3',
-				'client_secret': '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
+				'client_id': current_app.config['SPOTWARE_CLIENT_ID'],
+				'client_secret': current_app.config['SPOTWARE_CLIENT_SECRET']
 			}
 		)
 
