@@ -21,7 +21,8 @@ def create_app(test_config=None):
 	app.config.from_mapping(
 		SECRET_KEY='dev',
 		BROKERS=os.path.join(app.instance_path, 'brokers.json'),
-		SPOTWARE_ASSETS=os.path.join(app.instance_path, 'spotware_assets.json')
+		SPOTWARE_ASSETS=os.path.join(app.instance_path, 'spotware_assets.json'),
+		SPOTWARE_SYMBOLS=os.path.join(app.instance_path, 'spotware_symbols.json')
 	)
 
 	if test_config is None:

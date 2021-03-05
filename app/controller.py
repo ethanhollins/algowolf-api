@@ -158,13 +158,21 @@ class Brokers(dict):
 		else:
 			raise Exception('Broker options file does not exist.')
 
-	def _get_spotware_assets(self):
-		path = self.ctrl.app.config['SPOTWARE_ASSETS']
-		if os.path.exists(path):
-			with open(path, 'r') as f:
-				return json.load(f)
-		else:
-			raise Exception('Spotware assets file does not exist.')
+	def _get_spotware_items(self):
+		assets_path = self.ctrl.app.config['SPOTWARE_ASSETS']
+		symbols_path = self.ctrl.app.config['SPOTWARE_SYMBOLS']
+		if os.path.exists(assets_path) and os.path.exists(symbols_path):
+			assets = None
+			symbols = None
+			with open(assets_path, 'r') as f:
+				assets = json.load(f)
+			with open(symbols_path, 'r') as f:
+				symbols = json.load(f)
+
+			if all((assets, symbols)):
+				return assets, symbols
+		
+		raise Exception('Spotware files do not exist.')
 
 	def _init_broker(self, name, options):
 		key = options.get('key')
@@ -182,8 +190,8 @@ class Brokers(dict):
 			return tl.broker.IG(self.ctrl, username, password, key, is_demo)
 		elif name == tl.broker.SPOTWARE_NAME:
 			accounts = options.get('accounts')
-			assets = self._get_spotware_assets()
-			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True, assets=assets)
+			assets, symbols = self._get_spotware_items()
+			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True, assets=assets, symbols=symbols)
 
 	def getBroker(self, name):
 		return self.get(name)

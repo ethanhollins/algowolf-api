@@ -35,6 +35,7 @@ class DataSaver(object):
 			return pd.DataFrame(columns=[
 				'timestamp', 
 				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
 				'bid_open', 'bid_high', 'bid_low', 'bid_close'
 			], dtype=float).set_index('timestamp')
 
@@ -79,6 +80,7 @@ class DataSaver(object):
 						names=[
 							'timestamp', 
 							'ask_open', 'ask_high', 'ask_low', 'ask_close',
+							'mid_open', 'mid_high', 'mid_low', 'mid_close',
 							'bid_open', 'bid_high', 'bid_low', 'bid_close'
 						], 
 						index_col='timestamp', compression='gzip',
@@ -102,18 +104,18 @@ class DataSaver(object):
 		if len(frags):
 			result = pd.concat(frags)
 			# Create Mid Prices
-			result = pd.concat((
-				result, pd.DataFrame(
-					index=result.index, 
-					columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
-					data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5),
-					dtype=float
-				)
-			), axis=1)[[
-				'ask_open', 'ask_high', 'ask_low', 'ask_close',
-				'mid_open', 'mid_high', 'mid_low', 'mid_close',
-				'bid_open', 'bid_high', 'bid_low', 'bid_close'
-			]]
+			# result = pd.concat((
+			# 	result, pd.DataFrame(
+			# 		index=result.index, 
+			# 		columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
+			# 		data=np.around((result.values[:, :4] + result.values[:, 4:])/2, decimals=5),
+			# 		dtype=float
+			# 	)
+			# ), axis=1)[[
+			# 	'ask_open', 'ask_high', 'ask_low', 'ask_close',
+			# 	'mid_open', 'mid_high', 'mid_low', 'mid_close',
+			# 	'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			# ]]
 
 			if load_period == tl.period.ONE_MINUTE:
 				result = self._remove_weekend_data(result)
@@ -153,6 +155,7 @@ class DataSaver(object):
 			columns=[
 				'timestamp',
 				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
 				'bid_open', 'bid_high', 'bid_low', 'bid_close'
 			]
 		).set_index('timestamp')
@@ -174,6 +177,7 @@ class DataSaver(object):
 							names=[
 								'timestamp', 
 								'ask_open', 'ask_high', 'ask_low', 'ask_close',
+								'mid_open', 'mid_high', 'mid_low', 'mid_close',
 								'bid_open', 'bid_high', 'bid_low', 'bid_close'
 							], 
 							index_col='timestamp', compression='gzip',
@@ -182,18 +186,18 @@ class DataSaver(object):
 						temp_data
 					))
 
-				construction_data = pd.concat((
-					temp_data, pd.DataFrame(
-						index=temp_data.index, 
-						columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
-						data=np.around((temp_data.values[:, :4] + temp_data.values[:, 4:])/2, decimals=5),
-						dtype=float
-					)
-				), axis=1)[[
-					'ask_open', 'ask_high', 'ask_low', 'ask_close',
-					'mid_open', 'mid_high', 'mid_low', 'mid_close',
-					'bid_open', 'bid_high', 'bid_low', 'bid_close'
-				]]
+				# construction_data = pd.concat((
+				# 	temp_data, pd.DataFrame(
+				# 		index=temp_data.index, 
+				# 		columns=['mid_open', 'mid_high', 'mid_low', 'mid_close'],
+				# 		data=np.around((temp_data.values[:, :4] + temp_data.values[:, 4:])/2, decimals=5),
+				# 		dtype=float
+				# 	)
+				# ), axis=1)[[
+				# 	'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				# 	'mid_open', 'mid_high', 'mid_low', 'mid_close',
+				# 	'bid_open', 'bid_high', 'bid_low', 'bid_close'
+				# ]]
 
 				complete_data = self._construct_bars(period, construction_data)
 				result = pd.concat((complete_data, result))
@@ -253,10 +257,11 @@ class DataSaver(object):
 					index=pd.Index(data=[item['timestamp']], name='timestamp'),
 					columns=[
 						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'mid_open', 'mid_high', 'mid_low', 'mid_close',
 						'bid_open', 'bid_high', 'bid_low', 'bid_close'
 					],
 					data=[np.concatenate(
-						(item['item']['ask'], item['item']['bid'])
+						(item['item']['ask'], item['item']['mid'], item['item']['bid'])
 					)]
 				))
 
@@ -475,6 +480,7 @@ class DataSaver(object):
 					names=[
 						'timestamp', 
 						'ask_open', 'ask_high', 'ask_low', 'ask_close',
+						'mid_open', 'mid_high', 'mid_low', 'mid_close',
 						'bid_open', 'bid_high', 'bid_low', 'bid_close'
 					], 
 					compression='gzip'
@@ -506,11 +512,7 @@ class DataSaver(object):
 
 				# Save new data
 				self._save_data(
-					product, period, 
-					data[[
-						'ask_open', 'ask_high', 'ask_low', 'ask_close',
-						'bid_open', 'bid_high', 'bid_low', 'bid_close'
-					]]
+					product, period, data
 				)
 
 

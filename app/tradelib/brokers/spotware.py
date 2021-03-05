@@ -22,7 +22,7 @@ class Spotware(Broker):
 	def __init__(self,
 		ctrl, is_demo, access_token=None, refresh_token=None,
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
-		display_name=None, is_dummy=False, is_parent=False, assets=None
+		display_name=None, is_dummy=False, is_parent=False, assets=None, symbols=None
 	):
 		if not is_parent:
 			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
@@ -37,6 +37,7 @@ class Spotware(Broker):
 			tl.POSITION_CLOSE: {}
 		}
 		self.assets = assets
+		self.symbols = symbols
 
 		'''
 		Setup Spotware Funcs
@@ -63,8 +64,17 @@ class Spotware(Broker):
 			self.refresh_token = user.get('refresh_token')
 			self._authorize_accounts(self.accounts, is_parent=True)
 
+			# CHARTS = [
+			# 	'1', '5', '8', '6', '2',
+			# 	'4', '24', '22', '12', '29',
+			# 	'45', '46', '49', '52', '65',
+			# 	'60', '72', '73', '71', '69'
+			# ]
 			CHARTS = ['EUR_USD']
-			for instrument in CHARTS:
+			for i in CHARTS:
+				# print(f'LOADING {instrument}')
+				# instrument = self._get_symbol(i)['symbolName']
+				instrument = i
 				chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
@@ -160,7 +170,7 @@ class Spotware(Broker):
 
 	def message(self, payloadType, payload, msgid):
 
-		if payloadType != 2138 and payloadType != 2131:
+		if not payloadType in (2138,2131,2165):
 			print(f'MSG: ({payloadType}) {payload}')
 
 		# Heartbeat
@@ -1289,8 +1299,12 @@ class Spotware(Broker):
 			return tl.product.EURUSD
 
 
-	def _get_deposit_asset_currency(self, deposit_id):
-		return self.assets[str(deposit_id)]['name']
+	def _get_asset(self, asset_id):
+		return self.assets[str(asset_id)]
+
+
+	def _get_symbol(self, symbol_id):
+		return self.symbols[str(symbol_id)]
 
 
 	def isPeriodCompatible(self, period):
