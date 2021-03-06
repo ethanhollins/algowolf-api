@@ -46,6 +46,9 @@ class Spotware(Broker):
 			self.parent = self
 			self.children = []
 
+			self._set_assets(assets)
+			self._set_symbols(symbols)
+
 			self.client = Client(self.is_demo)
 
 			self.client.event('connect', self.connect)
@@ -64,17 +67,16 @@ class Spotware(Broker):
 			self.refresh_token = user.get('refresh_token')
 			self._authorize_accounts(self.accounts, is_parent=True)
 
-			# CHARTS = [
-			# 	'1', '5', '8', '6', '2',
-			# 	'4', '24', '22', '12', '29',
-			# 	'45', '46', '49', '52', '65',
-			# 	'60', '72', '73', '71', '69'
-			# ]
-			CHARTS = ['EUR_USD']
-			for i in CHARTS:
-				# print(f'LOADING {instrument}')
+			CHARTS = [
+				'EUR_USD', 'AUD_USD', 'USD_CAD', 'USD_CHF', 'GBP_USD',
+				'USD_JPY', 'USD_MXN', 'USD_NOK', 'NZD_USD', 'USD_SEK',
+				'USD_RUB', 'USD_CNH', 'USD_TRY', 'USD_ZAR', 'USD_PLN',
+				'USD_HUF', 'USD_CZK', 'USD_SGD', 'USD_HKD', 'USD_DKK'
+			]
+			# CHARTS = ['EUR_USD']
+			for instrument in CHARTS:
+				print(f'LOADING {instrument}')
 				# instrument = self._get_symbol(i)['symbolName']
-				instrument = i
 				chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
@@ -1286,10 +1288,7 @@ class Spotware(Broker):
 
 
 	def _convert_product(self, product):
-		if product == tl.product.GBPUSD:
-			return 2
-		elif product == tl.product.EURUSD:
-			return 1
+		return int(self._get_symbol_by_name(product.replace('_', ''))['symbolId'])
 
 
 	def _convert_sw_product(self, product):
@@ -1299,12 +1298,38 @@ class Spotware(Broker):
 			return tl.product.EURUSD
 
 
+	def _set_assets(self, assets):
+		self.assets_by_name = {}
+		for i in assets:
+			self.assets_by_name[assets[i]['name']] = {
+				'name': i,
+				**assets[i]
+			}
+
+
 	def _get_asset(self, asset_id):
 		return self.assets[str(asset_id)]
 
 
+	def _get_asset_by_name(self, asset_name):
+		return self.assets_by_name[asset_name]
+
+
+	def _set_symbols(self, symbols):
+		self.symbols_by_name = {}
+		for i in symbols:
+			self.symbols_by_name[symbols[i]['symbolName']] = {
+				'symbolId': i,
+				**symbols[i]
+			}
+
+
 	def _get_symbol(self, symbol_id):
 		return self.symbols[str(symbol_id)]
+
+
+	def _get_symbol_by_name(self, symbol_name):
+		return self.symbols_by_name[symbol_name]
 
 
 	def isPeriodCompatible(self, period):
