@@ -92,12 +92,14 @@ class Controller(object):
 		self.db = Database(self, app.config['ENV'])
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
-		self.spots = Spots(self, [
-			'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
-			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
-			'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
-			'HUF', 'CZK', 'SGD'
-		])
+
+		if 'spotware' in self.brokers:
+			self.spots = Spots(self, [
+				'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+				'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+				'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
+				'HUF', 'CZK', 'SGD'
+			])
 		
 
 	def closeApp(self):
