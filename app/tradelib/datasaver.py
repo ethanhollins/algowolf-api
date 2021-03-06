@@ -199,7 +199,7 @@ class DataSaver(object):
 				# 	'bid_open', 'bid_high', 'bid_low', 'bid_close'
 				# ]]
 
-				complete_data = self._construct_bars(period, construction_data)
+				complete_data = self._construct_bars(period, temp_data)
 				result = pd.concat((complete_data, result))
 				if complete_data.size > 0:
 					temp_data = temp_data.loc[temp_data.index < complete_data.index.values[0]]
@@ -363,13 +363,14 @@ class DataSaver(object):
 	# 		return data
 
 	def _remove_weekend_data(self, df):
-		ts = df.index.values[0] - timedelta(days=7).total_seconds()
-		while ts < df.index.values[-1]:
-			weekend_start = tl.utils.getWeekstartDate(datetime.utcfromtimestamp(ts))
-			weekend_end = tl.utils.getWeekendDate(datetime.utcfromtimestamp(ts))
+		if df.size > 0:
+			ts = df.index.values[0] - timedelta(days=7).total_seconds()
+			while ts < df.index.values[-1]:
+				weekend_start = tl.utils.getWeekstartDate(datetime.utcfromtimestamp(ts))
+				weekend_end = tl.utils.getWeekendDate(datetime.utcfromtimestamp(ts))
 
-			df = df.loc[(df.index < tl.convertTimeToTimestamp(weekend_end)) | (df.index > tl.convertTimeToTimestamp(weekend_start))]
-			ts += timedelta(days=7).total_seconds()
+				df = df.loc[(df.index < tl.convertTimeToTimestamp(weekend_end)) | (df.index > tl.convertTimeToTimestamp(weekend_start))]
+				ts += timedelta(days=7).total_seconds()
 
 		return df
 

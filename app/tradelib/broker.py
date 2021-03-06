@@ -286,6 +286,12 @@ class Broker(object):
 	def getUserAccount(self):
 		return self.userAccount
 
+
+	def convertToUSD(self, currency, price):
+		spotware = self.ctrl.brokers.get(SPOTWARE_NAME)
+		if spotware:
+			pass
+
 	'''
 	Account Utilities
 		- All functions access brokerage direction

@@ -67,13 +67,7 @@ class Spotware(Broker):
 			self.refresh_token = user.get('refresh_token')
 			self._authorize_accounts(self.accounts, is_parent=True)
 
-			CHARTS = [
-				'EUR_USD', 'AUD_USD', 'USD_CAD', 'USD_CHF', 'GBP_USD',
-				'USD_JPY', 'USD_MXN', 'USD_NOK', 'NZD_USD', 'USD_SEK',
-				'USD_RUB', 'USD_CNH', 'USD_TRY', 'USD_ZAR', 'USD_PLN',
-				'USD_HUF', 'USD_CZK', 'USD_SGD', 'USD_HKD', 'USD_DKK'
-			]
-			# CHARTS = ['EUR_USD']
+			CHARTS = ['EUR_USD', 'BTC/USD']
 			for instrument in CHARTS:
 				print(f'LOADING {instrument}')
 				# instrument = self._get_symbol(i)['symbolName']
@@ -90,8 +84,6 @@ class Spotware(Broker):
 			self.parent.addChild(self)
 			self.client = self.parent.client
 			self._authorize_accounts(accounts)
-
-			# self._subscribe_chart_updates(2, self.onChartUpdate)
 
 		if not is_dummy:
 			# for account_id in self.getAccounts():
@@ -724,10 +716,15 @@ class Spotware(Broker):
 		# Handle account info result
 
 		result = {}
+
+		currency = self._get_asset(res.trader.depositAssetId)['name']
+		balance = self.ctrl.spots[currency].convertFrom(res.trader.balance/100)
+
+		print(f'INFO: {currency}, {balance}')
 		if res.payloadType == 2122:
 			result[account_id] = {
-				'currency': 'USD',
-				'balance': res.trader.balance/100,
+				'currency': currency,
+				'balance': balance,
 				'pl': None,
 				'margin': None,
 				'available': None
@@ -1172,18 +1169,25 @@ class Spotware(Broker):
 		self.client.send(sub_req, msgid=ref_id)
 		self.parent._wait(ref_id)
 
-		for i in range(14):
-			if i % 5 == 0:
-				time.sleep(1)
+		sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+			ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+			symbolId=product, period=1
+		)
+		self.client.send(sub_req)
 
-			sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
-				ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-				symbolId=product, period=i+1
-			)
-			self.client.send(sub_req)
+		# for i in range(14):
+		# 	if i % 5 == 0:
+		# 		time.sleep(1)
+
+		# 	sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# 		ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# 		symbolId=product, period=i+1
+		# 	)
+		# 	self.client.send(sub_req)
 
 
 	def onChartUpdate(self, chart, payload):
+		# print(payload)
 		result = []
 		if len(payload.trendbar) > 0:
 			for i in payload.trendbar:
@@ -1308,11 +1312,11 @@ class Spotware(Broker):
 
 
 	def _get_asset(self, asset_id):
-		return self.assets[str(asset_id)]
+		return self.parent.assets[str(asset_id)]
 
 
 	def _get_asset_by_name(self, asset_name):
-		return self.assets_by_name[asset_name]
+		return self.parent.assets_by_name[asset_name]
 
 
 	def _set_symbols(self, symbols):
@@ -1325,11 +1329,11 @@ class Spotware(Broker):
 
 
 	def _get_symbol(self, symbol_id):
-		return self.symbols[str(symbol_id)]
+		return self.parent.symbols[str(symbol_id)]
 
 
 	def _get_symbol_by_name(self, symbol_name):
-		return self.symbols_by_name[symbol_name]
+		return self.parent.symbols_by_name[symbol_name]
 
 
 	def isPeriodCompatible(self, period):

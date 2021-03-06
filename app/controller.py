@@ -92,6 +92,12 @@ class Controller(object):
 		self.db = Database(self, app.config['ENV'])
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
+		self.spots = Spots(self, [
+			'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+			'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
+			'HUF', 'CZK', 'SGD'
+		])
 		
 
 	def closeApp(self):
@@ -288,6 +294,25 @@ class Accounts(dict):
 	def deleteAccount(self, user_id):
 		if user_id in self:
 			del self[user_id]
+
+
+class Spots(dict):
+
+	def __init__(self, ctrl, spots):
+		self.ctrl = ctrl
+		self._init_spots(spots)
+
+
+	def _init_spots(self, spots):
+		for i in spots:
+			self[i] = tl.Spot(self.ctrl, i)
+			self[i].getRate()
+
+
+	def _update_spots(self):
+		for i in self:
+			self[i].getRate()
+
 
 
 from app import tradelib as tl
