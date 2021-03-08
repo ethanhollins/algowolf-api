@@ -9,6 +9,7 @@ from copy import copy
 from urllib.request import urlopen
 from flask import abort
 from threading import Thread
+from xecd_rates_client import XecdClient
 
 
 STREAM_URL = 'http://nginx:3001'
@@ -93,13 +94,14 @@ class Controller(object):
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
 
-		if 'spotware' in self.brokers:
-			self.spots = Spots(self, [
-				'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
-				'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
-				'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
-				'HUF', 'CZK', 'SGD'
-			])
+		self.xecd = XecdClient(app.config['XECD_ACCOUNT_ID'], app.config['XECD_API_KEY'])
+		# if 'spotware' in self.brokers:
+		self.spots = Spots(self, [
+			'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+			'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
+			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
+		])
 		
 
 	def closeApp(self):

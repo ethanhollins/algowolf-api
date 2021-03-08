@@ -30,7 +30,7 @@ class Spot(object):
 		return price * self.rate
 
 
-	def getRate(self):
+	def __getRate(self):
 		spotware = self.ctrl.brokers.get('spotware')
 		if spotware is not None:
 			pair = self._get_pair()
@@ -44,3 +44,9 @@ class Spot(object):
 				rate = df.values[-1, 3]
 
 			return rate
+
+
+	def getRate(self):
+		result = self.ctrl.xecd.convert_from(self.currency, 'USD', 1.0)
+		if result.get('to') and len(result.get('to')):
+			return result['to'][0]['mid']

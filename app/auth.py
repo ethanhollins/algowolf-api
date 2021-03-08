@@ -310,9 +310,9 @@ def change_broker_name(old_name, new_name):
 	)
 
 
-@bp.route('/broker/<name>', methods=('DELETE',))
+@bp.route('/broker/<broker_id>', methods=('DELETE',))
 @login_required
-def delete_broker(name):
+def delete_broker(broker_id):
 	# Check no scripts are running on broker
 	if broker_id in g.user.brokers:
 		for account_id in g.user.brokers[broker_id].accounts:
@@ -327,7 +327,7 @@ def delete_broker(name):
 				)
 
 	res = {
-		'name': g.user.deleteBroker(name)
+		'name': g.user.deleteBroker(broker_id)
 	}
 	return Response(
 		json.dumps(res, indent=2),

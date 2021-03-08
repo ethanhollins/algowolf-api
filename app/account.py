@@ -485,16 +485,15 @@ class Account(object):
 		for preset in strategy_vars:
 			result[preset] = {}
 			for k in default_vars:
-				if k in strategy_vars[preset]:
-					if (
-						default_vars[k].get('scope') == strategy_vars[preset][k].get('scope') and
-						default_vars[k].get('type') == strategy_vars[preset][k].get('type')
-					):
-						result[preset][k] = strategy_vars[preset][k]
-						continue
-
 				if default_vars[k].get('scope') == 'global':
 					result[preset][k] = default_vars[k]
+
+				if (
+					k in strategy_vars[preset] and
+					default_vars[k].get('scope') == strategy_vars[preset][k].get('scope') and
+					default_vars[k].get('type') == strategy_vars[preset][k].get('type')
+				):
+					result[preset][k]['value'] = strategy_vars[preset][k]['value']
 
 		if update:
 			self.updateStrategyInputVariables(strategy_id, script_id, result)
@@ -516,16 +515,15 @@ class Account(object):
 		for preset in account_vars:
 			result[preset] = {}
 			for k in default_vars:
-				if k in account_vars[preset]:
-					if (
-						default_vars[k].get('scope') == account_vars[preset][k].get('scope') and
-						default_vars[k].get('type') == account_vars[preset][k].get('type')
-					):
-						result[preset][k] = account_vars[preset][k]
-						continue
-
 				if default_vars[k].get('scope') == 'local':
 					result[preset][k] = default_vars[k]
+
+				if (
+					k in account_vars[preset] and
+					default_vars[k].get('scope') == account_vars[preset][k].get('scope') and
+					default_vars[k].get('type') == account_vars[preset][k].get('type')
+				):
+					result[preset][k]['value'] = account_vars[preset][k]['value']
 
 		if update:
 			self.updateAccountInputVariables(strategy_id, account_code, script_id, result)

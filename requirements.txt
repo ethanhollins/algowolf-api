@@ -46,4 +46,5 @@ urllib3==1.26.2
 uWSGI==2.0.19.1
 websocket-client==0.57.0
 Werkzeug==1.0.1
+xecd-rates-client==1.0.0
 zope.interface==5.2.0

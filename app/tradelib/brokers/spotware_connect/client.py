@@ -23,6 +23,7 @@ class Client(object):
 		}
 		self._msg_queue = []
 
+		self.is_demo = is_demo
 		self.host = "demo.ctraderapi.com" if is_demo else "live.ctraderapi.com"
 		self.port = 5035
 
@@ -64,7 +65,7 @@ class Client(object):
 
 		try:
 			for e in self._events[CONNECT_EVENT]:
-				e()
+				e(self.is_demo)
 		except Exception:
 			print(traceback.format_exc())
 
@@ -139,7 +140,7 @@ class Client(object):
 						payload.ParseFromString(proto_msg.payload)
 						try:
 							for e in self._events[MESSAGE_EVENT]:
-								e(proto_msg.payloadType, payload, proto_msg.clientMsgId)
+								e(self.is_demo, proto_msg.payloadType, payload, proto_msg.clientMsgId)
 						except Exception:
 							print(traceback.format_exc())
 
@@ -149,7 +150,7 @@ class Client(object):
 		print('[SC] Disconnected...')
 		try:
 			for e in self._events[DISCONNECT_EVENT]:
-				e()
+				e(self.is_demo)
 		except Exception:
 			print(traceback.format_exc())
 

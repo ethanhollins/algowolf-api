@@ -75,13 +75,15 @@ class FXCM(Broker):
 		self.is_demo = is_demo
 		self.username = username
 		self.password = password
-		self._spotware_connected = False
 		self._last_update = time.time()
 		self._subscriptions = {}
 		self.session = None
 		self._initialized = False
 		self.job_queue = []
+		
 		self._price_queue = []
+		self.time_off = 0
+		self._set_time_off()
 
 		self.fx = ForexConnect()
 		self._login()
@@ -110,9 +112,6 @@ class FXCM(Broker):
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
-
-		self.time_off = 0
-		self._set_time_off()
 
 		t = Thread(target=self._handle_chart_update)
 		t.start()

@@ -14,7 +14,6 @@ class Chart(object):
 		'lastTs', '_subscriptions', '_unsubscriptions', '_tick_queue'
 	)
 	def __init__(self, ctrl, broker, product, await_completion=False):
-		print(f'BROKER: {broker.name} {broker}')
 		self.ctrl = ctrl
 		self.broker = broker
 		self.product = product

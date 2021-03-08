@@ -225,7 +225,6 @@ class Broker(object):
 		return self.accounts
 
 	def createChart(self, product, await_completion=False):
-		print(f'CREATE CHART: {self.name}')
 		chart = self.ctrl.charts.getChart(self, product, await_completion=await_completion)
 		self.charts.append(chart)
 
