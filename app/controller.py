@@ -97,7 +97,7 @@ class Controller(object):
 		self.xecd = XecdClient(app.config['XECD_ACCOUNT_ID'], app.config['XECD_API_KEY'])
 		# if 'spotware' in self.brokers:
 		self.spots = Spots(self, [
-			'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
 			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
 			'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
