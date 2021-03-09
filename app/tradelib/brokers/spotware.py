@@ -38,8 +38,13 @@ class Spotware(Broker):
 			tl.MARKET_ENTRY: {},
 			tl.POSITION_CLOSE: {}
 		}
-		self.assets = assets
-		self.symbols = symbols
+		# self.assets = assets
+		# self.symbols = symbols
+
+		self.assets = {}
+		self.assets_by_name = {}
+		self.symbols = {}
+		self.symbols_by_name = {}
 
 		self._price_queue = []
 		self.time_off = 0
@@ -51,9 +56,6 @@ class Spotware(Broker):
 		if is_parent:
 			self.parent = self
 			self.children = []
-
-			self._set_assets(assets)
-			self._set_symbols(symbols)
 
 			self.demo_client = Client(True)
 			self.live_client = Client(False)
@@ -201,7 +203,7 @@ class Spotware(Broker):
 
 	def message(self, is_demo, payloadType, payload, msgid):
 
-		if not payloadType in (2138,2131,2165,2120):
+		if not payloadType in (2138,2131,2165,2120,2153,2160,2113,2115):
 			print(f'MSG: ({payloadType}) {payload}')
 
 		# Heartbeat
@@ -309,8 +311,64 @@ class Spotware(Broker):
 			self._get_client(account_id).send(acc_auth, msgid=ref_id)
 			res = self.parent._wait(ref_id)
 			
+			trader_ref_id = self.generateReference()
+			trader_req = o2.ProtoOATraderReq(
+				ctidTraderAccountId=int(account_id)
+			)
+			self._get_client(account_id).send(trader_req, msgid=trader_ref_id)
+			trader_res = self.parent._wait(trader_ref_id)
+
+			self._set_broker_info(account_id, trader_res.trader.brokerName)
+
 			# if res.payloadType == 2142:
 			# 	return self._authorize_accounts(accounts)
+
+
+	def _set_broker_info(self, account_id, broker_name):
+		if broker_name not in self.parent.assets or broker_name not in self.parent.symbols:
+			print(f'Setting {broker_name} info...')
+
+			asset_ref_id = self.generateReference()
+			asset_req = o2.ProtoOAAssetListReq(
+				ctidTraderAccountId=int(account_id)
+			)
+			self._get_client(account_id).send(asset_req, msgid=asset_ref_id)
+			asset_res = self.parent._wait(asset_ref_id)
+
+			self.parent.assets[broker_name] = {}
+			self.parent.assets_by_name[broker_name] = {}
+			for i in asset_res.asset:
+				self.parent.assets[broker_name][str(i.assetId)] = {
+					'name': i.name,
+					'displayName': i.displayName
+				}
+				self.parent.assets_by_name[broker_name][str(i.name)] = {
+					'assetId': i.assetId,
+					'displayName': i.displayName
+				}
+
+			symbol_ref_id = self.generateReference()
+			symbol_req = o2.ProtoOASymbolsListReq(
+				ctidTraderAccountId=int(account_id) 
+			)
+			self._get_client(account_id).send(symbol_req, msgid=symbol_ref_id)
+			symbol_res = self.parent._wait(symbol_ref_id)
+
+			self.parent.symbols[broker_name] = {}
+			self.parent.symbols_by_name[broker_name] = {}
+			for i in symbol_res.symbol:
+				self.parent.symbols[broker_name][str(i.symbolId)] = {
+					'symbolName': i.symbolName,
+					'baseAssetId': i.baseAssetId,
+					'quoteAssetId': i.quoteAssetId,
+					'symbolCategoryId': i.symbolCategoryId
+				}
+				self.parent.symbols_by_name[broker_name][str(i.symbolName)] = {
+					'symbolId': i.symbolId,
+					'baseAssetId': i.baseAssetId,
+					'quoteAssetId': i.quoteAssetId,
+					'symbolCategoryId': i.symbolCategoryId
+				}
 
 
 	'''
@@ -322,7 +380,7 @@ class Spotware(Broker):
 		start=None, end=None, count=None,
 		force_download=False
 	):
-		sw_product = self._convert_product(product)
+		sw_product = self._convert_product('Spotware', product)
 		sw_period = self._convert_period(period)
 
 		result = pd.concat((
@@ -544,7 +602,8 @@ class Spotware(Broker):
 		if tp_range:
 			sl_tp_ranges['relativeTakeProfit'] = int(tp_range)
 		
-		sw_product = self._convert_product(product)
+		broker_name = self.accounts[account_id]['broker']
+		sw_product = self._convert_product(broker_name, product)
 		direction = 1 if direction == tl.LONG else 2
 		lotsize = round(lotsize / 100000) * 100000
 
@@ -773,18 +832,17 @@ class Spotware(Broker):
 		trader_req = o2.ProtoOATraderReq(
 			ctidTraderAccountId=int(account_id)
 		)
-		print(trader_req)
 		self._get_client(account_id).send(trader_req, msgid=ref_id)
-
 		res = self.parent._wait(ref_id)
-		print(res)
 
 		# Handle account info result
 
 		result = {}
 
-		currency = self._get_asset(res.trader.depositAssetId)['name']
+		currency = self._get_asset(res.trader.brokerName, res.trader.depositAssetId)['name']
+		print(f'CURRENCY: {currency}')
 		balance = self.ctrl.spots[currency].convertFrom(res.trader.balance/100)
+		print(f'BALANCE: {currency}')
 
 		print(f'INFO: {currency}, {balance}')
 		if res.payloadType == 2122:
@@ -854,9 +912,10 @@ class Spotware(Broker):
 		TEMP
 		'''
 
+		broker_name = self.accounts[account_id]['broker']
 		new_order_req = o2.ProtoOANewOrderReq(
 			ctidTraderAccountId=int(account_id),
-			symbolId=self._convert_product(product), orderType=sw_order_type, tradeSide=direction,
+			symbolId=self._convert_product(broker_name, product), orderType=sw_order_type, tradeSide=direction,
 			volume=lotsize, **params
 		)
 		self._get_client(account_id).send(new_order_req, msgid=ref_id)
@@ -1241,7 +1300,7 @@ class Spotware(Broker):
 		ref_id = self.generateReference()
 
 		print(product)
-		product = self._convert_product(product)
+		product = self._convert_product('Spotware', product)
 		print(product)
 		print(int(list(self.accounts.keys())[0]))
 		self.parent._subscriptions[str(product)] = listener
@@ -1435,11 +1494,11 @@ class Spotware(Broker):
 		self._price_queue.append((chart, payload))
 
 
-	def _convert_product(self, product):
+	def _convert_product(self, broker_name, product):
 		if product == 'BTC_USD':
 			product = 'BTC/USD'
 
-		return int(self._get_symbol_by_name(product.replace('_', ''))['symbolId'])
+		return int(self._get_symbol_by_name(broker_name, product.replace('_', ''))['symbolId'])
 
 
 	def _convert_sw_product(self, product):
@@ -1449,38 +1508,20 @@ class Spotware(Broker):
 			return tl.product.EURUSD
 
 
-	def _set_assets(self, assets):
-		self.assets_by_name = {}
-		for i in assets:
-			self.assets_by_name[assets[i]['name']] = {
-				'name': i,
-				**assets[i]
-			}
+	def _get_asset(self, broker_name, asset_id):
+		return self.parent.assets[broker_name][str(asset_id)]
 
 
-	def _get_asset(self, asset_id):
-		return self.parent.assets[str(asset_id)]
+	def _get_asset_by_name(self, broker_name, asset_name):
+		return self.parent.assets_by_name[broker_name][asset_name]
 
 
-	def _get_asset_by_name(self, asset_name):
-		return self.parent.assets_by_name[asset_name]
+	def _get_symbol(self, broker_name, symbol_id):
+		return self.parent.symbols[broker_name][str(symbol_id)]
 
 
-	def _set_symbols(self, symbols):
-		self.symbols_by_name = {}
-		for i in symbols:
-			self.symbols_by_name[symbols[i]['symbolName']] = {
-				'symbolId': i,
-				**symbols[i]
-			}
-
-
-	def _get_symbol(self, symbol_id):
-		return self.parent.symbols[str(symbol_id)]
-
-
-	def _get_symbol_by_name(self, symbol_name):
-		return self.parent.symbols_by_name[symbol_name]
+	def _get_symbol_by_name(self, broker_name, symbol_name):
+		return self.parent.symbols_by_name[broker_name][symbol_name]
 
 
 	def isPeriodCompatible(self, period):

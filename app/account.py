@@ -100,6 +100,7 @@ class Account(object):
 				'accounts': {
 					acc: { 
 						'strategy_status': self.isScriptRunning(broker_id, acc),
+						'balance': self.brokers.get(broker_id).getAccountInfo(acc)[acc].get('balance'),
 						**brokers.get(broker_id)['accounts'][acc]
 					}
 					for acc in brokers.get(broker_id)['accounts']
