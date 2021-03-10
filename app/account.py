@@ -231,10 +231,9 @@ class Account(object):
 			data=json.dumps(payload)
 		)
 
-		print(f'START DONE: {res.status_code}')
-
 		if res.status_code == 200:
-			self._set_running(strategy_id, broker_id, account_id, True)
+			for account_id in accounts:
+				self._set_running(strategy_id, broker_id, account_id, True)
 			return True
 		else:
 			return False
@@ -271,7 +270,8 @@ class Account(object):
 		)
 
 		if res.status_code == 200:
-			self._set_running(strategy_id, broker_id, account_id, False)
+			for account_id in accounts:
+				self._set_running(strategy_id, broker_id, account_id, False)
 			return True
 		else:
 			return False
