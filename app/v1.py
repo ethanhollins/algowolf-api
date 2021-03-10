@@ -461,7 +461,7 @@ def stop_script_ept(strategy_id, broker_id):
 	accounts = body.get('accounts')
 	if accounts is not None:
 		# package = account.stopStrategyScript(broker_id, accounts)
-		success = account._stopStrategyScript(broker_id, accounts)
+		success = account._stopStrategyScript(strategy_id, broker_id, accounts)
 
 		res = account.getStrategy(strategy_id)
 		return Response(

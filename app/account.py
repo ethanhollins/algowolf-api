@@ -99,7 +99,7 @@ class Account(object):
 				'broker': brokers[broker_id]['broker'],
 				'accounts': {
 					acc: { 
-						'strategy_status': self.isScriptRunning(broker_id, acc),
+						'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
 						'balance': self.brokers.get(broker_id).getAccountInfo(acc)[acc].get('balance'),
 						**brokers.get(broker_id)['accounts'][acc]
 					}
@@ -151,7 +151,23 @@ class Account(object):
 		self.ctrl.getDb().updateStrategy(self.userId, strategy_id, strategy_info)
 
 
-	def isScriptRunning(self, broker_id, account_id):
+	def _set_running(self, strategy_id, broker_id, account_id, is_running):
+		user = self.ctrl.getDb().getUser(self.userId)
+
+		if not isinstance(user['strategies'][strategy_id].get('running'), dict):
+			user['strategies'][strategy_id]['running'] = {}
+		if not isinstance(user['strategies'][strategy_id]['running'].get(broker_id), dict):
+			user['strategies'][strategy_id]['running'][broker_id] = {}
+
+		user['strategies'][strategy_id]['running'][broker_id][account_id] = is_running
+
+		self.ctrl.getDb().updateUser(self.userId, { 'strategies': user['strategies'] })
+
+
+	def isScriptRunning(self, strategy_id, broker_id, account_id):
+		user = self.ctrl.getDb().getUser(self.userId)
+		is_user_running = user['strategies'][strategy_id].get('running')
+
 		payload = {
 			'user_id': self.userId,
 			'broker_id': broker_id,
@@ -165,7 +181,12 @@ class Account(object):
 			data=json.dumps(payload)
 		)
 
-		return res.json().get('running')
+		is_process_running = res.json().get('running')
+
+		if is_user_running != is_process_running:
+			self._set_running(strategy_id, broker_id, account_id, is_process_running)
+
+		return is_process_running
 
 
 	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
@@ -210,7 +231,13 @@ class Account(object):
 			data=json.dumps(payload)
 		)
 
-		return res.status_code == 200
+		print(f'START DONE: {res.status_code}')
+
+		if res.status_code == 200:
+			self._set_running(strategy_id, broker_id, account_id, True)
+			return True
+		else:
+			return False
 
 
 	def stopStrategyScript(self, broker_id, accounts):
@@ -222,7 +249,7 @@ class Account(object):
 			return None
 
 
-	def _stopStrategyScript(self, broker_id, accounts):
+	def _stopStrategyScript(self, strategy_id, broker_id, accounts):
 
 		payload = {
 			'user_id': self.userId,
@@ -243,7 +270,11 @@ class Account(object):
 			data=json.dumps(payload)
 		)
 
-		return res.status_code == 200
+		if res.status_code == 200:
+			self._set_running(strategy_id, broker_id, account_id, False)
+			return True
+		else:
+			return False
 
 
 	def updateStrategyPackage(self, strategy_id, new_package):
@@ -495,6 +526,8 @@ class Account(object):
 					default_vars[k].get('type') == strategy_vars[preset][k].get('type')
 				):
 					result[preset][k]['value'] = strategy_vars[preset][k]['value']
+					if 'properties' in result[preset][k] and 'enabled' in result[preset][k]['properties']:
+						result[preset][k]['properties']['enabled'] = strategy_vars[preset][k]['properties']['enabled']
 
 		if update:
 			self.updateStrategyInputVariables(strategy_id, script_id, result)
@@ -525,6 +558,8 @@ class Account(object):
 					default_vars[k].get('type') == account_vars[preset][k].get('type')
 				):
 					result[preset][k]['value'] = account_vars[preset][k]['value']
+					if 'properties' in result[preset][k] and 'enabled' in result[preset][k]['properties']:
+						result[preset][k]['properties']['enabled'] = account_vars[preset][k]['properties']['enabled']
 
 		if update:
 			self.updateAccountInputVariables(strategy_id, account_code, script_id, result)
