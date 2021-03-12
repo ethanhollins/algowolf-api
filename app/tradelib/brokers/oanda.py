@@ -45,7 +45,7 @@ class Oanda(Broker):
 		accounts={}, display_name=None,
 		is_dummy=False, is_parent=False
 	):
-		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.OANDA_NAME, accounts, display_name)
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.OANDA_NAME, accounts, display_name, is_dummy)
 
 		self.dl = tl.DataLoader(broker=self)
 		self.data_saver = tl.DataSaver(broker=self)

@@ -68,7 +68,7 @@ class FXCM(Broker):
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
-		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.FXCM_NAME, accounts, display_name)
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.FXCM_NAME, accounts, display_name, is_dummy)
 
 		self.data_saver = tl.DataSaver(broker=self)
 

@@ -60,19 +60,6 @@ class Account(object):
 		# Handle broker info
 		brokers = self._set_brokers(strategy_id, strategy_info)
 
-		# Init strategy handler
-		for broker_id in brokers:
-			broker = self.brokers.get(broker_id)
-			if broker is not None:
-				if tl.broker.PAPERTRADER_NAME in broker.getAccounts():
-					self.updateTrades(
-						strategy_id,
-						broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
-						broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
-					)
-
-				# strategy = self._set_strategy(strategy_id, broker_id, broker, strategy_info.get('package'))
-
 
 	def getStrategyInfo(self, broker_id):		
 		strategy = self.strategies.get(broker_id)
@@ -646,7 +633,7 @@ class Account(object):
 				} 
 			}
 		}
-		print(f'BROKERS: {brokers}')
+		print(f'SET BROKERS: {brokers}')
 		for broker_id in brokers:
 			self._set_broker_queue.handle(
 				broker_id,
@@ -654,6 +641,15 @@ class Account(object):
 				strategy_id, broker_id, 
 				brokers[broker_id]
 			)
+
+			broker = self.brokers.get(broker_id)
+			if broker is not None:
+				if tl.broker.PAPERTRADER_NAME in broker.getAccounts():
+					self.updateTrades(
+						strategy_id,
+						broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
+						broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
+					)
 
 		return brokers
 
@@ -673,7 +669,8 @@ class Account(object):
 				broker_name = tl.broker.PAPERTRADER_NAME
 				broker_args.update({
 					'name': tl.broker.OANDA_NAME,
-					'display_name': 'Paper Trader'
+					'display_name': 'Paper Trader',
+					'is_dummy': False
 				})
 				self._init_broker(broker_name, broker_args)
 

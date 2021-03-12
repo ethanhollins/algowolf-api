@@ -62,7 +62,7 @@ class IG(Broker):
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False
 	):
-		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.IG_NAME, accounts, display_name)
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.IG_NAME, accounts, display_name, is_dummy)
 
 		self.dl = tl.DataLoader(broker=self)
 

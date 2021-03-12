@@ -49,15 +49,18 @@ class Broker(object):
 	__slots__ = (
 		'ctrl', 'userAccount', 'strategyId', 'brokerId', 'name', 'backtester', 'acceptLive', 
 		'accounts', 'charts', 'positions', 'orders', 'is_running', '_handled', 'transactions',
-		'ontrade_subs', 'display_name'
+		'ontrade_subs', 'display_name', 'is_dummy'
 	)
-	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name):
+	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name, is_dummy):
 		self.ctrl = ctrl
 		self.userAccount = user_account
 		self.strategyId = strategy_id
 		self.brokerId = broker_id
+		print(f'PARENT BROKER: {self.brokerId}')
+
 		self.name = name
 		self.display_name = display_name
+		self.is_dummy = is_dummy
 
 		if self.name == OANDA_NAME:
 			self.backtester = tl.OandaBacktester(self)
@@ -440,28 +443,31 @@ class Broker(object):
 
 	# Update Handlers
 	def handleOnTrade(self, account_id, res):
-		transactions = []
-		for i in res:
-			res[i]['brokerId'] = self.brokerId
-			transactions.append(res[i])
+		if not self.is_dummy:
+			transactions = []
+			for i in res:
+				res[i]['brokerId'] = self.brokerId
+				transactions.append(res[i])
 
-		# Handle stream subscriptions
-		for func in self.ontrade_subs.values():
-			func(res)
+			# Handle stream subscriptions
+			for func in self.ontrade_subs.values():
+				func(res)
 
-		print(f'on trade: {res}')
-		self.ctrl.sio.emit(
-			'ontrade', 
-			{'broker_id': self.brokerId, 'item': res}, 
-			namespace='/admin'
-		)
+			print(f'on trade: {res}')
+			print(f'{self.strategyId}, {self.display_name}, {self.accounts}')
 
-		# Save transaction to storage
-		account_code = '.'.join((self.brokerId, str(account_id)))
-		self.userAccount.appendAccountGui(
-			self.strategyId, account_code,
-			{ 'transactions': transactions }
-		)
+			self.ctrl.sio.emit(
+				'ontrade', 
+				{'broker_id': self.brokerId, 'item': res}, 
+				namespace='/admin'
+			)
+
+			# Save transaction to storage
+			account_code = '.'.join((self.brokerId, str(account_id)))
+			self.userAccount.appendAccountGui(
+				self.strategyId, account_code,
+				{ 'transactions': transactions }
+			)
 
 
 	# Update Handlers

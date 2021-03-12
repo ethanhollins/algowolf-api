@@ -502,6 +502,7 @@ class Database(object):
 				self.ctrl, props.get('is_demo'), props.get('access_token'), is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
+			dummy_broker.parent.deleteChild(dummy_broker)
 
 			if accounts is None:
 				raise BrokerException('Unable to connect to broker.')

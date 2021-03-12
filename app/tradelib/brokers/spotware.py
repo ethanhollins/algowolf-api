@@ -15,8 +15,6 @@ from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
 from app.error import OrderException, BrokerException
 
-CLIENT_ID = '2096_sEzU1jyvCjvNMo2ViU8YnZha8UQmuHokkaXJDVD7fVEoIc1wx3'
-CLIENT_SECRET = '0Tl8PVbt9rek4rRelAkGx9BoYRUhbhDYTp9sQjOAMdcmo0XQ6W'
 ONE_HOUR = 60*60
 
 class Spotware(Broker):
@@ -27,7 +25,8 @@ class Spotware(Broker):
 		display_name=None, is_dummy=False, is_parent=False, assets=None, symbols=None
 	):
 		if not is_parent:
-			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
+			print(f'NOT PARENT: {broker_id}')
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
 
 		self.ctrl = ctrl
 		self.is_demo = is_demo
@@ -74,7 +73,7 @@ class Spotware(Broker):
 			while not self._spotware_connected:
 				pass
 
-			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name)
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
 
 			user = self.ctrl.getDb().getUser(self.name)
 			self.access_token = user.get('access_token')
@@ -231,7 +230,7 @@ class Spotware(Broker):
 			if 'ctidTraderAccountId' in payload.DESCRIPTOR.fields_by_name.keys():
 				# print(f'MSG: {payload}')
 				account_id = payload.ctidTraderAccountId
-				for child in self.children:
+				for child in copy(self.children):
 					if account_id in map(int, child.accounts.keys()):
 						result = child._on_account_update(account_id, payload, msgid)
 
