@@ -7,6 +7,31 @@ SPOTWARE_PAIRS = [
 	'USD_HUF', 'USD_CZK', 'USD_SGD'
 ]
 
+TEMP_PRICES = {
+	"USD": 1.0,
+	"EUR": 1.1953491294,
+	"AUD": 0.7759772229,
+	"CAD": 0.8017214459,
+	"CHF": 1.0752328045,
+	"GBP": 1.3921464559,
+	"JPY": 0.0091755518,
+	"MXN": 0.0482467518,
+	"NOK": 0.1185582234,
+	"NZD": 0.717701726,
+	"SEK": 0.1179590884,
+	"RUB": 0.0136365659,
+	"CNH": 0.153947181,
+	"TRY": 0.1323155877,
+	"ZAR": 0.0668959103,
+	"PLN": 0.2608400647,
+	"HUF": 0.0032562302,
+	"CZK": 0.0456554405,
+	"SGD": 0.7437709851,
+	"HKD": 0.1288240033,
+	"DKK": 0.1607334027
+}
+
+
 class Spot(object):
 
 	def __init__(self, ctrl, currency):
@@ -46,7 +71,11 @@ class Spot(object):
 			return rate
 
 
+	# def getRate(self):
+	# 	result = self.ctrl.xecd.convert_from(self.currency, 'USD', 1.0)
+	# 	if result.get('to') and len(result.get('to')):
+	# 		return result['to'][0]['mid']
+
+
 	def getRate(self):
-		result = self.ctrl.xecd.convert_from(self.currency, 'USD', 1.0)
-		if result.get('to') and len(result.get('to')):
-			return result['to'][0]['mid']
+		return TEMP_PRICES[self.currency]

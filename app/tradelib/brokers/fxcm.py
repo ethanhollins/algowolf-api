@@ -26,8 +26,6 @@ class OffersTableListener(object):
 		if instrument not in self.__instruments:
 			self.__instruments.append(instrument)
 			self.__listeners.append(listener)
-			print(self.__instruments)
-			print(self.__listeners)
 
 	def on_added(self, table_listener, row_id, row):
 		pass
@@ -234,12 +232,9 @@ class FXCM(Broker):
 		if include_current:
 			chart = self.getChart(product)
 			timestamp = chart.lastTs[period]
-			print(f'include_current {tl.convertTimeToTimestamp(end)} -> {timestamp}')
 
 			if tl.convertTimeToTimestamp(end) >= timestamp:
 				current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
-
-				print(f'Current: {timestamp}, {current_bars}')
 
 				result = result.append(pd.DataFrame(
 					index=pd.Index(data=[timestamp], name='timestamp'),
@@ -630,8 +625,6 @@ class FXCM(Broker):
 			bar_ends = data.index.map(lambda x: (x-first_ts)%tl.period.getPeriodOffsetSeconds(period)==0)
 			indicies = np.arange(data.shape[0])[bar_ends.values.astype(bool)]
 			result = np.zeros((indicies.shape[0], 12), dtype=float)
-			print(indicies.shape)
-			print(indicies[:10])
 
 			for i in range(1, indicies.shape[0]):
 				idx = indicies[i]

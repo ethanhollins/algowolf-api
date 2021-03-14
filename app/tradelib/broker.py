@@ -56,7 +56,6 @@ class Broker(object):
 		self.userAccount = user_account
 		self.strategyId = strategy_id
 		self.brokerId = broker_id
-		print(f'PARENT BROKER: {self.brokerId}')
 
 		self.name = name
 		self.display_name = display_name
@@ -454,7 +453,6 @@ class Broker(object):
 				func(res)
 
 			print(f'on trade: {res}')
-			print(f'{self.strategyId}, {self.display_name}, {self.accounts}')
 
 			self.ctrl.sio.emit(
 				'ontrade', 

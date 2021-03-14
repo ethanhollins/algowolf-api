@@ -414,7 +414,7 @@ def update_script_ept(script_id):
 def start_script_ept(strategy_id, broker_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.ADMIN)
 	account = ctrl.accounts.getAccount(user_id)
-	key = request.headers.get('Authorization').replace('Bearer ', '')
+	# key = request.headers.get('Authorization').replace('Bearer ', '')
 	
 	# Make sure strategy is started
 	account.startStrategy(strategy_id)
@@ -422,32 +422,43 @@ def start_script_ept(strategy_id, broker_id):
 	# Get accounts
 	body = getJson()
 
-	accounts = body.get('accounts')
-	input_variables = body.get('input_variables')
-	if accounts is not None:
-		broker = account.getStrategyBroker(broker_id)
-		for account_id in accounts:
-			# Account validation check
-			if broker is None or not account_id in broker.getAccounts():
-				res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
-				return Response(
-					json.dumps(res, indent=2), 
-					status=404,
-					content_type='application/json'
-				)
 
-		# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
-		success = account._runStrategyScript(strategy_id, broker_id, accounts, key, input_variables)
+	if not account.isAnyScriptRunning():
+		accounts = body.get('accounts')
+		input_variables = body.get('input_variables')
+		if accounts is not None:
+			broker = account.getStrategyBroker(broker_id)
+			for account_id in accounts:
+				# Account validation check
+				if broker is None or not account_id in broker.getAccounts():
+					res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
+					return Response(
+						json.dumps(res, indent=2), 
+						status=404,
+						content_type='application/json'
+					)
 
-		res = account.getStrategy(strategy_id)
-		return Response(
-			json.dumps(res, indent=2),
-			status=200, content_type='application/json'
-		)
+			# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
+			success = account._runStrategyScript(strategy_id, broker_id, accounts, input_variables)
 
+			res = account.getStrategy(strategy_id)
+			return Response(
+				json.dumps(res, indent=2),
+				status=200, content_type='application/json'
+			)
+
+		else:
+			raise AccountException('Body does not contain `accounts`.')
 
 	else:
-		raise AccountException('Body does not contain `accounts`.')
+		res = {
+			'error': 'AccountException',
+			'message': 'Can only run one script at a time.'
+		}
+		return Response(
+				json.dumps(res, indent=2),
+				status=400, content_type='application/json'
+			)
 
 @bp.route('/strategy/<strategy_id>/stop/<broker_id>', methods=('POST',))
 def stop_script_ept(strategy_id, broker_id):

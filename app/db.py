@@ -88,7 +88,6 @@ class Database(object):
 			for i in range(len(row)):
 				row[i] = self._convert_to_decimal(row[i])
 		elif isinstance(row, float):
-			print(row)
 			return Decimal(row)
 			
 		return row
@@ -161,6 +160,18 @@ class Database(object):
 		self.generateHolyGrailStrategy(user_id)
 
 		return user_id
+
+
+	def getAllUsers(self):
+		res = self.userTable.scan()
+		data = res['Items']
+
+		while 'LastEvaluatedKey' in res:
+			res = self.userTable.scan(ExclusiveStartKey=res['LastEvaluatedKey'])
+			data.extend(res['Items'])
+
+		return self._convert_to_float(data)
+
 
 	def getUser(self, user_id):
 		res = self.userTable.get_item(

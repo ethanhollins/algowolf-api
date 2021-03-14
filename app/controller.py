@@ -39,50 +39,6 @@ class DictQueue(dict):
 		return result
 
 
-class ContinuousThreadHandler(object):
-
-	def __init__(self):
-		self.jobs = {}
-		self._to_add = []
-		self._to_stop = []
-		self._running = True
-		self.thread = Thread(target=self.run)
-		self.thread.start()
-
-	def generateReference(self):
-		return shortuuid.uuid()
-
-
-	def addJob(self, func, *args, **kwargs):
-		ref = self.generateReference()
-		self._to_add.append((ref, func, args, kwargs))
-		return ref
-
-
-	def stopJob(self, ref):
-		self._to_stop.append(ref)
-
-
-	def jobsHandler(self):
-		for j in self._to_add:
-			self.jobs[j[0]] = j[1:]
-
-		for j in self._to_stop:
-			if ref in self.jobs:
-				del self.jobs[ref]
-
-
-	def run(self):
-		while self._running:
-			for j in self.jobs.values():
-				j[0](*j[1], **j[2])
-			self.jobsHandler()
-
-	def stop(self):
-		self._running = False
-		self.thread.join()
-
-
 class Controller(object):
 
 	def __init__(self, app):
@@ -102,6 +58,8 @@ class Controller(object):
 			'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
 		])
+
+		Thread(target=self.restartScripts).start()
 		
 
 	def closeApp(self):
@@ -135,6 +93,39 @@ class Controller(object):
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
 			print(traceback.format_exc())
+
+
+	def restartScripts(self):
+		all_users = self.getDb().getAllUsers()
+
+		for user in all_users:
+			user_id = user.get('user_id')
+			if 'strategies' in user:
+				for strategy_id in user['strategies']:
+					if 'running' in user['strategies'][strategy_id]:
+						for broker_id in user['strategies'][strategy_id]['running']:
+							for account_id in user['strategies'][strategy_id]['running'][broker_id]:
+								if (
+									isinstance(user['strategies'][strategy_id]['running'][broker_id][account_id], dict) and 
+									user['strategies'][strategy_id]['running'][broker_id][account_id].get('script_id')
+								):
+									# Get package name by last run
+									script_id = user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id']
+									input_variables = user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables']
+
+									# Restart strategy
+									account = self.accounts.getAccount(user_id)
+									account.startStrategy(strategy_id)
+
+									# Get Auth Key
+									# key = account.generateSessionToken()
+
+									# Run Script
+									print(f'STARTING {strategy_id}, {broker_id}, {account_id}')
+
+									account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
+
+
 
 
 	def getAccounts(self):

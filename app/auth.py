@@ -314,17 +314,15 @@ def change_broker_name(old_name, new_name):
 @login_required
 def delete_broker(broker_id):
 	# Check no scripts are running on broker
-	if broker_id in g.user.brokers:
-		for account_id in g.user.brokers[broker_id].accounts:
-			if g.user.isScriptRunning(broker_id, account_id):
-				res = {
-					'error': 'BrokerException',
-					'message': 'Please stop all scripts on this broker before deleting.'
-				}
-				return Response(
-					json.dumps(res, indent=2),
-					status=400, content_type='application/json'
-				)
+	if g.user.account.isAnyScriptRunning():
+		res = {
+			'error': 'BrokerException',
+			'message': 'Please stop all scripts on this broker before deleting.'
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
 
 	res = {
 		'name': g.user.deleteBroker(broker_id)

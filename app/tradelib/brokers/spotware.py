@@ -25,7 +25,6 @@ class Spotware(Broker):
 		display_name=None, is_dummy=False, is_parent=False, assets=None, symbols=None
 	):
 		if not is_parent:
-			print(f'NOT PARENT: {broker_id}')
 			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
 
 		self.ctrl = ctrl
@@ -93,8 +92,6 @@ class Spotware(Broker):
 			t.start()
 
 		else:
-			print(f'ACCOUNTS: {accounts}')
-
 			self.access_token = access_token
 			self.refresh_token = refresh_token
 
@@ -131,7 +128,6 @@ class Spotware(Broker):
 		while self.is_running:
 			if time.time() - self._last_update > TEN_SECONDS:
 				try:
-					# print('[SC] Send heartbeat!')
 					heartbeat = o1.ProtoHeartbeatEvent()
 					self.demo_client.send(heartbeat)
 					self.live_client.send(heartbeat)
@@ -1059,12 +1055,10 @@ class Spotware(Broker):
 			if execution_type == 3:
 				# Check `closingOrder`
 				if update.order.closingOrder:
-					print(f'CLOSING: {str(update.position.positionId)}')
 					# Delete
 					for i in range(len(self.positions)):
 						pos = self.positions[i]
 						if str(update.position.positionId) == pos.order_id:
-							print('FOUND')
 							if update.order.orderType == 4:
 								pos.close_price = update.order.executionPrice
 								pos.close_time = update.order.utcLastUpdateTimestamp / 1000
@@ -1086,7 +1080,6 @@ class Spotware(Broker):
 								else:
 									order_type = tl.STOP_LOSS
 
-								print(order_type)
 								result.update({
 									ref_id: {
 										'timestamp': pos.close_time,
@@ -1130,7 +1123,6 @@ class Spotware(Broker):
 										}
 									})
 
-							print(self.positions)
 							break
 				else:
 					order_type = tl.MARKET_ENTRY
@@ -1298,10 +1290,7 @@ class Spotware(Broker):
 	def _subscribe_chart_updates(self, product, listener):
 		ref_id = self.generateReference()
 
-		print(product)
 		product = self._convert_product('Spotware', product)
-		print(product)
-		print(int(list(self.accounts.keys())[0]))
 		self.parent._subscriptions[str(product)] = listener
 
 		sub_req = o2.ProtoOASubscribeSpotsReq(

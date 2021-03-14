@@ -452,8 +452,6 @@ class DataSaver(object):
 	def _fill_missing_data(self, product, period):
 		''' Fill any data that was missed '''
 
-		print(f'FILL: {product} -> {period}')
-
 		# Retrieve saved data
 		path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{period}')
 
@@ -464,8 +462,6 @@ class DataSaver(object):
 				key=lambda x: datetime.strptime(x.replace('.csv.gz', ''), '%Y%m%d'), 
 				reverse=True
 			)[0]
-
-			print(last_file)
 
 			# Get last saved timestamp
 			if period == tl.period.TICK:
@@ -488,12 +484,8 @@ class DataSaver(object):
 				).set_index('timestamp')
 				last_ts = old_data.index.values[-1]
 
-			print(last_ts)
-			print(tl.convertTimestampToTime(last_ts))
-
 			# Retrieve new data
 			current_ts = self.broker.getChart(product).lastTs[period]
-			print(f'current ts: {current_ts}')
 
 			data = self.broker._download_historical_data_broker(
 				product, period,
@@ -501,15 +493,12 @@ class DataSaver(object):
 				end=datetime.utcnow()
 			)
 			data = data.loc[(data.index > last_ts) & (data.index < current_ts)]
-			print(data)
 
 			if data.shape[0] > 0:
 				# Delete duplicate memory data
 				if product in self.data and period in self.data[product]:
 					mem_data = self.data[product][period]
-					print(f'MEM BEFORE: {mem_data.shape}')
 					self.data[product][period] = mem_data.loc[mem_data.index > data.index.values[-1]]
-					print(f'MEM AFTER: {mem_data.shape}')
 
 				# Save new data
 				self._save_data(
@@ -519,9 +508,6 @@ class DataSaver(object):
 
 	def _save_data(self, product, period, data):
 		''' Save data to storage '''
-
-		print(f'Save: {data.columns}, {data.shape}')
-
 		start_ts = data.index.values[0]
 		start_dt = tl.convertTimestampToTime(start_ts)
 		end_ts = data.index.values[-1]

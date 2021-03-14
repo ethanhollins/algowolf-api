@@ -8,6 +8,7 @@ from app import tradelib as tl
 from threading import Thread
 from app.strategy import Strategy
 from app.error import AccountException, BrokerException, AuthorizationException
+from copy import copy
 from flask import current_app
 
 class Account(object):
@@ -138,22 +139,39 @@ class Account(object):
 		self.ctrl.getDb().updateStrategy(self.userId, strategy_id, strategy_info)
 
 
-	def _set_running(self, strategy_id, broker_id, account_id, is_running):
+	def _set_running(self, strategy_id, broker_id, account_id, script_id, input_variables):
 		user = self.ctrl.getDb().getUser(self.userId)
+		user_brokers = user.get('brokers')
 
 		if not isinstance(user['strategies'][strategy_id].get('running'), dict):
 			user['strategies'][strategy_id]['running'] = {}
 		if not isinstance(user['strategies'][strategy_id]['running'].get(broker_id), dict):
 			user['strategies'][strategy_id]['running'][broker_id] = {}
+		if not isinstance(user['strategies'][strategy_id]['running'][broker_id].get(account_id), dict):
+			user['strategies'][strategy_id]['running'][broker_id][account_id] = {}
 
-		user['strategies'][strategy_id]['running'][broker_id][account_id] = is_running
+		user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id'] = script_id
+		user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables'] = input_variables
 
+		# Clean user running
+		for broker_id in copy(list(user['strategies'][strategy_id]['running'].keys())):
+			if broker_id != strategy_id and broker_id not in user_brokers:
+				del user['strategies'][strategy_id]['running'][broker_id]
+
+		# Update user running
 		self.ctrl.getDb().updateUser(self.userId, { 'strategies': user['strategies'] })
 
 
 	def isScriptRunning(self, strategy_id, broker_id, account_id):
 		user = self.ctrl.getDb().getUser(self.userId)
-		is_user_running = user['strategies'][strategy_id].get('running')
+		user_running_dict = user['strategies'][strategy_id].get('running')
+
+		is_user_running = None
+		if user_running_dict is not None and broker_id in user_running_dict:
+			if account_id in user_running_dict[broker_id]:
+				if 'script_id' in user_running_dict[broker_id][account_id]:
+					is_user_running = user_running_dict[broker_id][account_id]['script_id']
+
 
 		payload = {
 			'user_id': self.userId,
@@ -169,11 +187,32 @@ class Account(object):
 		)
 
 		is_process_running = res.json().get('running')
+		input_variables = res.json().get('input_variables')
 
 		if is_user_running != is_process_running:
-			self._set_running(strategy_id, broker_id, account_id, is_process_running)
+			self._set_running(
+				strategy_id, broker_id, account_id, is_process_running, input_variables
+			)
 
 		return is_process_running
+
+
+	def isAnyScriptRunning(self):
+		user = self.ctrl.getDb().getUser(self.userId)
+
+		if 'strategies' in user:
+			for strategy_id in user['strategies']:
+				if 'running' in user['strategies'][strategy_id]:
+					for broker_id in user['strategies'][strategy_id]['running']:
+						for account_id in user['strategies'][strategy_id]['running'][broker_id]:
+							if (
+								isinstance(user['strategies'][strategy_id]['running'][broker_id][account_id], dict) and 
+								user['strategies'][strategy_id]['running'][broker_id][account_id].get('script_id')
+							):
+								return True
+
+		return False
+
 
 
 	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
@@ -183,7 +222,7 @@ class Account(object):
 		return strategy.package
 
 
-	def _runStrategyScript(self, strategy_id, broker_id, accounts, auth_key, input_variables):
+	def _runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 
 		package = strategy_info['package']
@@ -193,12 +232,14 @@ class Account(object):
 		if input_variables is None:
 			input_variables = {}
 
+		session_key = self.generateSessionToken()
+
 		payload = {
 			'user_id': self.userId,
 			'strategy_id': strategy_id,
 			'broker_id': broker_id,
 			'accounts': accounts,
-			'auth_key': auth_key,
+			'auth_key': session_key,
 			'input_variables': input_variables,
 			'script_id': script_id,
 			'version': version
@@ -220,7 +261,7 @@ class Account(object):
 
 		if res.status_code == 200:
 			for account_id in accounts:
-				self._set_running(strategy_id, broker_id, account_id, True)
+				self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
 			return True
 		else:
 			return False
@@ -258,7 +299,7 @@ class Account(object):
 
 		if res.status_code == 200:
 			for account_id in accounts:
-				self._set_running(strategy_id, broker_id, account_id, False)
+				self._set_running(strategy_id, broker_id, account_id, None, None)
 			return True
 		else:
 			return False
@@ -376,13 +417,13 @@ class Account(object):
 		payload = { 
 			'sub': self.userId, 'iat': math.floor(time.time())
 		}
-		return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+		return jwt.encode(payload, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 
 	def generateSessionToken(self):
 		payload = { 
 			'sub': self.userId, 'iat': math.floor(time.time())
 		}
-		return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+		return jwt.encode(payload, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 
 
 	def checkToken(self, token):
