@@ -779,7 +779,7 @@ class Database(object):
 
 	def _handle_append_account_gui(self, user_id, strategy_id, account_code, obj):
 		MAX_GUI = 1000
-		MAX_TRANSACTIONS = 6000
+		MAX_TRANSACTIONS = 3000
 
 		gui = self.getAccountGui(user_id, strategy_id, account_code)
 
