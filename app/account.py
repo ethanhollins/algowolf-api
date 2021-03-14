@@ -169,7 +169,7 @@ class Account(object):
 		is_user_running = None
 		if user_running_dict is not None and broker_id in user_running_dict:
 			if account_id in user_running_dict[broker_id]:
-				if 'script_id' in user_running_dict[broker_id][account_id]:
+				if isinstance(user_running_dict[broker_id][account_id], dict) and 'script_id' in user_running_dict[broker_id][account_id]:
 					is_user_running = user_running_dict[broker_id][account_id]['script_id']
 
 
