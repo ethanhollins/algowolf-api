@@ -88,7 +88,7 @@ class Database(object):
 			for i in range(len(row)):
 				row[i] = self._convert_to_decimal(row[i])
 		elif isinstance(row, float):
-			return Decimal(row)
+			return Decimal(str(float(row)))
 			
 		return row
 
@@ -205,6 +205,8 @@ class Database(object):
 			dict([tuple([':{}'.format(i[0]), i[1]])
 					for i in update.items()])
 		)
+
+		print(update_values)
 		update_exp = ('set ' + ' '.join(
 			['{} = :{},'.format(k, k) for k in update.keys()]
 		))[:-1]
