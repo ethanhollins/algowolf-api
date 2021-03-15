@@ -83,22 +83,25 @@ class FXCM(Broker):
 		self.time_off = 0
 		self._set_time_off()
 
-		self.fx = ForexConnect()
-		self._login()
-		self.offers_listener = None
+		# self.fx = ForexConnect()
+		# self._login()
+		# self.offers_listener = None
 
 		if is_parent:
-			while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
-				time.sleep(0.01)
-			if self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
-				self._get_offers_listener()
 
-			# Load Charts
-			CHARTS = ['EUR_USD']
-			PERIODS = [tl.period.ONE_MINUTE]
-			for instrument in CHARTS:
-				chart = self.createChart(instrument, await_completion=True)
-				self.data_saver.subscribe(chart, PERIODS)
+			
+			
+			# while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
+			# 	time.sleep(0.01)
+			# if self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
+			# 	self._get_offers_listener()
+
+			# # Load Charts
+			# CHARTS = ['EUR_USD']
+			# PERIODS = [tl.period.ONE_MINUTE]
+			# for instrument in CHARTS:
+			# 	chart = self.createChart(instrument, await_completion=True)
+			# 	self.data_saver.subscribe(chart, PERIODS)
 
 		self._initialized = True
 
