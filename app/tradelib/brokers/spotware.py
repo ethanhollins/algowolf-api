@@ -922,6 +922,8 @@ class Spotware(Broker):
 		TEMP
 		'''
 
+		start_time = time.time()
+		print(f'CREATE ORDER START: {self.brokerId}')
 		broker_name = self.accounts[account_id]['broker']
 		new_order_req = o2.ProtoOANewOrderReq(
 			ctidTraderAccountId=int(account_id),
@@ -931,6 +933,7 @@ class Spotware(Broker):
 		self._get_client(account_id).send(new_order_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
+		print(f'CREATE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 
 		if not isinstance(res, dict):
 			if not res is None and res.payloadType in (50, 2132):
@@ -987,6 +990,8 @@ class Spotware(Broker):
 		if not tp_price is None:
 			args['takeProfit'] = tp_price
 
+		start_time = time.time()
+		print(f'MODIFY ORDER START: {self.brokerId}')
 		amend_req = o2.ProtoOAAmendOrderReq(
 			ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id),
 			**args
@@ -994,6 +999,7 @@ class Spotware(Broker):
 		self._get_client(order.account_id).send(amend_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
+		print(f'MODIFY ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 
 		if not isinstance(res, dict):
 			if not res is None and res.payloadType in (50, 2132):
@@ -1028,12 +1034,15 @@ class Spotware(Broker):
 
 		ref_id = self.generateReference()
 
+		start_time = time.time()
+		print(f'DELETE ORDER START: {self.brokerId}')
 		cancel_req = o2.ProtoOACancelOrderReq(
 			ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id)
 		)
 		self._get_client(order.account_id).send(cancel_req, msgid=ref_id)
 
 		res = self.parent._wait(ref_id)
+		print(f'DELETE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 
 		if not isinstance(res, dict):
 			if not res is None and res.payloadType in (50, 2132):
