@@ -206,7 +206,6 @@ class Database(object):
 					for i in update.items()])
 		)
 
-		print(update_values)
 		update_exp = ('set ' + ' '.join(
 			['{} = :{},'.format(k, k) for k in update.keys()]
 		))[:-1]

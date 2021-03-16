@@ -24,6 +24,10 @@ class Spotware(Broker):
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False, assets=None, symbols=None
 	):
+		self.strategyId = strategy_id
+		self.brokerId = strategy_id
+		self.accounts = accounts
+
 		if not is_parent:
 			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
 
@@ -265,6 +269,8 @@ class Spotware(Broker):
 
 
 	def _refresh_token(self, is_parent=False):
+		print(f'REFRESH: {self.refresh_token}')
+
 		ref_id = self.generateReference()
 		refresh_req = o2.ProtoOARefreshTokenReq(
 			refreshToken=self.refresh_token
@@ -294,6 +300,7 @@ class Spotware(Broker):
 
 
 	def _authorize_accounts(self, accounts, is_parent=False):
+		print(f'MSG: {self.strategyId}, {self.brokerId}, {accounts}')
 		if self.refresh_token is not None:
 			self._refresh_token(is_parent=is_parent)
 
@@ -611,7 +618,8 @@ class Spotware(Broker):
 		'''
 		TEMP
 		'''
-
+		start_time = time.time()
+		print(f'CREATE POSITION START: {self.brokerId}')
 
 		# Execute Market Order
 		new_order = o2.ProtoOANewOrderReq(
@@ -667,6 +675,7 @@ class Spotware(Broker):
 				}
 			})
 
+		print(f'CREATE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 		return result
 
 
@@ -681,6 +690,8 @@ class Spotware(Broker):
 
 		ref_id = self.generateReference()
 
+		start_time = time.time()
+		print(f'MODIFY POSITION START: {self.brokerId}')
 		amend_req = o2.ProtoOAAmendPositionSLTPReq(
 			ctidTraderAccountId=int(pos.account_id),
 			positionId=int(pos.order_id), stopLoss=sl_price, takeProfit=tp_price
@@ -707,6 +718,7 @@ class Spotware(Broker):
 					}
 				}
 
+		print(f'MODIFY POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 		return res
 
 
@@ -729,6 +741,8 @@ class Spotware(Broker):
 
 		res = self.parent._wait(ref_id)
 
+		start_time = time.time()
+		print(f'DELETE POSITION START: {self.brokerId}')
 		# Handle delete result
 		result = {}
 		if res.payloadType == 2126:
@@ -759,6 +773,7 @@ class Spotware(Broker):
 				}
 			})
 
+		print(f'DELETE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 		return result
 
 

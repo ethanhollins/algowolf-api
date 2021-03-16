@@ -78,7 +78,6 @@ class Account(object):
 		# brokers = list(self.ctrl.getDb().getStrategy(self.userId, strategy_id)['brokers'].keys())
 
 		brokers = self._set_brokers(strategy_id, None)
-		print(f'GET STRAT: {brokers}')
 
 		# Generate broker information
 		broker_info = {
@@ -674,7 +673,6 @@ class Account(object):
 				} 
 			}
 		}
-		print(f'SET BROKERS: {brokers}')
 		for broker_id in brokers:
 			self._set_broker_queue.handle(
 				broker_id,
