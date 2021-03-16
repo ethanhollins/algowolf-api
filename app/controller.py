@@ -49,6 +49,7 @@ class Controller(object):
 		self.db = Database(self, app.config['ENV'])
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
+		self._msg_queue = {}
 
 		self.xecd = XecdClient(app.config['XECD_ACCOUNT_ID'], app.config['XECD_API_KEY'])
 		# if 'spotware' in self.brokers:
@@ -93,6 +94,43 @@ class Controller(object):
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
 			print(traceback.format_exc())
+
+
+	@sio.on('broker_res', namespace='/admin')
+	def onCommand(data):
+		if 'msg_id' in data:
+			self._msg_queue[data['msg_id']] = data
+
+
+	def _wait_broker_response(self, msg_id, timeout=30):
+		start = time.time()
+
+		while time.time() - start < timeout:
+			if msg_id in copy(list(self._msg_queue.keys())):
+				res = self._msg_queue[msg_id]
+				del self._msg_queue[msg_id]
+				return res
+			time.sleep(0.1)
+
+		return {
+			'error': 'No response.'
+		}
+
+
+	def sendBrokerMsg(self, event, data={}, namespace=None, callback=None):
+		msg_id = shortuuid.uuid()
+
+		data.update({
+			'msg_id': msg_id
+		})
+		try:
+			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
+			return self._wait_broker_response(msg_id)
+		except Exception:
+			print(traceback.format_exc())
+			return {
+				'error': 'No response.'
+			}
 
 
 	def restartScripts(self):

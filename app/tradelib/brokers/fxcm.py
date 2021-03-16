@@ -89,7 +89,18 @@ class FXCM(Broker):
 
 		if is_parent:
 
-			
+			# Create Connection to FXCM Container
+			self.ctrl.sendBrokerMsg(
+				'broker_cmd', 
+				data={
+					'cmd': 'add_user',
+					'username': username,
+					'password': password,
+					'is_demo': is_demo
+				}, 
+				namespace='/admin'
+			)
+
 			
 			# while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
 			# 	time.sleep(0.01)
