@@ -423,32 +423,32 @@ def start_script_ept(strategy_id, broker_id):
 	body = getJson()
 
 
-	if not account.isAnyScriptRunning():
-		accounts = body.get('accounts')
-		input_variables = body.get('input_variables')
-		if accounts is not None:
-			broker = account.getStrategyBroker(broker_id)
-			for account_id in accounts:
-				# Account validation check
-				if broker is None or not account_id in broker.getAccounts():
-					res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
-					return Response(
-						json.dumps(res, indent=2), 
-						status=404,
-						content_type='application/json'
-					)
+	# if not account.isAnyScriptRunning():
+	accounts = body.get('accounts')
+	input_variables = body.get('input_variables')
+	if accounts is not None:
+		broker = account.getStrategyBroker(broker_id)
+		for account_id in accounts:
+			# Account validation check
+			if broker is None or not account_id in broker.getAccounts():
+				res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
+				return Response(
+					json.dumps(res, indent=2), 
+					status=404,
+					content_type='application/json'
+				)
 
-			# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
-			success = account._runStrategyScript(strategy_id, broker_id, accounts, input_variables)
+		# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
+		success = account._runStrategyScript(strategy_id, broker_id, accounts, input_variables)
 
-			res = account.getStrategy(strategy_id)
-			return Response(
-				json.dumps(res, indent=2),
-				status=200, content_type='application/json'
-			)
+		res = account.getStrategy(strategy_id)
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
 
-		else:
-			raise AccountException('Body does not contain `accounts`.')
+	else:
+		raise AccountException('Body does not contain `accounts`.')
 
 	else:
 		res = {
