@@ -450,15 +450,15 @@ def start_script_ept(strategy_id, broker_id):
 	else:
 		raise AccountException('Body does not contain `accounts`.')
 
-	else:
-		res = {
-			'error': 'AccountException',
-			'message': 'Can only run one script at a time.'
-		}
-		return Response(
-				json.dumps(res, indent=2),
-				status=400, content_type='application/json'
-			)
+	# else:
+	# 	res = {
+	# 		'error': 'AccountException',
+	# 		'message': 'Can only run one script at a time.'
+	# 	}
+	# 	return Response(
+	# 			json.dumps(res, indent=2),
+	# 			status=400, content_type='application/json'
+	# 		)
 
 @bp.route('/strategy/<strategy_id>/stop/<broker_id>', methods=('POST',))
 def stop_script_ept(strategy_id, broker_id):
