@@ -55,7 +55,7 @@ class Controller(object):
 		self.spots = Spots(self, [
 			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
 			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
-			'RUB', 'CNH', 'TRY', 'ZAR', 'PLN',
+			'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
 		])
 
