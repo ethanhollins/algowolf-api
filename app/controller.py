@@ -43,13 +43,16 @@ class Controller(object):
 
 	def __init__(self, app):
 		self.app = app
-		# self.continuousThreadHandler = ContinuousThreadHandler()
+		self._msg_queue = {}
+		self._listeners = {}
+
 		self.sio = self.setupSio()
+		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+
 		self.accounts = Accounts(self)
 		self.db = Database(self, app.config['ENV'])
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
-		self._msg_queue = {}
 
 		self.xecd = XecdClient(app.config['XECD_ACCOUNT_ID'], app.config['XECD_API_KEY'])
 		# if 'spotware' in self.brokers:
@@ -96,10 +99,13 @@ class Controller(object):
 			print(traceback.format_exc())
 
 
-	@sio.on('broker_res', namespace='/admin')
-	def onCommand(data):
+	def onCommand(self, data):
 		if 'msg_id' in data:
-			self._msg_queue[data['msg_id']] = data
+			if data['msg_id'] in self._listeners:
+				result = data['result']
+				self._listeners[data['msg_id']](*result.get('args'), **result.get('kwargs'))
+			else:
+				self._msg_queue[data['msg_id']] = data
 
 
 	def _wait_broker_response(self, msg_id, timeout=30):
@@ -109,7 +115,8 @@ class Controller(object):
 			if msg_id in copy(list(self._msg_queue.keys())):
 				res = self._msg_queue[msg_id]
 				del self._msg_queue[msg_id]
-				return res
+				print('WAIT RECV', flush=True)
+				return res.get('result')
 			time.sleep(0.1)
 
 		return {
@@ -117,20 +124,29 @@ class Controller(object):
 		}
 
 
-	def sendBrokerMsg(self, event, data={}, namespace=None, callback=None):
-		msg_id = shortuuid.uuid()
+	def brokerRequest(self, broker, func, msg_id, *args, **kwargs):
+		if msg_id is None:
+			msg_id = shortuuid.uuid()
 
-		data.update({
-			'msg_id': msg_id
-		})
+		data = {
+			'msg_id': msg_id,
+			'broker': broker,
+			'cmd': func,
+			'args': list(args),
+			'kwargs': kwargs
+		}
 		try:
-			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
+			self.sio.emit('broker_cmd', data=data, namespace='/admin')
 			return self._wait_broker_response(msg_id)
 		except Exception:
 			print(traceback.format_exc())
 			return {
 				'error': 'No response.'
 			}
+
+
+	def addBrokerListener(self, msg_id, listener):
+		self._listeners[msg_id] = listener
 
 
 	def restartScripts(self):

@@ -73,11 +73,11 @@ class FXCM(Broker):
 		self.is_demo = is_demo
 		self.username = username
 		self.password = password
+		self.is_parent = is_parent
 		self._last_update = time.time()
 		self._subscriptions = {}
 		self.session = None
 		self._initialized = False
-		self.job_queue = []
 		
 		self._price_queue = []
 		self.time_off = 0
@@ -90,16 +90,7 @@ class FXCM(Broker):
 		if is_parent:
 
 			# Create Connection to FXCM Container
-			self.ctrl.sendBrokerMsg(
-				'broker_cmd', 
-				data={
-					'cmd': 'add_user',
-					'username': username,
-					'password': password,
-					'is_demo': is_demo
-				}, 
-				namespace='/admin'
-			)
+			self._add_user()
 
 			
 			# while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
@@ -107,12 +98,12 @@ class FXCM(Broker):
 			# if self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
 			# 	self._get_offers_listener()
 
-			# # Load Charts
-			# CHARTS = ['EUR_USD']
-			# PERIODS = [tl.period.ONE_MINUTE]
-			# for instrument in CHARTS:
-			# 	chart = self.createChart(instrument, await_completion=True)
-			# 	self.data_saver.subscribe(chart, PERIODS)
+			# Load Charts
+			CHARTS = ['EUR_USD']
+			PERIODS = [tl.period.ONE_MINUTE]
+			for instrument in CHARTS:
+				chart = self.createChart(instrument, await_completion=True)
+				self.data_saver.subscribe(chart, PERIODS)
 
 		self._initialized = True
 
@@ -145,73 +136,19 @@ class FXCM(Broker):
 		return False
 
 
-	def _login(self):
-		if not self._is_logged_in():
-			try:
-				print('[FXCM] Attempting login...')
-				self.fx.login(
-					user_id=self.username, password=self.password, 
-					connection='demo' if self.is_demo else 'real',
-					session_status_callback=self._on_status_change
-				)
-				return True
+	def _add_user(self):
+		print('Add User')
 
-			except Exception:
-				# print(traceback.format_exc(), flush=True)
-				print('[FXCM] Login failed.')
-				return False
+		res = self.ctrl.brokerRequest(
+			self.name, 'add_user', None,
+			self.username, self.password, self.is_demo,
+			is_parent=self.is_parent
+		)
 
+		if 'error' in res:
+			return self._add_user()
 		else:
-			return True
-
-
-	def _set_time_off(self):
-		try:
-			client = ntplib.NTPClient()
-			response = client.request('pool.ntp.org')
-			self.time_off = response.tx_time - time.time()
-		except Exception:
-			pass
-
-
-	def _handle_job(self, func, *args, **kwargs):
-		ref_id = self.generateReference()
-		self.job_queue.append(ref_id)
-		while self.job_queue.index(ref_id) > 0: pass
-		result = func(*args, **kwargs)
-		del self.job_queue[0]
-		return result
-
-
-	def _on_status_change(self, session, status):
-		self.session = session
-
-		print(f"Trading session status: {status}")
-		if status in (
-			fxcorepy.AO2GSessionStatus.O2GSessionStatus.DISCONNECTED,
-			fxcorepy.AO2GSessionStatus.O2GSessionStatus.SESSION_LOST,
-			fxcorepy.AO2GSessionStatus.O2GSessionStatus.RECONNECTING,
-			fxcorepy.AO2GSessionStatus.O2GSessionStatus.PRICE_SESSION_RECONNECTING,
-			fxcorepy.AO2GSessionStatus.O2GSessionStatus.CHART_SESSION_RECONNECTING
-		):
-			print('[FXCM] Disconnected.')
-			if not tl.isWeekend(datetime.utcnow()):
-				try:
-					self.session.logout()
-				except Exception:
-					pass
-				finally:
-					self.session = None
-
-				time.sleep(1)
-				self._login()
-
-			# sys.exit()
-
-		elif status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
-			print('[FXCM] Logged in.')
-			# if self._initialized and self.offers_listener is None:
-			# 	self.data_saver.fill_all_missing_data()
+			return res
 
 
 	def _get_offers_listener(self):
@@ -225,6 +162,16 @@ class FXCM(Broker):
 			on_delete_callback=self.offers_listener.on_deleted,
 			on_status_change_callback=self.offers_listener.on_changed
 		)
+
+
+	def _set_time_off(self):
+		try:
+			client = ntplib.NTPClient()
+			response = client.request('pool.ntp.org')
+			self.time_off = response.tx_time - time.time()
+		except Exception:
+			pass
+
 
 	'''
 	Broker functions
@@ -268,53 +215,49 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		**kwargs
 	):
-		if tl.isWeekend(datetime.utcnow()) or not self._login():
+		# if tl.isWeekend(datetime.utcnow()) or not self._login():
+		if tl.isWeekend(datetime.utcnow()):
 			return self._download_historical_data(
 				product, period, tz=tz, 
 				start=start, end=end, count=count,
 				include_current=False
 			)
 
+		if isinstance(start, datetime):
+			start = tl.convertTimeToTimestamp(start)
+		if isinstance(end, datetime):
+			end = tl.convertTimeToTimestamp(end)
+
 		# Count
-		if not count is None:
-			res = self._handle_job(
-				self.fx.get_history,
-				self._convert_product(product), 
-				self._convert_period(period), 
-				quotes_count=count
-			)
-
-		# Start -> End
-		else:
-			start = start.replace(tzinfo=None)
-			end = end.replace(tzinfo=None)
-			res = self._handle_job(
-				self.fx.get_history,
-				self._convert_product(product), 
-				self._convert_period(period), 
-				start, end
-			)
-
-		# Convert to result DF
-		res = np.array(list(map(lambda x: list(x), res)))
-
-		ask_prices = res[:, 5:9].astype(float)
-		bid_prices = res[:, 1:5].astype(float)
-		mid_prices = (ask_prices + bid_prices)/2
-		timestamps = res[:, 0]
-		prices = np.around(np.concatenate((ask_prices, mid_prices, bid_prices), axis=1), decimals=5)
-
-		result = pd.DataFrame(
-			index=pd.Index(timestamps).map(
-				lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
-			).rename('timestamp'),
-			columns=[
-				'ask_open', 'ask_high', 'ask_low', 'ask_close',
-				'mid_open', 'mid_high', 'mid_low', 'mid_close',
-				'bid_open', 'bid_high', 'bid_low', 'bid_close'
-			],
-			data=prices
+		res = self.ctrl.brokerRequest(
+			self.name, '_download_historical_data_broker', None,
+			product, period, tz=tz, start=start, end=end,
+			count=count, **kwargs
 		)
+
+		result = pd.DataFrame.from_dict(res, dtype=float)
+		result.index = result.index.astype(int)
+
+		# # Convert to result DF
+		# res = np.array(list(map(lambda x: list(x), res)))
+
+		# ask_prices = res[:, 5:9].astype(float)
+		# bid_prices = res[:, 1:5].astype(float)
+		# mid_prices = (ask_prices + bid_prices)/2
+		# timestamps = res[:, 0]
+		# prices = np.around(np.concatenate((ask_prices, mid_prices, bid_prices), axis=1), decimals=5)
+
+		# result = pd.DataFrame(
+		# 	index=pd.Index(timestamps).map(
+		# 		lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
+		# 	).rename('timestamp'),
+		# 	columns=[
+		# 		'ask_open', 'ask_high', 'ask_low', 'ask_close',
+		# 		'mid_open', 'mid_high', 'mid_low', 'mid_close',
+		# 		'bid_open', 'bid_high', 'bid_low', 'bid_close'
+		# 	],
+		# 	data=prices
+		# )
 
 		return result
 
@@ -438,8 +381,13 @@ class FXCM(Broker):
 
 
 	def _subscribe_chart_updates(self, instrument, listener):
-		if not tl.isWeekend(datetime.utcnow()) and self._login():
-			self.offers_listener.addInstrument(self._convert_product(instrument), listener)
+		# if not tl.isWeekend(datetime.utcnow()) and self._login():
+		# if not tl.isWeekend(datetime.utcnow()):
+		# 	self.offers_listener.addInstrument(self._convert_product(instrument), listener)
+
+		msg_id = self.generateReference()
+		res = self.ctrl.brokerRequest(self.name, '_subscribe_chart_updates', msg_id, instrument)
+		self.ctrl.addBrokerListener(msg_id, listener)
 
 
 	def _handle_chart_update(self):
@@ -453,7 +401,9 @@ class FXCM(Broker):
 
 				if update_time is not None:
 					# Convert time to datetime
-					c_ts = tl.convertTimeToTimestamp(update_time)
+					# c_ts = tl.convertTimeToTimestamp(update_time)
+					c_ts = update_time
+
 					# Iterate periods
 					for period in chart.getActivePeriods():
 						if (isinstance(chart.bid.get(period), np.ndarray) and 
@@ -588,8 +538,8 @@ class FXCM(Broker):
 				time_off_timer = time.time()
 				self._set_time_off()
 
-			if not self._is_logged_in():
-				self._login()
+			# if not self._is_logged_in():
+			# 	self._login()
 
 			time.sleep(0.01)
 

@@ -33,20 +33,21 @@ class Spotware(Broker):
 
 		self.ctrl = ctrl
 		self.is_demo = is_demo
-		self._spotware_connected = False
-		self._last_update = time.time()
-		self._subscriptions = {}
-		self._handled_position_events = {
-			tl.MARKET_ENTRY: {},
-			tl.POSITION_CLOSE: {}
-		}
+		self.is_parent = is_parent
+		# self._spotware_connected = False
+		# self._last_update = time.time()
+		# self._subscriptions = {}
+		# self._handled_position_events = {
+		# 	tl.MARKET_ENTRY: {},
+		# 	tl.POSITION_CLOSE: {}
+		# }
 		# self.assets = assets
 		# self.symbols = symbols
 
-		self.assets = {}
-		self.assets_by_name = {}
-		self.symbols = {}
-		self.symbols_by_name = {}
+		# self.assets = {}
+		# self.assets_by_name = {}
+		# self.symbols = {}
+		# self.symbols_by_name = {}
 
 		self._price_queue = []
 		self.time_off = 0
@@ -55,33 +56,37 @@ class Spotware(Broker):
 		'''
 		Setup Spotware Funcs
 		'''
-		if is_parent:
+		if self.is_parent:
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
+
 			self.parent = self
 			self.children = []
-
-			self.demo_client = Client(True)
-			self.live_client = Client(False)
-
-			self.demo_client.event('connect', self.connect)
-			self.demo_client.event('disconnect', self.disconnect)
-			self.demo_client.event('message', self.message)
-
-			self.live_client.event('connect', self.connect)
-			self.live_client.event('disconnect', self.disconnect)
-			self.live_client.event('message', self.message)
-
-			self.demo_client.connect()
-			self.live_client.connect()
-
-			while not self._spotware_connected:
-				pass
-
-			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
 
 			user = self.ctrl.getDb().getUser(self.name)
 			self.access_token = user.get('access_token')
 			self.refresh_token = user.get('refresh_token')
-			self._authorize_accounts(self.accounts, is_parent=True)
+
+			self._add_user()
+
+			# self.demo_client = Client(True)
+			# self.live_client = Client(False)
+
+			# self.demo_client.event('connect', self.connect)
+			# self.demo_client.event('disconnect', self.disconnect)
+			# self.demo_client.event('message', self.message)
+
+			# self.live_client.event('connect', self.connect)
+			# self.live_client.event('disconnect', self.disconnect)
+			# self.live_client.event('message', self.message)
+
+			# self.demo_client.connect()
+			# self.live_client.connect()
+
+			# while not self._spotware_connected:
+			# 	pass
+
+
+			# self._authorize_accounts(self.accounts, is_parent=True)
 
 			CHARTS = ['EUR_USD']
 			# self._subscribe_multiple_chart_updates(CHARTS)
@@ -91,7 +96,7 @@ class Spotware(Broker):
 				chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
-			Thread(target=self._periodic_refresh).start()
+			# Thread(target=self._periodic_refresh).start()
 			t = Thread(target=self._handle_chart_update)
 			t.start()
 
@@ -141,6 +146,21 @@ class Spotware(Broker):
 					pass
 
 			time.sleep(1)
+
+
+	def _add_user(self):
+		print('Add User')
+
+		res = self.ctrl.brokerRequest(
+			'spotware', 'add_user', None,
+			self.brokerId, self.access_token, self.refresh_token, self.accounts,
+			is_parent=self.is_parent
+		)
+
+		if 'error' in res:
+			return self._add_user()
+		else:
+			return res
 
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
@@ -382,68 +402,78 @@ class Spotware(Broker):
 		start=None, end=None, count=None,
 		force_download=False
 	):
-		sw_product = self._convert_product('Spotware', product)
-		sw_period = self._convert_period(period)
 
-		result = pd.concat((
-			self._create_empty_asks_df(), 
-			self._create_empty_mids_df(), 
-			self._create_empty_bids_df()
-		))
+		res = self.ctrl.brokerRequest(
+			self.name, '_download_historical_data_broker', None,
+			product, period, tz=tz, start=start, end=end,
+			count=count, force_download=force_download
+		)
 
-		dl_start = None
-		dl_end = None
-		if start:
-			dl_start = tl.utils.convertTimeToTimestamp(start)
-		if end:
-			dl_end = tl.utils.convertTimeToTimestamp(end)
+		result = pd.DataFrame.from_dict(res, dtype=float)
+		result.index = result.index.astype(int)
 
-		if count:
-			if start:
-				dl_end = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, start=start))
-			elif end:
-				dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, end=end))
-			else:
-				dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1))
-				dl_end = tl.utils.convertTimeToTimestamp(datetime.utcnow()) + tl.period.getPeriodOffsetSeconds(period)
+		# sw_product = self._convert_product('Spotware', product)
+		# sw_period = self._convert_period(period)
 
-		while True:
-			ref_id = self.generateReference()
-			trendbars_req = o2.ProtoOAGetTrendbarsReq(
-				ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-				fromTimestamp=int(dl_start*1000), toTimestamp=int(dl_end*1000), 
-				symbolId=sw_product, period=sw_period
-			)
-			self._get_client(list(self.accounts.keys())[0]).send(trendbars_req, msgid=ref_id)
+		# result = pd.concat((
+		# 	self._create_empty_asks_df(), 
+		# 	self._create_empty_mids_df(), 
+		# 	self._create_empty_bids_df()
+		# ))
 
-			res = self._wait(ref_id)
+		# dl_start = None
+		# dl_end = None
+		# if start:
+		# 	dl_start = tl.utils.convertTimeToTimestamp(start)
+		# if end:
+		# 	dl_end = tl.utils.convertTimeToTimestamp(end)
 
-			'''
-			Bar Constructor
-			'''
+		# if count:
+		# 	if start:
+		# 		dl_end = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, start=start))
+		# 	elif end:
+		# 		dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, end=end))
+		# 	else:
+		# 		dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1))
+		# 		dl_end = tl.utils.convertTimeToTimestamp(datetime.utcnow()) + tl.period.getPeriodOffsetSeconds(period)
 
-			if res.payloadType == 2138:
-				mids = self._bar_data_constructor(res, self._create_empty_mids_df())
-				asks = mids.copy()
-				asks.columns = ['ask_open', 'ask_high', 'ask_low', 'ask_close']
-				bids = mids.copy()
-				bids.columns = ['bid_open', 'bid_high', 'bid_low', 'bid_close']
+		# while True:
+		# 	ref_id = self.generateReference()
+		# 	trendbars_req = o2.ProtoOAGetTrendbarsReq(
+		# 		ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# 		fromTimestamp=int(dl_start*1000), toTimestamp=int(dl_end*1000), 
+		# 		symbolId=sw_product, period=sw_period
+		# 	)
+		# 	self._get_client(list(self.accounts.keys())[0]).send(trendbars_req, msgid=ref_id)
 
-				result = pd.concat((
-					result,
-					pd.concat((asks, mids, bids), axis=1)
-				))
+		# 	res = self._wait(ref_id)
 
-				if count and result.shape[0] < count:
-					dl_end = dl_start
-					dl_start = tl.convertTimeToTimestamp(tl.utils.getCountDate(
-						period, count+1, end=tl.convertTimestampToTime(dl_end)
-					))
-				else:
-					break
+		# 	'''
+		# 	Bar Constructor
+		# 	'''
 
-			else:
-				break
+		# 	if res.payloadType == 2138:
+		# 		mids = self._bar_data_constructor(res, self._create_empty_mids_df())
+		# 		asks = mids.copy()
+		# 		asks.columns = ['ask_open', 'ask_high', 'ask_low', 'ask_close']
+		# 		bids = mids.copy()
+		# 		bids.columns = ['bid_open', 'bid_high', 'bid_low', 'bid_close']
+
+		# 		result = pd.concat((
+		# 			result,
+		# 			pd.concat((asks, mids, bids), axis=1)
+		# 		))
+
+		# 		if count and result.shape[0] < count:
+		# 			dl_end = dl_start
+		# 			dl_start = tl.convertTimeToTimestamp(tl.utils.getCountDate(
+		# 				period, count+1, end=tl.convertTimestampToTime(dl_end)
+		# 			))
+		# 		else:
+		# 			break
+
+		# 	else:
+		# 		break
 
 		'''
 		Tick Constructor
@@ -1312,33 +1342,35 @@ class Spotware(Broker):
 
 
 	def _subscribe_chart_updates(self, product, listener):
-		ref_id = self.generateReference()
+		# ref_id = self.generateReference()
 
-		product = self._convert_product('Spotware', product)
-		self.parent._subscriptions[str(product)] = listener
+		# product = self._convert_product('Spotware', product)
+		# self.parent._subscriptions[str(product)] = listener
 
-		sub_req = o2.ProtoOASubscribeSpotsReq(
-			ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-			symbolId=[product]
-		)
-		self._get_client(list(self.accounts.keys())[0]).send(sub_req, msgid=ref_id)
-		self.parent._wait(ref_id)
-
-		# sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# sub_req = o2.ProtoOASubscribeSpotsReq(
 		# 	ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-		# 	symbolId=product, period=1
+		# 	symbolId=[product]
 		# )
-		# self._get_client(list(self.accounts.keys())[0]).send(sub_req)
+		# self._get_client(list(self.accounts.keys())[0]).send(sub_req, msgid=ref_id)
+		# self.parent._wait(ref_id)
 
-		for i in range(14):
-			if i % 5 == 0:
-				time.sleep(1)
+		# # sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# # 	ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# # 	symbolId=product, period=1
+		# # )
+		# # self._get_client(list(self.accounts.keys())[0]).send(sub_req)
 
-			sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
-				ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-				symbolId=product, period=i+1
-			)
-			self._get_client(list(self.accounts.keys())[0]).send(sub_req)
+		# for i in range(14):
+		# 	if i % 5 == 0:
+		# 		time.sleep(1)
+
+		# 	sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# 		ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# 		symbolId=product, period=i+1
+		# 	)
+		# 	self._get_client(list(self.accounts.keys())[0]).send(sub_req)
+
+		return
 
 
 	def _subscribe_multiple_chart_updates(self, products, listener):
