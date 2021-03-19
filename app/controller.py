@@ -54,8 +54,6 @@ class Controller(object):
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
 
-		self.xecd = XecdClient(app.config['XECD_ACCOUNT_ID'], app.config['XECD_API_KEY'])
-		# if 'spotware' in self.brokers:
 		self.spots = Spots(self, [
 			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
 			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
