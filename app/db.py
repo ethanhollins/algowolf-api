@@ -27,13 +27,19 @@ class Database(object):
 		if env == 'development':
 			self.userTable = self._generate_table('algowolf-users-dev')
 			self.scriptTable = self._generate_table('algowolf-scripts-dev')
+			self.holygrailAccessTable = self._generate_table('algowolf-holygrail-access')
+			self.holygrailTokenTable = self._generate_table('algowolf-holygrail-tokens')
 			self.strategyBucketName = 'algowolf-strategies-dev'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 		else:
 			self.userTable = self._generate_table('algowolf-users')
 			self.scriptTable = self._generate_table('algowolf-scripts')
+			self.holygrailAccessTable = self._generate_table('algowolf-holygrail-access')
+			self.holygrailTokenTable = self._generate_table('algowolf-holygrail-tokens')
 			self.strategyBucketName = 'algowolf-strategies'
 			self.scriptBucketName = 'algowolf-scripts-dev'
+
+		self.prodUserTable = self._generate_table('algowolf-users')
 
 		self.analyticsTable = self._generate_table('algowolf-analytics')
 		self.emailsTable = self._generate_table('algowolf-emails')
@@ -1370,4 +1376,126 @@ class Database(object):
 		)
 
 
+	'''
+	HolyGrail Demo
+	'''
 
+	def getProdUser(self, user_id):
+		res = self.prodUserTable.get_item(
+			Key={ 'user_id': user_id }
+		)
+		if res.get('Item'):
+			return self._convert_to_float(res['Item'])
+		else:
+			return None
+
+
+	def getAllProdUsers(self):
+		res = self.prodUserTable.scan()
+		data = res['Items']
+
+		while 'LastEvaluatedKey' in res:
+			res = self.prodUserTable.scan(ExclusiveStartKey=res['LastEvaluatedKey'])
+			data.extend(res['Items'])
+
+		return self._convert_to_float(data)
+
+
+	def getHolyGrailUser(self, user_id):
+		res = self.holygrailAccessTable.get_item(
+			Key={ 'user_id': user_id }
+		)
+		if res.get('Item'):
+			return res['Item']
+		else:
+			return None
+
+
+	def getAllHolyGrailUsers(self):
+		res = self.holygrailAccessTable.scan()
+		data = res['Items']
+
+		while 'LastEvaluatedKey' in res:
+			res = self.holygrailAccessTable.scan(ExclusiveStartKey=res['LastEvaluatedKey'])
+			data.extend(res['Items'])
+
+		return data
+
+
+	def addHolyGrailUser(self, user_id, email, first_name, last_name, approved):
+		if not self.getHolyGrailUser(user_id):
+			res = self.holygrailAccessTable.put_item(
+				Item={
+					'user_id': user_id,
+					'email': email,
+					'first_name': first_name,
+					'last_name': last_name,
+					'approved': approved
+				}
+			)
+		else:
+			self.updateHolyGrailUser(
+				user_id, { 'approved': True }
+			)
+
+		return user_id
+
+
+	def updateHolyGrailUser(self, user_id, update):
+		update_values = self._convert_to_decimal(
+			dict([tuple([':{}'.format(i[0]), i[1]])
+					for i in update.items()])
+		)
+
+		update_exp = ('set ' + ' '.join(
+			['{} = :{},'.format(k, k) for k in update.keys()]
+		))[:-1]
+
+		res = self.holygrailAccessTable.update_item(
+			Key={
+				'user_id': user_id
+			},
+			UpdateExpression=update_exp,
+			ExpressionAttributeValues=update_values,
+			ReturnValues="UPDATED_NEW"
+		)
+		return True
+
+
+	def deleteHolyGrailUser(self, user_id):
+		res = self.holygrailAccessTable.delete_item(
+			Key={
+				'user_id': user_id,
+			}
+		)
+		return True
+
+
+	def checkHolyGrailToken(self, token):
+		res = self.holygrailTokenTable.get_item(
+			Key={ 'token': token }
+		)
+		if res.get('Item'):
+			print(res.get('Item'))
+			return True
+		else:
+			return False
+
+
+	def addHolyGrailToken(self, token):
+		res = self.holygrailTokenTable.put_item(
+			Item={
+				'token': token
+			}
+		)
+
+		return token
+
+
+	def deleteHolyGrailToken(self, token):
+		res = self.holygrailTokenTable.delete_item(
+			Key={
+				'token': token,
+			}
+		)
+		return True

@@ -3,6 +3,7 @@ import time
 import math
 import json, jwt
 import re, string, random
+import requests
 from datetime import datetime
 from enum import Enum
 from flask import (
@@ -423,42 +424,42 @@ def start_script_ept(strategy_id, broker_id):
 	body = getJson()
 
 
-	# if not account.isAnyScriptRunning():
-	accounts = body.get('accounts')
-	input_variables = body.get('input_variables')
-	if accounts is not None:
-		broker = account.getStrategyBroker(broker_id)
-		for account_id in accounts:
-			# Account validation check
-			if broker is None or not account_id in broker.getAccounts():
-				res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
-				return Response(
-					json.dumps(res, indent=2), 
-					status=404,
-					content_type='application/json'
-				)
+	if not account.isAnyScriptRunning():
+		accounts = body.get('accounts')
+		input_variables = body.get('input_variables')
+		if accounts is not None:
+			broker = account.getStrategyBroker(broker_id)
+			for account_id in accounts:
+				# Account validation check
+				if broker is None or not account_id in broker.getAccounts():
+					res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
+					return Response(
+						json.dumps(res, indent=2), 
+						status=404,
+						content_type='application/json'
+					)
 
-		# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
-		success = account._runStrategyScript(strategy_id, broker_id, accounts, input_variables)
+			# package = account.runStrategyScript(strategy_id, broker_id, accounts, input_variables)
+			success = account._runStrategyScript(strategy_id, broker_id, accounts, input_variables)
 
-		res = account.getStrategy(strategy_id)
-		return Response(
-			json.dumps(res, indent=2),
-			status=200, content_type='application/json'
-		)
+			res = account.getStrategy(strategy_id)
+			return Response(
+				json.dumps(res, indent=2),
+				status=200, content_type='application/json'
+			)
+
+		else:
+			raise AccountException('Body does not contain `accounts`.')
 
 	else:
-		raise AccountException('Body does not contain `accounts`.')
-
-	# else:
-	# 	res = {
-	# 		'error': 'AccountException',
-	# 		'message': 'Can only run one script at a time.'
-	# 	}
-	# 	return Response(
-	# 			json.dumps(res, indent=2),
-	# 			status=400, content_type='application/json'
-	# 		)
+		res = {
+			'error': 'AccountException',
+			'message': 'Can only run one script at a time.'
+		}
+		return Response(
+				json.dumps(res, indent=2),
+				status=400, content_type='application/json'
+			)
 
 @bp.route('/strategy/<strategy_id>/stop/<broker_id>', methods=('POST',))
 def stop_script_ept(strategy_id, broker_id):
@@ -1534,4 +1535,199 @@ def subscribe_email_ept():
 		json.dumps(res, indent=2), status=200,
 		content_type='application/json'
 	)
+
+
+@bp.route("/holygrail", methods=("GET",))
+def get_all_holygrail_users_ept():
+	users = ctrl.getDb().getAllHolyGrailUsers()
+
+	res = { 'users': users }
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail/<user_id>", methods=("GET",))
+def get_holygrail_user_ept(user_id):
+	user = ctrl.getDb().getHolyGrailUser(user_id)
+
+	if user is not None:
+		res = user
+	else:
+		res = {}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail/<user_id>", methods=("POST",))
+def add_holygrail_user_ept(user_id):
+	user = ctrl.getDb().getProdUser(user_id)
+	user_id = ctrl.getDb().addHolyGrailUser(
+		user.get('user_id'), user.get('email'),
+		user.get('first_name'), user.get('last_name'),
+		False
+	)
+
+	res = { 
+		'user_id': user.get('user_id'),
+		'email': user.get('email'),
+		'first_name': user.get('first_name'),
+		'last_name': user.get('last_name'),
+		'approved': False
+	}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail/approve", methods=("PUT",))
+def set_holygrail_user_approved_ept():
+	body = getJson()
+
+	if 'approved' in body and 'users' in body:
+		ACCESS_GRANTED_ZOHO_EPT = 'https://flow.zoho.com.au/7001001266/flow/webhook/incoming?zapikey=1001.44fdf71722d081f97958c88559b5c639.541402092e6abc3fa6ca30e8e39c1f0b&isdebug=false'
+		for user_id in body.get('users'):
+			ctrl.getDb().updateHolyGrailUser(
+				user_id, { 'approved': body.get('approved') }
+			)
+
+			user = ctrl.getDb().getHolyGrailUser(user_id)
+
+			payload = {
+				'email': user.get('email'),
+				'first_name': user.get('first_name'),
+				'last_name': user.get('last_name')
+			}
+			requests.post(
+				ACCESS_GRANTED_ZOHO_EPT,
+				data=json.dumps(payload)
+			)
+
+	res = { 
+		'user_id': user_id
+	}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail", methods=("DELETE",))
+def delete_holygrail_user_ept():
+	body = getJson()
+
+	if 'users' in body:
+		for user_id in body.get('users'):
+			ctrl.getDb().deleteHolyGrailUser(user_id)
+
+	res = { 'completed': True }
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail/auth/<user_id>", methods=("POST",))
+def authorize_holygrail_user_ept(user_id):
+	
+	if user_id in [
+		'L8qaPZNsLnyHugrqMaPPDY', '8M5LU6uEZY9DDiH8nftqEH',
+		'WbcHtB9iqBkehm3YvAGMzd', 'bgAATeNkqpn4LP6mt85Fsy'
+	]:
+		res = { 'authorized': True }
+		return Response(
+			json.dumps(res, indent=2), status=200,
+			content_type='application/json'
+		)
+
+	else:
+		res = { 'authorized': False }
+		return Response(
+			json.dumps(res, indent=2), status=403,
+			content_type='application/json'
+		)
+
+
+@bp.route("/holygrail/all", methods=("POST",))
+def add_all_current_users_to_holygrail_ept():
+	users = ctrl.getDb().getAllProdUsers()
+
+	for user in users:
+		ctrl.getDb().addHolyGrailUser(
+			user.get('user_id'), user.get('email'),
+			user.get('first_name'), user.get('last_name'),
+			True
+		)
+
+	res = { 
+		'completed': True
+	}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail/invite", methods=("POST",))
+def invite_holygrail_user_ept():
+	body = getJson()
+
+	if 'emails' in body:
+		DEMO_INVITE_ZOHO_EPT = 'https://flow.zoho.com.au/7001001266/flow/webhook/incoming?zapikey=1001.2831b69b6eeb35463eb596398c30a387.9607608a976d1031ba4e608960c3db96&isdebug=false'
+		for email in body.get('emails'):
+			jwt_payload = {
+				'sub': email,
+				'iat': time.time()
+			}
+			token = jwt.encode(jwt_payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf-8')
+			ctrl.getDb().addHolyGrailToken(token)
+
+			BASE_CLIENT_URL = current_app.config['BASE_CLIENT_URL']
+			payload = {
+				'email': email,
+				'link': f'{BASE_CLIENT_URL}/login?redirect=auth%2Fholygrail&code={token}'
+			}
+			requests.post(
+				DEMO_INVITE_ZOHO_EPT,
+				data=json.dumps(payload)
+			)
+
+	res = { 
+		'completed': True
+	}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/holygrail/auth/token", methods=("GET",))
+@auth.login_required
+def check_holygrail_token_ept():
+	user_id = g.user.userId
+
+	token = request.args.get('code')
+	token_exists = ctrl.getDb().checkHolyGrailToken(token)
+
+	if token_exists:
+		ctrl.getDb().deleteHolyGrailToken(token)
+		user = ctrl.getDb().getUser(user_id)
+		user_id = ctrl.getDb().addHolyGrailUser(
+			user.get('user_id'), user.get('email'),
+			user.get('first_name'), user.get('last_name'),
+			True
+		)
+
+	res = { 
+		'authorized': token_exists
+	}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
 
