@@ -34,6 +34,7 @@ class Spotware(Broker):
 		self.ctrl = ctrl
 		self.is_demo = is_demo
 		self.is_parent = is_parent
+		self.is_dummy = is_dummy
 		# self._spotware_connected = False
 		# self._last_update = time.time()
 		# self._subscriptions = {}
@@ -53,8 +54,6 @@ class Spotware(Broker):
 		self.time_off = 0
 		self._set_time_off()
 
-		self._subscribe_account_updates()
-
 		'''
 		Setup Spotware Funcs
 		'''
@@ -69,6 +68,7 @@ class Spotware(Broker):
 			self.refresh_token = user.get('refresh_token')
 
 			self._add_user()
+			self._subscribe_account_updates()
 
 			# self.demo_client = Client(True)
 			# self.live_client = Client(False)
@@ -108,8 +108,11 @@ class Spotware(Broker):
 
 			self.parent = ctrl.brokers.getBroker(tl.broker.SPOTWARE_NAME)
 			self.parent.addChild(self)
+
+			self._add_user()
+
 			# self.client = self.parent.client
-			self._authorize_accounts(accounts)
+			# self._authorize_accounts(accounts)
 
 		if not is_dummy:
 			# for account_id in self.getAccounts():
@@ -154,14 +157,34 @@ class Spotware(Broker):
 		print('Add User')
 
 		res = self.ctrl.brokerRequest(
-			'spotware', 'add_user', None,
+			'spotware', self.brokerId, 'add_user', None,
 			self.brokerId, self.access_token, self.refresh_token, self.accounts,
-			is_parent=self.is_parent
+			is_parent=self.is_parent, is_dummy=self.is_dummy
 		)
 
 		if 'error' in res:
 			return self._add_user()
 		else:
+			self.access_token = res['access_token']
+			self.refresh_token = res['refresh_token']
+			if self.is_parent:
+				self.ctrl.getDb().updateUser(
+					'spotware',
+					{
+						'access_token': self.access_token,
+						'refresh_token': self.refresh_token
+					}
+				)
+
+			else:
+				self.ctrl.getDb().updateBroker(
+					self.userAccount.userId, self.brokerId, 
+					{ 
+						'access_token': self.access_token,
+						'refresh_token': self.refresh_token
+					}
+				)
+
 			return res
 
 
@@ -293,15 +316,23 @@ class Spotware(Broker):
 	def _refresh_token(self, is_parent=False):
 		print(f'REFRESH: {self.refresh_token}')
 
-		ref_id = self.generateReference()
-		refresh_req = o2.ProtoOARefreshTokenReq(
-			refreshToken=self.refresh_token
+
+		res = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_refresh_token', None
 		)
-		self.parent.demo_client.send(refresh_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
-		if res.payloadType == 2174:
-			self.access_token = res.accessToken
-			self.refresh_token = res.refreshToken
+
+
+		# ref_id = self.generateReference()
+		# refresh_req = o2.ProtoOARefreshTokenReq(
+		# 	refreshToken=self.refresh_token
+		# )
+		# self.parent.demo_client.send(refresh_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
+		# if res.payloadType == 2174:
+
+		if 'error' not in res:
+			self.access_token = res['access_token']
+			self.refresh_token = res['refresh_token']
 			if is_parent:
 				self.ctrl.getDb().updateUser(
 					self.name,
@@ -323,26 +354,33 @@ class Spotware(Broker):
 
 	def _authorize_accounts(self, accounts, is_parent=False):
 		print(f'MSG: {self.strategyId}, {self.brokerId}, {accounts}')
-		if self.refresh_token is not None:
-			self._refresh_token(is_parent=is_parent)
 
-		for account_id in accounts:
-			ref_id = self.generateReference()
-			acc_auth = o2.ProtoOAAccountAuthReq(
-				ctidTraderAccountId=int(account_id), 
-				accessToken=self.access_token
-			)
-			self._get_client(account_id).send(acc_auth, msgid=ref_id)
-			res = self.parent._wait(ref_id)
+		res = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_authorize_accounts', None,
+			accounts, is_parent=is_parent
+		)
+
+
+		# if self.refresh_token is not None:
+		# 	self._refresh_token(is_parent=is_parent)
+
+		# for account_id in accounts:
+		# 	ref_id = self.generateReference()
+		# 	acc_auth = o2.ProtoOAAccountAuthReq(
+		# 		ctidTraderAccountId=int(account_id), 
+		# 		accessToken=self.access_token
+		# 	)
+		# 	self._get_client(account_id).send(acc_auth, msgid=ref_id)
+		# 	res = self.parent._wait(ref_id)
 			
-			trader_ref_id = self.generateReference()
-			trader_req = o2.ProtoOATraderReq(
-				ctidTraderAccountId=int(account_id)
-			)
-			self._get_client(account_id).send(trader_req, msgid=trader_ref_id)
-			trader_res = self.parent._wait(trader_ref_id)
+		# 	trader_ref_id = self.generateReference()
+		# 	trader_req = o2.ProtoOATraderReq(
+		# 		ctidTraderAccountId=int(account_id)
+		# 	)
+		# 	self._get_client(account_id).send(trader_req, msgid=trader_ref_id)
+		# 	trader_res = self.parent._wait(trader_ref_id)
 
-			self._set_broker_info(account_id, trader_res.trader.brokerName)
+		# 	self._set_broker_info(account_id, trader_res.trader.brokerName)
 
 			# if res.payloadType == 2142:
 			# 	return self._authorize_accounts(accounts)
@@ -406,7 +444,7 @@ class Spotware(Broker):
 	):
 
 		res = self.ctrl.brokerRequest(
-			self.name, '_download_historical_data_broker', None,
+			self.name, self.brokerId, '_download_historical_data_broker', None,
 			product, period, tz=tz, start=start, end=end,
 			count=count, force_download=force_download
 		)
@@ -570,19 +608,25 @@ class Spotware(Broker):
 
 
 	def _get_all_positions(self, account_id):
-		ref_id = self.generateReference()
-		pos_req = o2.ProtoOAReconcileReq(
-			ctidTraderAccountId=int(account_id)
+
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_get_all_positions', None,
+			account_id
 		)
-		self._get_client(account_id).send(pos_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
 
-		result = { account_id: [] }
-		if res.payloadType == 2125:
-			for pos in res.position:
-				new_pos = self.convert_sw_position(account_id, pos)
+		# ref_id = self.generateReference()
+		# pos_req = o2.ProtoOAReconcileReq(
+		# 	ctidTraderAccountId=int(account_id)
+		# )
+		# self._get_client(account_id).send(pos_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
 
-				result[account_id].append(new_pos)
+		# result = { account_id: [] }
+		# if res.payloadType == 2125:
+		# 	for pos in res.position:
+		# 		new_pos = self.convert_sw_position(account_id, pos)
+
+		# 		result[account_id].append(new_pos)
 
 		return result
 
@@ -607,8 +651,8 @@ class Spotware(Broker):
 				override=override
 			)
 
-		result = self.brokerRequest(
-			self.name, 'createPosition', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'createPosition', None,
 			product, lotsize, direction,
 			account_id, entry_range, entry_price,
 			sl_range, tp_range, sl_price, tp_price
@@ -727,8 +771,8 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
-		result = self.brokerRequest(
-			self.name, 'modifyPosition', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'modifyPosition', None,
 			pos.account_id, pos.order_id, sl_price, tp_price
 		)
 
@@ -775,8 +819,8 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
-		result = self.brokerRequest(
-			self.name, 'deletePosition', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'deletePosition', None,
 			pos.account_id, pos.order_id, lotsize
 		)
 
@@ -846,8 +890,8 @@ class Spotware(Broker):
 
 	def getAllAccounts(self):
 
-		result = self.brokerRequest(
-			self.name, 'getAllAccounts', None
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'getAllAccounts', None
 		)
 
 		return result
@@ -894,8 +938,8 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
-		result = self.brokerRequest(
-			self.name, 'getAccountInfo', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'getAccountInfo', None,
 			account_id
 		)
 
@@ -948,8 +992,8 @@ class Spotware(Broker):
 				override=override
 			)
 
-		result = self.brokerRequest(
-			self.name, 'createOrder', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'createOrder', None,
 			product, lotsize, direction,
 			account_id, order_type, entry_range, entry_price,
 			sl_range, tp_range, sl_price, tp_price
@@ -1036,8 +1080,8 @@ class Spotware(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 
-		result = self.brokerRequest(
-			self.name, 'modifyOrder', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'modifyOrder', None,
 			order.account_id, order.order_id, order.order_type, lotsize, entry_price, sl_price, tp_price
 		)
 
@@ -1107,8 +1151,8 @@ class Spotware(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 
-		result = self.brokerRequest(
-			self.name, 'deleteOrder', None,
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'deleteOrder', None,
 			order.account_id, order.order_id
 		)
 
@@ -1149,14 +1193,8 @@ class Spotware(Broker):
 	def _subscribe_account_updates(self):
 		msg_id = self.generateReference()
 		res = self.ctrl.brokerRequest(
-			self.name, '_subscribe_account_updates', msg_id
+			'spotware', self.brokerId, '_subscribe_account_updates', msg_id
 		)
-
-		if 'error' in res:
-			return self._subscribe_account_updates()
-		else:
-			self.ctrl.addBrokerListener(msg_id, self._on_account_update)
-			return res
 
 
 	def _on_account_update(self, account_id, update, ref_id):
