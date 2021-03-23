@@ -115,9 +115,10 @@ class Spotware(Broker):
 			# self._authorize_accounts(accounts)
 
 		if not is_dummy:
+			self._subscribe_account_updates()
 			# for account_id in self.getAccounts():
 			# 	if account_id != tl.broker.PAPERTRADER_NAME:
-			# 		self._subscribe_account_updates(account_id)
+					# self._subscribe_account_updates(account_id)
 
 			# Handle strategy
 			if self.userAccount and self.brokerId:
@@ -157,7 +158,7 @@ class Spotware(Broker):
 		print('Add User')
 
 		res = self.ctrl.brokerRequest(
-			'spotware', self.brokerId, 'add_user', None,
+			'spotware', self.brokerId, 'add_user',
 			self.brokerId, self.access_token, self.refresh_token, self.accounts,
 			is_parent=self.is_parent, is_dummy=self.is_dummy
 		)
@@ -321,7 +322,7 @@ class Spotware(Broker):
 
 
 		res = self.ctrl.brokerRequest(
-			self.name, self.brokerId, '_refresh_token', None
+			self.name, self.brokerId, '_refresh_token'
 		)
 
 
@@ -359,7 +360,7 @@ class Spotware(Broker):
 		print(f'MSG: {self.strategyId}, {self.brokerId}, {accounts}')
 
 		res = self.ctrl.brokerRequest(
-			self.name, self.brokerId, '_authorize_accounts', None,
+			self.name, self.brokerId, '_authorize_accounts',
 			accounts, is_parent=is_parent
 		)
 
@@ -447,7 +448,7 @@ class Spotware(Broker):
 	):
 
 		res = self.ctrl.brokerRequest(
-			self.name, self.brokerId, '_download_historical_data_broker', None,
+			self.name, self.brokerId, '_download_historical_data_broker',
 			product, period, tz=tz, start=start, end=end,
 			count=count, force_download=force_download
 		)
@@ -568,14 +569,14 @@ class Spotware(Broker):
 
 
 	def convert_sw_position(self, account_id, pos):
-		order_id = str(pos.positionId)
-		product = self._convert_sw_product(pos.tradeData.symbolId)
-		direction = tl.LONG if pos.tradeData.tradeSide == 1 else tl.SHORT
-		lotsize = pos.tradeData.volume
-		entry_price = pos.price
-		sl = None if pos.stopLoss == 0 else round(pos.stopLoss, 5)
-		tp = None if pos.takeProfit == 0 else round(pos.takeProfit, 5)
-		open_time = pos.tradeData.openTimestamp / 1000
+		order_id = str(pos['positionId'])
+		product = self._convert_sw_product(int(pos['tradeData']['symbolId']))
+		direction = tl.LONG if pos['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
+		lotsize = float(pos['tradeData']['volume'])
+		entry_price = float(pos['price'])
+		sl = None if float(pos['stopLoss']) == 0 else round(float(pos['stopLoss']), 5)
+		tp = None if float(pos['takeProfit']) == 0 else round(float(pos['takeProfit']), 5)
+		open_time = float(pos['tradeData']['openTimestamp']) / 1000
 
 		return tl.Position(
 			self,
@@ -587,20 +588,20 @@ class Spotware(Broker):
 
 	def convert_sw_order(self, account_id, order):
 		entry_price = None
-		if order.orderType == 3:
-			entry_price = order.stopPrice
+		if order['orderType'] == 'STOP':
+			entry_price = float(order['stopPrice'])
 			order_type = tl.STOP_ORDER
-		elif order.orderType == 2:
-			entry_price = order.limitPrice
+		elif order['orderType'] == 'LIMIT':
+			entry_price = float(order['limitPrice'])
 			order_type = tl.LIMIT_ORDER
 
-		order_id = str(order.orderId)
-		product = self._convert_sw_product(order.tradeData.symbolId)
-		direction = tl.LONG if order.tradeData.tradeSide == 1 else tl.SHORT
-		lotsize = order.tradeData.volume
-		sl = None if order.stopLoss == 0 else round(order.stopLoss, 5)
-		tp = None if order.takeProfit == 0 else round(order.takeProfit, 5)
-		open_time = order.tradeData.openTimestamp / 1000
+		order_id = str(order['orderId'])
+		product = self._convert_sw_product(int(order['tradeData']['symbolId']))
+		direction = tl.LONG if order['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
+		lotsize = float(order['tradeData']['volume'])
+		sl = None if float(order['stopLoss']) == 0 else round(float(order['stopLoss']), 5)
+		tp = None if float(order['takeProfit']) == 0 else round(float(order['takeProfit']), 5)
+		open_time = float(order['tradeData']['openTimestamp']) / 1000
 
 		return tl.Order(
 			self,
@@ -613,9 +614,13 @@ class Spotware(Broker):
 	def _get_all_positions(self, account_id):
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, '_get_all_positions', None,
+			self.name, self.brokerId, '_get_all_positions',
 			account_id
 		)
+
+		for account_id in result:
+			for i in range(len(result[account_id])):
+				result[account_id][i] = tl.Position.fromDict(self, result[account_id][i])
 
 		# ref_id = self.generateReference()
 		# pos_req = o2.ProtoOAReconcileReq(
@@ -655,7 +660,7 @@ class Spotware(Broker):
 			)
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'createPosition', None,
+			self.name, self.brokerId, 'createPosition',
 			product, lotsize, direction,
 			account_id, entry_range, entry_price,
 			sl_range, tp_range, sl_price, tp_price
@@ -775,7 +780,7 @@ class Spotware(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'modifyPosition', None,
+			self.name, self.brokerId, 'modifyPosition',
 			pos.account_id, pos.order_id, sl_price, tp_price
 		)
 
@@ -823,7 +828,7 @@ class Spotware(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'deletePosition', None,
+			self.name, self.brokerId, 'deletePosition',
 			pos.account_id, pos.order_id, lotsize
 		)
 
@@ -876,9 +881,13 @@ class Spotware(Broker):
 	def _get_all_orders(self, account_id):
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, '_get_all_orders', None,
+			self.name, self.brokerId, '_get_all_orders',
 			account_id
 		)
+
+		for account_id in result:
+			for i in range(len(result[account_id])):
+				result[account_id][i] = tl.Order.fromDict(self, result[account_id][i])
 
 
 		# ref_id = self.generateReference()
@@ -901,7 +910,7 @@ class Spotware(Broker):
 	def getAllAccounts(self):
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'getAllAccounts', None
+			self.name, self.brokerId, 'getAllAccounts'
 		)
 
 		return result
@@ -949,7 +958,7 @@ class Spotware(Broker):
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'getAccountInfo', None,
+			self.name, self.brokerId, 'getAccountInfo',
 			account_id
 		)
 
@@ -1007,7 +1016,7 @@ class Spotware(Broker):
 			)
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'createOrder', None,
+			self.name, self.brokerId, 'createOrder',
 			product, lotsize, direction,
 			account_id, order_type, entry_range, entry_price,
 			sl_range, tp_range, sl_price, tp_price
@@ -1095,7 +1104,7 @@ class Spotware(Broker):
 
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'modifyOrder', None,
+			self.name, self.brokerId, 'modifyOrder',
 			order.account_id, order.order_id, order.order_type, lotsize, entry_price, sl_price, tp_price
 		)
 
@@ -1166,7 +1175,7 @@ class Spotware(Broker):
 
 
 		result = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'deleteOrder', None,
+			self.name, self.brokerId, 'deleteOrder',
 			order.account_id, order.order_id
 		)
 
@@ -1205,42 +1214,44 @@ class Spotware(Broker):
 
 
 	def _subscribe_account_updates(self):
-		msg_id = self.generateReference()
+		stream_id = self.generateReference()
 		res = self.ctrl.brokerRequest(
-			'spotware', self.brokerId, '_subscribe_account_updates', msg_id
+			'spotware', self.brokerId, '_subscribe_account_updates', stream_id
 		)
+		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 
-	def _on_account_update(self, account_id, update, ref_id):
-		if update.payloadType == 2126:
+	def _on_account_update(self, payload_type, account_id, update, ref_id):
+		print(f'_on_account_update: {payload_type} {account_id} {update}', flush=True)
+		if int(payload_type) == 2126:
 			# if not ref_id:
 			ref_id = self.generateReference()
 
 			print(f'Account Update: {update}')
-			execution_type = update.executionType
+			execution_type = update['executionType']
 
 			result = {}
 			# ORDER_FILLED
-			if execution_type == 3:
+			if execution_type == 'ORDER_FILLED':
 				# Check `closingOrder`
-				if update.order.closingOrder:
+				if update['order']['closingOrder']:
 					# Delete
 					for i in range(len(self.positions)):
 						pos = self.positions[i]
-						if str(update.position.positionId) == pos.order_id:
-							if update.order.orderType == 4:
-								pos.close_price = update.order.executionPrice
-								pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+						if str(update['position']['positionId']) == pos.order_id:
+							if int(update['order']['orderType']) == 'STOP_LOSS_TAKE_PROFIT':
+								pos.close_price = float(update['order']['executionPrice'])
+								pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 								del self.positions[i]
 
-								if update.order.limitPrice:
-									tp_dist = abs(update.order.executionPrice - update.order.limitPrice)
+								if update['order']['limitPrice']:
+									tp_dist = abs(float(update['order']['executionPrice']) - float(update['order']['limitPrice']))
 								else:
 									tp_dist = None
 
-								if update.order.limitPrice:
-									sl_dist = abs(update.order.executionPrice - update.order.stopPrice)
+								if update['order']['stopPrice']:
+									sl_dist = abs(float(update['order']['executionPrice']) - float(update['order']['stopPrice']))
 								else:
 									sl_dist = None
 
@@ -1259,9 +1270,9 @@ class Spotware(Broker):
 								})
 							else:
 								# Fully Closed
-								if update.position.tradeData.volume == 0:
-									pos.close_price = update.order.executionPrice
-									pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+								if float(update['position']['tradeData']['volume']) == 0:
+									pos.close_price = float(update['order']['executionPrice'])
+									pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 									del self.positions[i]
 
@@ -1276,12 +1287,12 @@ class Spotware(Broker):
 
 								# Partially Closed
 								else:
-									pos.lotsize -= update.order.executedVolume
+									pos.lotsize -= float(update['order']['executedVolume'])
 
 									del_pos = tl.Position.fromDict(self, pos)
-									del_pos.lotsize = update.order.executedVolume
-									del_pos.close_price = update.order.executionPrice
-									del_pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+									del_pos.lotsize = float(update['order']['executedVolume'])
+									del_pos.close_price = float(update['order']['executionPrice'])
+									del_pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 									result.update({
 										ref_id: {
@@ -1297,8 +1308,8 @@ class Spotware(Broker):
 					order_type = tl.MARKET_ENTRY
 					for i in range(len(self.orders)):
 						order = self.orders[i]
-						if str(update.order.orderId) == order.order_id:
-							order.close_time = update.order.utcLastUpdateTimestamp / 1000
+						if str(update['order']['orderId']) == order.order_id:
+							order.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 							if order.order_type == tl.STOP_ORDER:
 								order_type = tl.STOP_ENTRY
 							elif order.order_type == tl.LIMIT_ORDER:
@@ -1319,7 +1330,7 @@ class Spotware(Broker):
 							break
 
 					# Create
-					new_pos = self.convert_sw_position(account_id, update.position)
+					new_pos = self.convert_sw_position(account_id, update['position'])
 					self.positions.append(new_pos)
 
 					result.update({
@@ -1332,15 +1343,15 @@ class Spotware(Broker):
 					})
 
 			# ORDER_ACCEPTED
-			elif execution_type == 2:
+			elif execution_type == 'ORDER_ACCEPTED':
 				# Check if `STOP` or `LIMIT`
-				if update.order.orderType in (2,3):
-					new_order = self.convert_sw_order(account_id, update.order)
+				if update['order']['orderType'] in ('LIMIT','STOP'):
+					new_order = self.convert_sw_order(account_id, update['order'])
 					self.orders.append(new_order)
 
 					result.update({
 						ref_id: {
-							'timestamp': update.order.utcLastUpdateTimestamp/1000,
+							'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 							'type': new_order.order_type,
 							'accepted': True,
 							'item': new_order
@@ -1348,17 +1359,17 @@ class Spotware(Broker):
 					})
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
-				elif update.order.orderType == 4:
+				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					for pos in self.positions:
-						if str(update.position.positionId) == pos.order_id:
-							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
+						if str(update['position']['positionId']) == pos.order_id:
+							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
+							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order'][utcLastUpdateTimestamp])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
@@ -1368,15 +1379,15 @@ class Spotware(Broker):
 							break
 
 			# ORDER_CANCELLED
-			elif execution_type == 5:
+			elif execution_type == 'ORDER_CANCELLED':
 				# Check if `STOP` or `LIMIT`
-				if update.order.orderType in (2,3):
+				if update['order']['orderType'] in ('LIMIT','STOP'):
 					# Update current order
-					new_order = self.convert_sw_order(account_id, update.order)
+					new_order = self.convert_sw_order(account_id, update['order'])
 					for i in range(len(self.orders)):
 						order = self.orders[i]
-						if str(update.order.orderId) == order.order_id:
-							order.close_time = update.order.utcLastUpdateTimestamp / 1000
+						if str(update['order']['orderId']) == order.order_id:
+							order.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 							del self.orders[i]
 
@@ -1392,17 +1403,17 @@ class Spotware(Broker):
 							break
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
-				elif update.order.orderType == 4:
+				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					for pos in self.positions:
-						if str(update.position.positionId) == pos.order_id:
-							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
+						if str(update['position']['positionId']) == pos.order_id:
+							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
+							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
@@ -1412,18 +1423,18 @@ class Spotware(Broker):
 							break
 
 			# ORDER_REPLACED
-			elif execution_type == 4:
+			elif execution_type == 'ORDER_REPLACED':
 				# Check if `STOP` or `LIMIT`
-				if update.order.orderType in (2,3):
+				if update['order']['orderType'] in ('LIMIT','STOP'):
 					# Update current order
-					new_order = self.convert_sw_order(account_id, update.order)
+					new_order = self.convert_sw_order(account_id, update['order'])
 					for order in self.orders:
-						if str(update.order.orderId) == order.order_id:
+						if str(update['order']['orderId']) == order.order_id:
 							order.update(new_order)
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': order
@@ -1431,18 +1442,18 @@ class Spotware(Broker):
 							})
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
-				elif update.order.orderType == 4:
+				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					# Update current position
 					for pos in self.positions:
-						if str(update.position.positionId) == pos.order_id:
-							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
+						if str(update['position']['positionId']) == pos.order_id:
+							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
+							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
@@ -1485,9 +1496,9 @@ class Spotware(Broker):
 		# 	)
 		# 	self._get_client(list(self.accounts.keys())[0]).send(sub_req)
 
-		msg_id = self.generateReference()
-		res = self.ctrl.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', msg_id, instrument)
-		self.ctrl.addBrokerListener(msg_id, listener)
+		stream_id = self.generateReference()
+		res = self.ctrl.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', stream_id, instrument)
+		self.ctrl.addBrokerListener(stream_id, listener)
 
 
 	def _subscribe_multiple_chart_updates(self, products, listener):
@@ -1531,8 +1542,15 @@ class Spotware(Broker):
 				# chart, update_time, bid, ask, volume = self._price_queue[0]
 				del self._price_queue[0]
 
-				ask = float(payload['ask']) / 100000
-				bid = float(payload['bid']) / 100000
+				if 'ask' in payload:
+					ask = float(payload['ask']) / 100000
+				else:
+					ask = None
+
+				if 'bid' in payload:
+					bid = float(payload['bid']) / 100000
+				else:
+					bid = None
 
 				volume = None
 				c_ts = time.time()+self.time_off
@@ -1558,23 +1576,49 @@ class Spotware(Broker):
 						}
 					})
 
+				if 'trendbar' in payload:
+					for i in payload['trendbar']:
+						period = self._convert_sw_period(i['period'])
+						if period in chart.getActivePeriods():
+							if (isinstance(chart.bid.get(period), np.ndarray) and 
+								isinstance(chart.ask.get(period), np.ndarray)):
 
-				for i in payload['trendbar']:
-					period = self._convert_sw_period(i.period)
-					if period in chart.getActivePeriods():
-						if (isinstance(chart.bid.get(period), np.ndarray) and 
-							isinstance(chart.ask.get(period), np.ndarray)):
+								bar_ts = float(i['utcTimestampInMinutes'])*60
+								# Handle period bar end
+								if chart.lastTs[period] is None:
+									chart.lastTs[period] = bar_ts
+								elif bar_ts > chart.lastTs[period]:
+									result.append({
+										'broker': self.name,
+										'product': chart.product,
+										'period': period,
+										'bar_end': True,
+										'timestamp': chart.lastTs[period],
+										'item': {
+											'ask': chart.ask[period].tolist(),
+											'mid': chart.mid[period].tolist(),
+											'bid': chart.bid[period].tolist()
+										}
+									})
 
-							bar_ts = float(i['utcTimestampInMinutes'])*60
-							# Handle period bar end
-							if chart.lastTs[period] is None:
-								chart.lastTs[period] = bar_ts
-							elif bar_ts > chart.lastTs[period]:
+									chart.lastTs[period] = bar_ts
+									print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
+
+								new_low = float(i['low']) / 100000
+								new_open = (float(i['low']) + float(i['deltaOpen'])) / 100000
+								new_high = (float(i['low']) + float(i['deltaHigh'])) / 100000
+								new_close = chart.mid[tl.period.TICK]
+								new_ohlc = np.array([new_open, new_high, new_low, new_close], dtype=np.float64)
+
+								chart.ask[period] = new_ohlc
+								chart.mid[period] = new_ohlc
+								chart.bid[period] = new_ohlc
+
 								result.append({
 									'broker': self.name,
 									'product': chart.product,
 									'period': period,
-									'bar_end': True,
+									'bar_end': False,
 									'timestamp': chart.lastTs[period],
 									'item': {
 										'ask': chart.ask[period].tolist(),
@@ -1582,32 +1626,6 @@ class Spotware(Broker):
 										'bid': chart.bid[period].tolist()
 									}
 								})
-
-								chart.lastTs[period] = bar_ts
-								print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
-
-							new_low = float(i['low']) / 100000
-							new_open = (float(i['low']) + float(i['deltaOpen'])) / 100000
-							new_high = (float(i['low']) + float(i['deltaHigh'])) / 100000
-							new_close = chart.mid[tl.period.TICK]
-							new_ohlc = np.array([new_open, new_high, new_low, new_close], dtype=np.float64)
-
-							chart.ask[period] = new_ohlc
-							chart.mid[period] = new_ohlc
-							chart.bid[period] = new_ohlc
-
-							result.append({
-								'broker': self.name,
-								'product': chart.product,
-								'period': period,
-								'bar_end': False,
-								'timestamp': chart.lastTs[period],
-								'item': {
-									'ask': chart.ask[period].tolist(),
-									'mid': chart.mid[period].tolist(),
-									'bid': chart.bid[period].tolist()
-								}
-							})
 
 			else:
 				for chart in self.charts:
@@ -1642,7 +1660,6 @@ class Spotware(Broker):
 								dtype=np.float64)
 
 			if len(result):
-				print(result, flush=True)
 				chart.handleTick(result)
 
 			if time.time() - time_off_timer > ONE_HOUR:
@@ -1729,34 +1746,64 @@ class Spotware(Broker):
 			return 14
 
 
+	# def _convert_sw_period(self, period):
+	# 	if period == 1:
+	# 		return tl.period.ONE_MINUTE
+	# 	elif period == 2:
+	# 		return tl.period.TWO_MINUTES
+	# 	elif period == 3:
+	# 		return tl.period.THREE_MINUTES
+	# 	elif period == 4:
+	# 		return tl.period.FOUR_MINUTES
+	# 	elif period == 5:
+	# 		return tl.period.FIVE_MINUTES
+	# 	elif period == 6:
+	# 		return tl.period.TEN_MINUTES
+	# 	elif period == 7:
+	# 		return tl.period.FIFTEEN_MINUTES
+	# 	elif period == 8:
+	# 		return tl.period.THIRTY_MINUTES
+	# 	elif period == 9:
+	# 		return tl.period.ONE_HOUR
+	# 	elif period == 10:
+	# 		return tl.period.FOUR_HOURS
+	# 	elif period == 11:
+	# 		return tl.period.TWELVE_HOURS
+	# 	elif period == 12:
+	# 		return tl.period.DAILY
+	# 	elif period == 13:
+	# 		return tl.period.WEEKLY
+	# 	elif period == 14:
+	# 		return tl.period.MONTHLY
+
 	def _convert_sw_period(self, period):
-		if period == 1:
+		if period == 'M1':
 			return tl.period.ONE_MINUTE
-		elif period == 2:
+		elif period == 'M2':
 			return tl.period.TWO_MINUTES
-		elif period == 3:
+		elif period == 'M3':
 			return tl.period.THREE_MINUTES
-		elif period == 4:
+		elif period == 'M4':
 			return tl.period.FOUR_MINUTES
-		elif period == 5:
+		elif period == 'M5':
 			return tl.period.FIVE_MINUTES
-		elif period == 6:
+		elif period == 'M10':
 			return tl.period.TEN_MINUTES
-		elif period == 7:
+		elif period == 'M15':
 			return tl.period.FIFTEEN_MINUTES
-		elif period == 8:
+		elif period == 'M30':
 			return tl.period.THIRTY_MINUTES
-		elif period == 9:
+		elif period == 'H1':
 			return tl.period.ONE_HOUR
-		elif period == 10:
+		elif period == 'H4':
 			return tl.period.FOUR_HOURS
-		elif period == 11:
+		elif period == 'H12':
 			return tl.period.TWELVE_HOURS
-		elif period == 12:
+		elif period == 'D1':
 			return tl.period.DAILY
-		elif period == 13:
+		elif period == 'W1':
 			return tl.period.WEEKLY
-		elif period == 14:
+		elif period == 'MN1':
 			return tl.period.MONTHLY
 
 

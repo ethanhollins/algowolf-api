@@ -122,9 +122,8 @@ class Controller(object):
 		}
 
 
-	def brokerRequest(self, broker, broker_id, func, msg_id, *args, **kwargs):
-		if msg_id is None:
-			msg_id = shortuuid.uuid()
+	def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
+		msg_id = shortuuid.uuid()
 
 		data = {
 			'msg_id': msg_id,

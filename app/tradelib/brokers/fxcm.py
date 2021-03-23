@@ -140,7 +140,7 @@ class FXCM(Broker):
 		print('Add User')
 
 		res = self.ctrl.brokerRequest(
-			self.name, self.brokerId, 'add_user', None,
+			self.name, self.brokerId, 'add_user',
 			self.username, self.password, self.is_demo,
 			is_parent=self.is_parent
 		)
@@ -230,7 +230,7 @@ class FXCM(Broker):
 
 		# Count
 		res = self.ctrl.brokerRequest(
-			self.name, self.brokerId, '_download_historical_data_broker', None,
+			self.name, self.brokerId, '_download_historical_data_broker',
 			product, period, tz=tz, start=start, end=end,
 			count=count, **kwargs
 		)
@@ -385,9 +385,9 @@ class FXCM(Broker):
 		# if not tl.isWeekend(datetime.utcnow()):
 		# 	self.offers_listener.addInstrument(self._convert_product(instrument), listener)
 
-		msg_id = self.generateReference()
-		res = self.ctrl.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', msg_id, instrument)
-		self.ctrl.addBrokerListener(msg_id, listener)
+		stream_id = self.generateReference()
+		res = self.ctrl.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', stream_id, instrument)
+		self.ctrl.addBrokerListener(stream_id, listener)
 
 
 	def _handle_chart_update(self):
