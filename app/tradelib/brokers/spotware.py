@@ -1245,17 +1245,21 @@ class Spotware(Broker):
 
 								del self.positions[i]
 
-								if update['order']['limitPrice']:
+								if update['order'].get('limitPrice'):
 									tp_dist = abs(float(update['order']['executionPrice']) - float(update['order']['limitPrice']))
 								else:
 									tp_dist = None
 
-								if update['order']['stopPrice']:
+								if update['order'].get('stopPrice'):
 									sl_dist = abs(float(update['order']['executionPrice']) - float(update['order']['stopPrice']))
 								else:
 									sl_dist = None
 
-								if sl_dist is None or tp_dist < sl_dist:
+								if sl_dist is None:
+									order_type = tl.TAKE_PROFIT
+								elif tp_dist is None:
+									order_type = tl.STOP_LOSS
+								elif tp_dist < sl_dist:
 									order_type = tl.TAKE_PROFIT
 								else:
 									order_type = tl.STOP_LOSS
@@ -1362,9 +1366,9 @@ class Spotware(Broker):
 				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					for pos in self.positions:
 						if str(update['position']['positionId']) == pos.order_id:
-							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
+							new_sl = None if update['position'].get('stopLoss') is None else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
+							new_tp = None if update['position'].get('takeProfit') is None else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
@@ -1406,9 +1410,9 @@ class Spotware(Broker):
 				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					for pos in self.positions:
 						if str(update['position']['positionId']) == pos.order_id:
-							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
+							new_sl = None if update['position'].get('stopLoss') is None else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
+							new_tp = None if update['position'].get('takeProfit') is None else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
@@ -1446,9 +1450,9 @@ class Spotware(Broker):
 					# Update current position
 					for pos in self.positions:
 						if str(update['position']['positionId']) == pos.order_id:
-							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
+							new_sl = None if update['position'].get('stopLoss') is None else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
+							new_tp = None if update['position'].get('takeProfit') is None else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
