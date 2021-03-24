@@ -517,7 +517,7 @@ class Database(object):
 
 			# Run broker API call check
 			dummy_broker = tl.broker.Spotware(
-				self.ctrl, props.get('is_demo'), props.get('access_token'), is_dummy=True
+				self.ctrl, props.get('is_demo'), props.get('access_token'), broker_id=broker_id, is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
 			dummy_broker.parent.deleteChild(dummy_broker)

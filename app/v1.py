@@ -575,7 +575,7 @@ def replace_account_input_variables_ept(strategy_id, broker_id, account_id):
 def create_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	# Validation
@@ -617,7 +617,7 @@ def create_order(strategy_id, broker_id, data):
 def get_all_orders(strategy_id, broker_id, accounts):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -637,7 +637,7 @@ def get_all_orders(strategy_id, broker_id, accounts):
 def get_orders(strategy_id, broker_id, order_ids):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -654,7 +654,7 @@ def get_orders(strategy_id, broker_id, order_ids):
 def update_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -688,7 +688,7 @@ def update_order(strategy_id, broker_id, data):
 def delete_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -718,7 +718,7 @@ def delete_order(strategy_id, broker_id, data):
 def get_all_positions(strategy_id, broker_id, accounts):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -738,7 +738,7 @@ def get_all_positions(strategy_id, broker_id, accounts):
 def get_positions(strategy_id, broker_id, order_ids):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -755,7 +755,7 @@ def get_positions(strategy_id, broker_id, order_ids):
 def update_position(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -788,7 +788,7 @@ def update_position(strategy_id, broker_id, data):
 def delete_position(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -817,7 +817,7 @@ def delete_position(strategy_id, broker_id, data):
 def get_account_info(strategy_id, broker_id, account_id):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = broker.getAccountInfo(account_id)
@@ -826,7 +826,7 @@ def get_account_info(strategy_id, broker_id, account_id):
 def get_transaction_info(strategy_id, broker_id, account_id):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	account.getStrategy(strategy_id)
+	# account.getStrategy(strategy_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = broker.getTransactionInfo(account_id)

@@ -33,20 +33,22 @@ class Spotware(Broker):
 
 		self.ctrl = ctrl
 		self.is_demo = is_demo
-		self._spotware_connected = False
-		self._last_update = time.time()
-		self._subscriptions = {}
-		self._handled_position_events = {
-			tl.MARKET_ENTRY: {},
-			tl.POSITION_CLOSE: {}
-		}
+		self.is_parent = is_parent
+		self.is_dummy = is_dummy
+		# self._spotware_connected = False
+		# self._last_update = time.time()
+		# self._subscriptions = {}
+		# self._handled_position_events = {
+		# 	tl.MARKET_ENTRY: {},
+		# 	tl.POSITION_CLOSE: {}
+		# }
 		# self.assets = assets
 		# self.symbols = symbols
 
-		self.assets = {}
-		self.assets_by_name = {}
-		self.symbols = {}
-		self.symbols_by_name = {}
+		# self.assets = {}
+		# self.assets_by_name = {}
+		# self.symbols = {}
+		# self.symbols_by_name = {}
 
 		self._price_queue = []
 		self.time_off = 0
@@ -55,33 +57,38 @@ class Spotware(Broker):
 		'''
 		Setup Spotware Funcs
 		'''
-		if is_parent:
+		if self.is_parent:
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
+
 			self.parent = self
 			self.children = []
-
-			self.demo_client = Client(True)
-			self.live_client = Client(False)
-
-			self.demo_client.event('connect', self.connect)
-			self.demo_client.event('disconnect', self.disconnect)
-			self.demo_client.event('message', self.message)
-
-			self.live_client.event('connect', self.connect)
-			self.live_client.event('disconnect', self.disconnect)
-			self.live_client.event('message', self.message)
-
-			self.demo_client.connect()
-			self.live_client.connect()
-
-			while not self._spotware_connected:
-				pass
-
-			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
 
 			user = self.ctrl.getDb().getUser(self.name)
 			self.access_token = user.get('access_token')
 			self.refresh_token = user.get('refresh_token')
-			self._authorize_accounts(self.accounts, is_parent=True)
+
+			self._add_user()
+			self._subscribe_account_updates()
+
+			# self.demo_client = Client(True)
+			# self.live_client = Client(False)
+
+			# self.demo_client.event('connect', self.connect)
+			# self.demo_client.event('disconnect', self.disconnect)
+			# self.demo_client.event('message', self.message)
+
+			# self.live_client.event('connect', self.connect)
+			# self.live_client.event('disconnect', self.disconnect)
+			# self.live_client.event('message', self.message)
+
+			# self.demo_client.connect()
+			# self.live_client.connect()
+
+			# while not self._spotware_connected:
+			# 	pass
+
+
+			# self._authorize_accounts(self.accounts, is_parent=True)
 
 			CHARTS = ['EUR_USD']
 			# self._subscribe_multiple_chart_updates(CHARTS)
@@ -91,7 +98,7 @@ class Spotware(Broker):
 				chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
-			Thread(target=self._periodic_refresh).start()
+			# Thread(target=self._periodic_refresh).start()
 			t = Thread(target=self._handle_chart_update)
 			t.start()
 
@@ -101,13 +108,17 @@ class Spotware(Broker):
 
 			self.parent = ctrl.brokers.getBroker(tl.broker.SPOTWARE_NAME)
 			self.parent.addChild(self)
+
+			self._add_user()
+
 			# self.client = self.parent.client
-			self._authorize_accounts(accounts)
+			# self._authorize_accounts(accounts)
 
 		if not is_dummy:
+			self._subscribe_account_updates()
 			# for account_id in self.getAccounts():
 			# 	if account_id != tl.broker.PAPERTRADER_NAME:
-			# 		self._subscribe_account_updates(account_id)
+					# self._subscribe_account_updates(account_id)
 
 			# Handle strategy
 			if self.userAccount and self.brokerId:
@@ -141,6 +152,44 @@ class Spotware(Broker):
 					pass
 
 			time.sleep(1)
+
+
+	def _add_user(self):
+		print('Add User')
+
+		res = self.ctrl.brokerRequest(
+			'spotware', self.brokerId, 'add_user',
+			self.brokerId, self.access_token, self.refresh_token, self.accounts,
+			is_parent=self.is_parent, is_dummy=self.is_dummy
+		)
+
+		if 'error' in res:
+			return self._add_user()
+		else:
+			if not self.is_dummy:
+				self.access_token = res['access_token']
+				self.refresh_token = res['refresh_token']
+				if self.is_parent:
+					print(f'UPDATE PARENT {res}')
+					self.ctrl.getDb().updateUser(
+						'spotware',
+						{
+							'access_token': self.access_token,
+							'refresh_token': self.refresh_token
+						}
+					)
+
+				else:
+					print(f'UPDATE ACCOUNT {res}')
+					self.ctrl.getDb().updateBroker(
+						self.userAccount.userId, self.brokerId, 
+						{ 
+							'access_token': self.access_token,
+							'refresh_token': self.refresh_token
+						}
+					)
+
+			return res
 
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
@@ -271,15 +320,23 @@ class Spotware(Broker):
 	def _refresh_token(self, is_parent=False):
 		print(f'REFRESH: {self.refresh_token}')
 
-		ref_id = self.generateReference()
-		refresh_req = o2.ProtoOARefreshTokenReq(
-			refreshToken=self.refresh_token
+
+		res = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_refresh_token'
 		)
-		self.parent.demo_client.send(refresh_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
-		if res.payloadType == 2174:
-			self.access_token = res.accessToken
-			self.refresh_token = res.refreshToken
+
+
+		# ref_id = self.generateReference()
+		# refresh_req = o2.ProtoOARefreshTokenReq(
+		# 	refreshToken=self.refresh_token
+		# )
+		# self.parent.demo_client.send(refresh_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
+		# if res.payloadType == 2174:
+
+		if 'error' not in res:
+			self.access_token = res['access_token']
+			self.refresh_token = res['refresh_token']
 			if is_parent:
 				self.ctrl.getDb().updateUser(
 					self.name,
@@ -301,26 +358,33 @@ class Spotware(Broker):
 
 	def _authorize_accounts(self, accounts, is_parent=False):
 		print(f'MSG: {self.strategyId}, {self.brokerId}, {accounts}')
-		if self.refresh_token is not None:
-			self._refresh_token(is_parent=is_parent)
 
-		for account_id in accounts:
-			ref_id = self.generateReference()
-			acc_auth = o2.ProtoOAAccountAuthReq(
-				ctidTraderAccountId=int(account_id), 
-				accessToken=self.access_token
-			)
-			self._get_client(account_id).send(acc_auth, msgid=ref_id)
-			res = self.parent._wait(ref_id)
+		res = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_authorize_accounts',
+			accounts, is_parent=is_parent
+		)
+
+
+		# if self.refresh_token is not None:
+		# 	self._refresh_token(is_parent=is_parent)
+
+		# for account_id in accounts:
+		# 	ref_id = self.generateReference()
+		# 	acc_auth = o2.ProtoOAAccountAuthReq(
+		# 		ctidTraderAccountId=int(account_id), 
+		# 		accessToken=self.access_token
+		# 	)
+		# 	self._get_client(account_id).send(acc_auth, msgid=ref_id)
+		# 	res = self.parent._wait(ref_id)
 			
-			trader_ref_id = self.generateReference()
-			trader_req = o2.ProtoOATraderReq(
-				ctidTraderAccountId=int(account_id)
-			)
-			self._get_client(account_id).send(trader_req, msgid=trader_ref_id)
-			trader_res = self.parent._wait(trader_ref_id)
+		# 	trader_ref_id = self.generateReference()
+		# 	trader_req = o2.ProtoOATraderReq(
+		# 		ctidTraderAccountId=int(account_id)
+		# 	)
+		# 	self._get_client(account_id).send(trader_req, msgid=trader_ref_id)
+		# 	trader_res = self.parent._wait(trader_ref_id)
 
-			self._set_broker_info(account_id, trader_res.trader.brokerName)
+		# 	self._set_broker_info(account_id, trader_res.trader.brokerName)
 
 			# if res.payloadType == 2142:
 			# 	return self._authorize_accounts(accounts)
@@ -382,68 +446,78 @@ class Spotware(Broker):
 		start=None, end=None, count=None,
 		force_download=False
 	):
-		sw_product = self._convert_product('Spotware', product)
-		sw_period = self._convert_period(period)
 
-		result = pd.concat((
-			self._create_empty_asks_df(), 
-			self._create_empty_mids_df(), 
-			self._create_empty_bids_df()
-		))
+		res = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_download_historical_data_broker',
+			product, period, tz=tz, start=start, end=end,
+			count=count, force_download=force_download
+		)
 
-		dl_start = None
-		dl_end = None
-		if start:
-			dl_start = tl.utils.convertTimeToTimestamp(start)
-		if end:
-			dl_end = tl.utils.convertTimeToTimestamp(end)
+		result = pd.DataFrame.from_dict(res, dtype=float)
+		result.index = result.index.astype(int)
 
-		if count:
-			if start:
-				dl_end = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, start=start))
-			elif end:
-				dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, end=end))
-			else:
-				dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1))
-				dl_end = tl.utils.convertTimeToTimestamp(datetime.utcnow()) + tl.period.getPeriodOffsetSeconds(period)
+		# sw_product = self._convert_product('Spotware', product)
+		# sw_period = self._convert_period(period)
 
-		while True:
-			ref_id = self.generateReference()
-			trendbars_req = o2.ProtoOAGetTrendbarsReq(
-				ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-				fromTimestamp=int(dl_start*1000), toTimestamp=int(dl_end*1000), 
-				symbolId=sw_product, period=sw_period
-			)
-			self._get_client(list(self.accounts.keys())[0]).send(trendbars_req, msgid=ref_id)
+		# result = pd.concat((
+		# 	self._create_empty_asks_df(), 
+		# 	self._create_empty_mids_df(), 
+		# 	self._create_empty_bids_df()
+		# ))
 
-			res = self._wait(ref_id)
+		# dl_start = None
+		# dl_end = None
+		# if start:
+		# 	dl_start = tl.utils.convertTimeToTimestamp(start)
+		# if end:
+		# 	dl_end = tl.utils.convertTimeToTimestamp(end)
 
-			'''
-			Bar Constructor
-			'''
+		# if count:
+		# 	if start:
+		# 		dl_end = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, start=start))
+		# 	elif end:
+		# 		dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1, end=end))
+		# 	else:
+		# 		dl_start = tl.utils.convertTimeToTimestamp(tl.utils.getCountDate(period, count+1))
+		# 		dl_end = tl.utils.convertTimeToTimestamp(datetime.utcnow()) + tl.period.getPeriodOffsetSeconds(period)
 
-			if res.payloadType == 2138:
-				mids = self._bar_data_constructor(res, self._create_empty_mids_df())
-				asks = mids.copy()
-				asks.columns = ['ask_open', 'ask_high', 'ask_low', 'ask_close']
-				bids = mids.copy()
-				bids.columns = ['bid_open', 'bid_high', 'bid_low', 'bid_close']
+		# while True:
+		# 	ref_id = self.generateReference()
+		# 	trendbars_req = o2.ProtoOAGetTrendbarsReq(
+		# 		ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# 		fromTimestamp=int(dl_start*1000), toTimestamp=int(dl_end*1000), 
+		# 		symbolId=sw_product, period=sw_period
+		# 	)
+		# 	self._get_client(list(self.accounts.keys())[0]).send(trendbars_req, msgid=ref_id)
 
-				result = pd.concat((
-					result,
-					pd.concat((asks, mids, bids), axis=1)
-				))
+		# 	res = self._wait(ref_id)
 
-				if count and result.shape[0] < count:
-					dl_end = dl_start
-					dl_start = tl.convertTimeToTimestamp(tl.utils.getCountDate(
-						period, count+1, end=tl.convertTimestampToTime(dl_end)
-					))
-				else:
-					break
+		# 	'''
+		# 	Bar Constructor
+		# 	'''
 
-			else:
-				break
+		# 	if res.payloadType == 2138:
+		# 		mids = self._bar_data_constructor(res, self._create_empty_mids_df())
+		# 		asks = mids.copy()
+		# 		asks.columns = ['ask_open', 'ask_high', 'ask_low', 'ask_close']
+		# 		bids = mids.copy()
+		# 		bids.columns = ['bid_open', 'bid_high', 'bid_low', 'bid_close']
+
+		# 		result = pd.concat((
+		# 			result,
+		# 			pd.concat((asks, mids, bids), axis=1)
+		# 		))
+
+		# 		if count and result.shape[0] < count:
+		# 			dl_end = dl_start
+		# 			dl_start = tl.convertTimeToTimestamp(tl.utils.getCountDate(
+		# 				period, count+1, end=tl.convertTimestampToTime(dl_end)
+		# 			))
+		# 		else:
+		# 			break
+
+		# 	else:
+		# 		break
 
 		'''
 		Tick Constructor
@@ -495,14 +569,14 @@ class Spotware(Broker):
 
 
 	def convert_sw_position(self, account_id, pos):
-		order_id = str(pos.positionId)
-		product = self._convert_sw_product(pos.tradeData.symbolId)
-		direction = tl.LONG if pos.tradeData.tradeSide == 1 else tl.SHORT
-		lotsize = pos.tradeData.volume
-		entry_price = pos.price
-		sl = None if pos.stopLoss == 0 else round(pos.stopLoss, 5)
-		tp = None if pos.takeProfit == 0 else round(pos.takeProfit, 5)
-		open_time = pos.tradeData.openTimestamp / 1000
+		order_id = str(pos['positionId'])
+		product = self._convert_sw_product(int(pos['tradeData']['symbolId']))
+		direction = tl.LONG if pos['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
+		lotsize = float(pos['tradeData']['volume'])
+		entry_price = float(pos['price'])
+		sl = None if float(pos['stopLoss']) == 0 else round(float(pos['stopLoss']), 5)
+		tp = None if float(pos['takeProfit']) == 0 else round(float(pos['takeProfit']), 5)
+		open_time = float(pos['tradeData']['openTimestamp']) / 1000
 
 		return tl.Position(
 			self,
@@ -514,20 +588,20 @@ class Spotware(Broker):
 
 	def convert_sw_order(self, account_id, order):
 		entry_price = None
-		if order.orderType == 3:
-			entry_price = order.stopPrice
+		if order['orderType'] == 'STOP':
+			entry_price = float(order['stopPrice'])
 			order_type = tl.STOP_ORDER
-		elif order.orderType == 2:
-			entry_price = order.limitPrice
+		elif order['orderType'] == 'LIMIT':
+			entry_price = float(order['limitPrice'])
 			order_type = tl.LIMIT_ORDER
 
-		order_id = str(order.orderId)
-		product = self._convert_sw_product(order.tradeData.symbolId)
-		direction = tl.LONG if order.tradeData.tradeSide == 1 else tl.SHORT
-		lotsize = order.tradeData.volume
-		sl = None if order.stopLoss == 0 else round(order.stopLoss, 5)
-		tp = None if order.takeProfit == 0 else round(order.takeProfit, 5)
-		open_time = order.tradeData.openTimestamp / 1000
+		order_id = str(order['orderId'])
+		product = self._convert_sw_product(int(order['tradeData']['symbolId']))
+		direction = tl.LONG if order['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
+		lotsize = float(order['tradeData']['volume'])
+		sl = None if float(order['stopLoss']) == 0 else round(float(order['stopLoss']), 5)
+		tp = None if float(order['takeProfit']) == 0 else round(float(order['takeProfit']), 5)
+		open_time = float(order['tradeData']['openTimestamp']) / 1000
 
 		return tl.Order(
 			self,
@@ -538,19 +612,29 @@ class Spotware(Broker):
 
 
 	def _get_all_positions(self, account_id):
-		ref_id = self.generateReference()
-		pos_req = o2.ProtoOAReconcileReq(
-			ctidTraderAccountId=int(account_id)
+
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_get_all_positions',
+			account_id
 		)
-		self._get_client(account_id).send(pos_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
 
-		result = { account_id: [] }
-		if res.payloadType == 2125:
-			for pos in res.position:
-				new_pos = self.convert_sw_position(account_id, pos)
+		for account_id in result:
+			for i in range(len(result[account_id])):
+				result[account_id][i] = tl.Position.fromDict(self, result[account_id][i])
 
-				result[account_id].append(new_pos)
+		# ref_id = self.generateReference()
+		# pos_req = o2.ProtoOAReconcileReq(
+		# 	ctidTraderAccountId=int(account_id)
+		# )
+		# self._get_client(account_id).send(pos_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
+
+		# result = { account_id: [] }
+		# if res.payloadType == 2125:
+		# 	for pos in res.position:
+		# 		new_pos = self.convert_sw_position(account_id, pos)
+
+		# 		result[account_id].append(new_pos)
 
 		return result
 
@@ -575,107 +659,114 @@ class Spotware(Broker):
 				override=override
 			)
 
-		ref_id = self.generateReference()
-
-		sl_tp_prices = {}
-		sl_tp_ranges = {}
-		if sl_price:
-			sl_tp_prices['stopLoss'] = sl_price
-
-			# Get range from current price for temp sl
-			chart = self.getChart(product)
-			if direction == tl.LONG:
-				sl_tp_ranges['relativeStopLoss'] = int((chart.ask[tl.period.ONE_MINUTE][3] - sl_price) * 100000)
-			else:
-				sl_tp_ranges['relativeStopLoss'] = int((sl_price - chart.bid[tl.period.ONE_MINUTE][3]) * 100000)
-
-		if sl_range:
-			sl_tp_ranges['relativeStopLoss'] = int(sl_range)
-
-		if tp_price:
-			sl_tp_prices['takeProfit'] = tp_price
-			# Get range from current price for temp tp
-			chart = self.getChart(product)
-			if direction == tl.LONG:
-				sl_tp_ranges['relativeTakeProfit'] = int((tp_price - chart.ask[tl.period.ONE_MINUTE][3]) * 100000)
-			else:
-				sl_tp_ranges['relativeTakeProfit'] = int((chart.bid[tl.period.ONE_MINUTE][3] - tp_price) * 100000)
-
-		if tp_range:
-			sl_tp_ranges['relativeTakeProfit'] = int(tp_range)
-		
-		broker_name = self.accounts[account_id]['broker']
-		sw_product = self._convert_product(broker_name, product)
-		direction = 1 if direction == tl.LONG else 2
-		lotsize = round(lotsize / 100000) * 100000
-
-		'''
-		TEMP
-		'''
-		# sl_tp_ranges['relativeStopLoss'] = int(round(sl_tp_ranges['relativeStopLoss']/100) * 100)
-		# sl_tp_ranges['relativeTakeProfit'] = int(round(sl_tp_ranges['relativeTakeProfit']/100) * 100)
-		# lotsize = int(lotsize / 100000)
-		'''
-		TEMP
-		'''
-		start_time = time.time()
-		print(f'CREATE POSITION START: {self.brokerId}')
-
-		# Execute Market Order
-		new_order = o2.ProtoOANewOrderReq(
-			ctidTraderAccountId=int(account_id),
-			symbolId=sw_product, orderType=1, tradeSide=direction,
-			volume=lotsize, **sl_tp_ranges
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'createPosition',
+			product, lotsize, direction,
+			account_id, entry_range, entry_price,
+			sl_range, tp_range, sl_price, tp_price
 		)
-		print(f'Sending:\n{new_order}')
-		self._get_client(account_id).send(new_order, msgid=ref_id)
-		res = self.parent._wait(ref_id)
-		print(f'Result:\n{res}')
 
-		result = {}
-		if res.payloadType == 2126:
-		# 	new_pos = self.convert_sw_position(account_id, res.position)
-			pos_res = self.parent._wait_for_position(str(res.position.positionId))
-			print(f'Pos Res: {pos_res}')
+		# ref_id = self.generateReference()
 
-			if pos_res is not None:
-				ref_id = list(pos_res.keys())[0]
-				item = pos_res[ref_id]
-				pos = item['item']
+		# sl_tp_prices = {}
+		# sl_tp_ranges = {}
+		# if sl_price:
+		# 	sl_tp_prices['stopLoss'] = sl_price
 
-				if len(sl_tp_prices) > 0:
-					mod_ref_id = self.generateReference()
+		# 	# Get range from current price for temp sl
+		# 	chart = self.getChart(product)
+		# 	if direction == tl.LONG:
+		# 		sl_tp_ranges['relativeStopLoss'] = int((chart.ask[tl.period.ONE_MINUTE][3] - sl_price) * 100000)
+		# 	else:
+		# 		sl_tp_ranges['relativeStopLoss'] = int((sl_price - chart.bid[tl.period.ONE_MINUTE][3]) * 100000)
 
-					amend_req = o2.ProtoOAAmendPositionSLTPReq(
-						ctidTraderAccountId=int(pos.account_id),
-						positionId=int(pos.order_id), **sl_tp_prices
-					)
-					self._get_client(account_id).send(amend_req, msgid=mod_ref_id)
+		# if sl_range:
+		# 	sl_tp_ranges['relativeStopLoss'] = int(sl_range)
 
-					res = self.parent._wait(mod_ref_id)
+		# if tp_price:
+		# 	sl_tp_prices['takeProfit'] = tp_price
+		# 	# Get range from current price for temp tp
+		# 	chart = self.getChart(product)
+		# 	if direction == tl.LONG:
+		# 		sl_tp_ranges['relativeTakeProfit'] = int((tp_price - chart.ask[tl.period.ONE_MINUTE][3]) * 100000)
+		# 	else:
+		# 		sl_tp_ranges['relativeTakeProfit'] = int((chart.bid[tl.period.ONE_MINUTE][3] - tp_price) * 100000)
 
-				result.update(pos_res)
+		# if tp_range:
+		# 	sl_tp_ranges['relativeTakeProfit'] = int(tp_range)
+		
+		# broker_name = self.accounts[account_id]['broker']
+		# sw_product = self._convert_product(broker_name, product)
+		# direction = 1 if direction == tl.LONG else 2
+		# lotsize = round(lotsize / 100000) * 100000
 
-		elif not res is None and res.payloadType in (50, 2132):
-			result.update({
-				ref_id: {
-					'timestamp': time.time(),
-					'type': tl.MARKET_ENTRY,
-					'accepted': False,
-					'message': res.errorCode
-				}
-			})
+		# '''
+		# TEMP
+		# '''
+		# # sl_tp_ranges['relativeStopLoss'] = int(round(sl_tp_ranges['relativeStopLoss']/100) * 100)
+		# # sl_tp_ranges['relativeTakeProfit'] = int(round(sl_tp_ranges['relativeTakeProfit']/100) * 100)
+		# # lotsize = int(lotsize / 100000)
+		# '''
+		# TEMP
+		# '''
+		# start_time = time.time()
+		# print(f'CREATE POSITION START: {self.brokerId}')
 
-		else:
-			result.update({
-				ref_id: {
-					'timestamp': time.time(),
-					'type': tl.MARKET_ENTRY,
-					'accepted': False
-				}
-			})
+		# # Execute Market Order
+		# new_order = o2.ProtoOANewOrderReq(
+		# 	ctidTraderAccountId=int(account_id),
+		# 	symbolId=sw_product, orderType=1, tradeSide=direction,
+		# 	volume=lotsize, **sl_tp_ranges
+		# )
+		# print(f'Sending:\n{new_order}')
+		# self._get_client(account_id).send(new_order, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
+		# print(f'Result:\n{res}')
 
-		print(f'CREATE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		# result = {}
+		# if res.payloadType == 2126:
+		# # 	new_pos = self.convert_sw_position(account_id, res.position)
+		# 	pos_res = self.parent._wait_for_position(str(res.position.positionId))
+		# 	print(f'Pos Res: {pos_res}')
+
+		# 	if pos_res is not None:
+		# 		ref_id = list(pos_res.keys())[0]
+		# 		item = pos_res[ref_id]
+		# 		pos = item['item']
+
+		# 		if len(sl_tp_prices) > 0:
+		# 			mod_ref_id = self.generateReference()
+
+		# 			amend_req = o2.ProtoOAAmendPositionSLTPReq(
+		# 				ctidTraderAccountId=int(pos.account_id),
+		# 				positionId=int(pos.order_id), **sl_tp_prices
+		# 			)
+		# 			self._get_client(account_id).send(amend_req, msgid=mod_ref_id)
+
+		# 			res = self.parent._wait(mod_ref_id)
+
+		# 		result.update(pos_res)
+
+		# elif not res is None and res.payloadType in (50, 2132):
+		# 	result.update({
+		# 		ref_id: {
+		# 			'timestamp': time.time(),
+		# 			'type': tl.MARKET_ENTRY,
+		# 			'accepted': False,
+		# 			'message': res.errorCode
+		# 		}
+		# 	})
+
+		# else:
+		# 	result.update({
+		# 		ref_id: {
+		# 			'timestamp': time.time(),
+		# 			'type': tl.MARKET_ENTRY,
+		# 			'accepted': False
+		# 		}
+		# 	})
+
+		# print(f'CREATE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 		return result
 
 
@@ -688,37 +779,42 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
-		ref_id = self.generateReference()
-
-		start_time = time.time()
-		print(f'MODIFY POSITION START: {self.brokerId}')
-		amend_req = o2.ProtoOAAmendPositionSLTPReq(
-			ctidTraderAccountId=int(pos.account_id),
-			positionId=int(pos.order_id), stopLoss=sl_price, takeProfit=tp_price
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'modifyPosition',
+			pos.account_id, pos.order_id, sl_price, tp_price
 		)
-		self._get_client(pos.account_id).send(amend_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
 
-		if not isinstance(res, dict):
-			if not res is None and res.payloadType in (50, 2132):
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': tl.MODIFY,
-						'accepted': False,
-						'message': res.errorCode
-					}
-				}
-			else:
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': tl.MODIFY,
-						'accepted': False
-					}
-				}
+		# ref_id = self.generateReference()
 
-		print(f'MODIFY POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		# start_time = time.time()
+		# print(f'MODIFY POSITION START: {self.brokerId}')
+		# amend_req = o2.ProtoOAAmendPositionSLTPReq(
+		# 	ctidTraderAccountId=int(pos.account_id),
+		# 	positionId=int(pos.order_id), stopLoss=sl_price, takeProfit=tp_price
+		# )
+		# self._get_client(pos.account_id).send(amend_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
+
+		# if not isinstance(res, dict):
+		# 	if not res is None and res.payloadType in (50, 2132):
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': tl.MODIFY,
+		# 				'accepted': False,
+		# 				'message': res.errorCode
+		# 			}
+		# 		}
+		# 	else:
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': tl.MODIFY,
+		# 				'accepted': False
+		# 			}
+		# 		}
+
+		# print(f'MODIFY POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 		return res
 
 
@@ -731,106 +827,129 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
-		ref_id = self.generateReference()
-
-		close_req = o2.ProtoOAClosePositionReq(
-			ctidTraderAccountId=int(pos.account_id),
-			positionId=int(pos.order_id), volume=lotsize
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'deletePosition',
+			pos.account_id, pos.order_id, lotsize
 		)
-		self._get_client(pos.account_id).send(close_req, msgid=ref_id)
 
-		res = self.parent._wait(ref_id)
+		# ref_id = self.generateReference()
 
-		start_time = time.time()
-		print(f'DELETE POSITION START: {self.brokerId}')
-		# Handle delete result
-		result = {}
-		if res.payloadType == 2126:
-			pos_res = self.parent._wait_for_close(str(pos.order_id))
-			if not pos_res is None:
-				ref_id = list(pos_res.keys())[0]
-				item = pos_res[ref_id]
-				print(f'Pos Res [delete]: {pos_res}')
+		# close_req = o2.ProtoOAClosePositionReq(
+		# 	ctidTraderAccountId=int(pos.account_id),
+		# 	positionId=int(pos.order_id), volume=lotsize
+		# )
+		# self._get_client(pos.account_id).send(close_req, msgid=ref_id)
 
-				result.update(pos_res)
+		# res = self.parent._wait(ref_id)
 
-		elif not res is None and res.payloadType in (50, 2132):
-			result.update({
-				ref_id: {
-					'timestamp': time.time(),
-					'type': tl.POSITION_CLOSE,
-					'accepted': False,
-					'message': res.errorCode
-				}
-			})
+		# start_time = time.time()
+		# print(f'DELETE POSITION START: {self.brokerId}')
+		# # Handle delete result
+		# result = {}
+		# if res.payloadType == 2126:
+		# 	pos_res = self.parent._wait_for_close(str(pos.order_id))
+		# 	if not pos_res is None:
+		# 		ref_id = list(pos_res.keys())[0]
+		# 		item = pos_res[ref_id]
+		# 		print(f'Pos Res [delete]: {pos_res}')
 
-		else:
-			result.update({
-				ref_id: {
-					'timestamp': time.time(),
-					'type': tl.POSITION_CLOSE,
-					'accepted': False
-				}
-			})
+		# 		result.update(pos_res)
 
-		print(f'DELETE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		# elif not res is None and res.payloadType in (50, 2132):
+		# 	result.update({
+		# 		ref_id: {
+		# 			'timestamp': time.time(),
+		# 			'type': tl.POSITION_CLOSE,
+		# 			'accepted': False,
+		# 			'message': res.errorCode
+		# 		}
+		# 	})
+
+		# else:
+		# 	result.update({
+		# 		ref_id: {
+		# 			'timestamp': time.time(),
+		# 			'type': tl.POSITION_CLOSE,
+		# 			'accepted': False
+		# 		}
+		# 	})
+
+		# print(f'DELETE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
 		return result
 
 
 	def _get_all_orders(self, account_id):
-		ref_id = self.generateReference()
-		order_req = o2.ProtoOAReconcileReq(
-			ctidTraderAccountId=int(account_id)
+
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, '_get_all_orders',
+			account_id
 		)
-		self._get_client(account_id).send(order_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
 
-		result = { account_id: [] }
-		if res.payloadType == 2125:
-			for order in res.order:
-				new_order = self.convert_sw_order(account_id, order)
+		for account_id in result:
+			for i in range(len(result[account_id])):
+				result[account_id][i] = tl.Order.fromDict(self, result[account_id][i])
 
-				result[account_id].append(new_order)
+
+		# ref_id = self.generateReference()
+		# order_req = o2.ProtoOAReconcileReq(
+		# 	ctidTraderAccountId=int(account_id)
+		# )
+		# self._get_client(account_id).send(order_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
+
+		# result = { account_id: [] }
+		# if res.payloadType == 2125:
+		# 	for order in res.order:
+		# 		new_order = self.convert_sw_order(account_id, order)
+
+		# 		result[account_id].append(new_order)
 
 		return result
 
 
 	def getAllAccounts(self):
-		ref_id = self.generateReference()
-		accounts_req = o2.ProtoOAGetAccountListByAccessTokenReq(
-			accessToken=self.access_token
+
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'getAllAccounts'
 		)
-		self.parent.demo_client.send(accounts_req, msgid=ref_id)
 
-		res = self.parent._wait(ref_id)
-		if res is not None:
-			self.accounts = { str(i.ctidTraderAccountId): { 'is_demo': not i.isLive } for i in res.ctidTraderAccount }
-			self._authorize_accounts([i.ctidTraderAccountId for i in res.ctidTraderAccount])
+		return result
 
-			result = []
-			for i in res.ctidTraderAccount:
-				if res.permissionScope == 1:
+		# ref_id = self.generateReference()
+		# accounts_req = o2.ProtoOAGetAccountListByAccessTokenReq(
+		# 	accessToken=self.access_token
+		# )
+		# self.parent.demo_client.send(accounts_req, msgid=ref_id)
 
-					trader_ref_id = self.generateReference()
-					trader_req = o2.ProtoOATraderReq(
-						ctidTraderAccountId=int(i.ctidTraderAccountId)
-					)
+		# res = self.parent._wait(ref_id)
+		# if res is not None:
+		# 	self.accounts = { str(i.ctidTraderAccountId): { 'is_demo': not i.isLive } for i in res.ctidTraderAccount }
+		# 	self._authorize_accounts([i.ctidTraderAccountId for i in res.ctidTraderAccount])
 
-					self._get_client(i.ctidTraderAccountId).send(trader_req, msgid=trader_ref_id)
+		# 	result = []
+		# 	for i in res.ctidTraderAccount:
+		# 		if res.permissionScope == 1:
 
-					trader_res = self.parent._wait(trader_ref_id)
+		# 			trader_ref_id = self.generateReference()
+		# 			trader_req = o2.ProtoOATraderReq(
+		# 				ctidTraderAccountId=int(i.ctidTraderAccountId)
+		# 			)
 
-					result.append({
-						'id': i.ctidTraderAccountId,
-						'is_demo': not i.isLive,
-						'account_id': i.traderLogin,
-						'broker': trader_res.trader.brokerName
-					})
+		# 			self._get_client(i.ctidTraderAccountId).send(trader_req, msgid=trader_ref_id)
 
-			return result
+		# 			trader_res = self.parent._wait(trader_ref_id)
 
-		else:
-			return None
+		# 			result.append({
+		# 				'id': i.ctidTraderAccountId,
+		# 				'is_demo': not i.isLive,
+		# 				'account_id': i.traderLogin,
+		# 				'broker': trader_res.trader.brokerName
+		# 			})
+
+		# 	return result
+
+		# else:
+		# 	return None
 
 
 	def getAccountInfo(self, account_id, override=False):
@@ -838,31 +957,40 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.LIMITED)
 
-		ref_id = self.generateReference()
-		trader_req = o2.ProtoOATraderReq(
-			ctidTraderAccountId=int(account_id)
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'getAccountInfo',
+			account_id
 		)
-		self._get_client(account_id).send(trader_req, msgid=ref_id)
-		res = self.parent._wait(ref_id)
 
-		# Handle account info result
+		for account_id in result:
+			result[account_id]['balance'] = self.ctrl.spots[result[account_id]['currency']].convertFrom(result[account_id]['balance'])
 
-		result = {}
+		print(f'GET ACCOUNT INFO: {result}')
+		# ref_id = self.generateReference()
+		# trader_req = o2.ProtoOATraderReq(
+		# 	ctidTraderAccountId=int(account_id)
+		# )
+		# self._get_client(account_id).send(trader_req, msgid=ref_id)
+		# res = self.parent._wait(ref_id)
 
-		currency = self._get_asset(res.trader.brokerName, res.trader.depositAssetId)['name']
-		print(f'CURRENCY: {currency}')
-		balance = self.ctrl.spots[currency].convertFrom(res.trader.balance/100)
-		print(f'BALANCE: {currency}')
+		# # Handle account info result
 
-		print(f'INFO: {currency}, {balance}')
-		if res.payloadType == 2122:
-			result[account_id] = {
-				'currency': currency,
-				'balance': balance,
-				'pl': None,
-				'margin': None,
-				'available': None
-			}
+		# result = {}
+
+		# currency = self._get_asset(res.trader.brokerName, res.trader.depositAssetId)['name']
+		# print(f'CURRENCY: {currency}')
+		# balance = self.ctrl.spots[currency].convertFrom(res.trader.balance/100)
+		# print(f'BALANCE: {currency}')
+
+		# print(f'INFO: {currency}, {balance}')
+		# if res.payloadType == 2122:
+		# 	result[account_id] = {
+		# 		'currency': currency,
+		# 		'balance': balance,
+		# 		'pl': None,
+		# 		'margin': None,
+		# 		'available': None
+		# 	}
 		
 		return result
 
@@ -887,74 +1015,81 @@ class Spotware(Broker):
 				override=override
 			)
 
-		ref_id = self.generateReference()
-
-		# Convert symbol
-		# symbol_id = 
-
-		params = {}
-		if order_type == tl.STOP_ORDER:
-			params['stopPrice'] = entry_price
-		elif order_type == tl.LIMIT_ORDER:
-			params['limitPrice'] = entry_price
-
-		if sl_price:
-			params['stopLoss'] = sl_price
-		else:
-			params['relativeStopLoss'] = sl_range
-
-		if tp_price:
-			params['takeProfit'] = tp_price
-		else:
-			params['relativeTakeProfit'] = tp_range
-
-		direction = 1 if direction == tl.LONG else 2
-		sw_order_type = 3 if order_type == tl.STOP_ORDER else 2
-		# lotsize = round(lotsize / 1000000) * 1000000
-		lotsize = round(lotsize / 100000) * 100000
-
-
-		'''
-		TEMP
-		'''
-		# lotsize = int(lotsize / 100000)
-		'''
-		TEMP
-		'''
-
-		start_time = time.time()
-		print(f'CREATE ORDER START: {self.brokerId}')
-		broker_name = self.accounts[account_id]['broker']
-		new_order_req = o2.ProtoOANewOrderReq(
-			ctidTraderAccountId=int(account_id),
-			symbolId=self._convert_product(broker_name, product), orderType=sw_order_type, tradeSide=direction,
-			volume=lotsize, **params
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'createOrder',
+			product, lotsize, direction,
+			account_id, order_type, entry_range, entry_price,
+			sl_range, tp_range, sl_price, tp_price
 		)
-		self._get_client(account_id).send(new_order_req, msgid=ref_id)
 
-		res = self.parent._wait(ref_id)
-		print(f'CREATE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		# ref_id = self.generateReference()
 
-		if not isinstance(res, dict):
-			if not res is None and res.payloadType in (50, 2132):
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': order_type,
-						'accepted': False,
-						'message': res.errorCode
-					}
-				}
-			else:
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': order_type,
-						'accepted': False
-					}
-				}
+		# # Convert symbol
+		# # symbol_id = 
 
-		return res
+		# params = {}
+		# if order_type == tl.STOP_ORDER:
+		# 	params['stopPrice'] = entry_price
+		# elif order_type == tl.LIMIT_ORDER:
+		# 	params['limitPrice'] = entry_price
+
+		# if sl_price:
+		# 	params['stopLoss'] = sl_price
+		# else:
+		# 	params['relativeStopLoss'] = sl_range
+
+		# if tp_price:
+		# 	params['takeProfit'] = tp_price
+		# else:
+		# 	params['relativeTakeProfit'] = tp_range
+
+		# direction = 1 if direction == tl.LONG else 2
+		# sw_order_type = 3 if order_type == tl.STOP_ORDER else 2
+		# # lotsize = round(lotsize / 1000000) * 1000000
+		# lotsize = round(lotsize / 100000) * 100000
+
+
+		# '''
+		# TEMP
+		# '''
+		# # lotsize = int(lotsize / 100000)
+		# '''
+		# TEMP
+		# '''
+
+		# start_time = time.time()
+		# print(f'CREATE ORDER START: {self.brokerId}')
+		# broker_name = self.accounts[account_id]['broker']
+		# new_order_req = o2.ProtoOANewOrderReq(
+		# 	ctidTraderAccountId=int(account_id),
+		# 	symbolId=self._convert_product(broker_name, product), orderType=sw_order_type, tradeSide=direction,
+		# 	volume=lotsize, **params
+		# )
+		# self._get_client(account_id).send(new_order_req, msgid=ref_id)
+
+		# res = self.parent._wait(ref_id)
+		# print(f'CREATE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+
+		# if not isinstance(res, dict):
+		# 	if not res is None and res.payloadType in (50, 2132):
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': order_type,
+		# 				'accepted': False,
+		# 				'message': res.errorCode
+		# 			}
+		# 		}
+		# 	else:
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': order_type,
+		# 				'accepted': False
+		# 			}
+		# 		}
+
+		return result
 
 
 	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price, override=False):
@@ -967,62 +1102,68 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
-		ref_id = self.generateReference()
 
-		args = {}
-		if not entry_price is None:
-			if order.order_type == tl.STOP_ORDER:
-				args['stopPrice'] = entry_price
-			elif order.order_type == tl.LIMIT_ORDER:
-				args['limitPrice'] = entry_price
-		if not lotsize is None:
-			'''
-			TEMP
-			'''
-			# lotsize = int(lotsize / 100000)
-			'''
-			TEMP
-			'''
-
-			args['volume'] = lotsize
-		if not sl_price is None:
-			args['stopLoss'] = sl_price
-		if not tp_price is None:
-			args['takeProfit'] = tp_price
-
-		start_time = time.time()
-		print(f'MODIFY ORDER START: {self.brokerId}')
-		amend_req = o2.ProtoOAAmendOrderReq(
-			ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id),
-			**args
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'modifyOrder',
+			order.account_id, order.order_id, order.order_type, lotsize, entry_price, sl_price, tp_price
 		)
-		self._get_client(order.account_id).send(amend_req, msgid=ref_id)
 
-		res = self.parent._wait(ref_id)
-		print(f'MODIFY ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		# ref_id = self.generateReference()
 
-		if not isinstance(res, dict):
-			if not res is None and res.payloadType in (50, 2132):
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': tl.MODIFY,
-						'accepted': False,
-						'message': res.errorCode
-					}
-				}
-			else:
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': tl.MODIFY,
-						'accepted': False
-					}
-				}
+		# args = {}
+		# if not entry_price is None:
+		# 	if order.order_type == tl.STOP_ORDER:
+		# 		args['stopPrice'] = entry_price
+		# 	elif order.order_type == tl.LIMIT_ORDER:
+		# 		args['limitPrice'] = entry_price
+		# if not lotsize is None:
+		# 	'''
+		# 	TEMP
+		# 	'''
+		# 	# lotsize = int(lotsize / 100000)
+		# 	'''
+		# 	TEMP
+		# 	'''
 
-		print(f'MOD: {res}')
+		# 	args['volume'] = lotsize
+		# if not sl_price is None:
+		# 	args['stopLoss'] = sl_price
+		# if not tp_price is None:
+		# 	args['takeProfit'] = tp_price
 
-		return res
+		# start_time = time.time()
+		# print(f'MODIFY ORDER START: {self.brokerId}')
+		# amend_req = o2.ProtoOAAmendOrderReq(
+		# 	ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id),
+		# 	**args
+		# )
+		# self._get_client(order.account_id).send(amend_req, msgid=ref_id)
+
+		# res = self.parent._wait(ref_id)
+		# print(f'MODIFY ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+
+		# if not isinstance(res, dict):
+		# 	if not res is None and res.payloadType in (50, 2132):
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': tl.MODIFY,
+		# 				'accepted': False,
+		# 				'message': res.errorCode
+		# 			}
+		# 		}
+		# 	else:
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': tl.MODIFY,
+		# 				'accepted': False
+		# 			}
+		# 		}
+
+		# print(f'MOD: {res}')
+
+		return result
 
 
 	def deleteOrder(self, order, override=False):
@@ -1032,70 +1173,85 @@ class Spotware(Broker):
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
-		ref_id = self.generateReference()
 
-		start_time = time.time()
-		print(f'DELETE ORDER START: {self.brokerId}')
-		cancel_req = o2.ProtoOACancelOrderReq(
-			ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id)
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'deleteOrder',
+			order.account_id, order.order_id
 		)
-		self._get_client(order.account_id).send(cancel_req, msgid=ref_id)
 
-		res = self.parent._wait(ref_id)
-		print(f'DELETE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		# ref_id = self.generateReference()
 
-		if not isinstance(res, dict):
-			if not res is None and res.payloadType in (50, 2132):
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': tl.ORDER_CANCEL,
-						'accepted': False,
-						'message': res.errorCode
-					}
-				}
-			else:
-				res = {
-					ref_id: {
-						'timestamp': time.time(),
-						'type': tl.ORDER_CANCEL,
-						'accepted': False
-					}
-				}
+		# start_time = time.time()
+		# print(f'DELETE ORDER START: {self.brokerId}')
+		# cancel_req = o2.ProtoOACancelOrderReq(
+		# 	ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id)
+		# )
+		# self._get_client(order.account_id).send(cancel_req, msgid=ref_id)
 
-		return res
+		# res = self.parent._wait(ref_id)
+		# print(f'DELETE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+
+		# if not isinstance(res, dict):
+		# 	if not res is None and res.payloadType in (50, 2132):
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': tl.ORDER_CANCEL,
+		# 				'accepted': False,
+		# 				'message': res.errorCode
+		# 			}
+		# 		}
+		# 	else:
+		# 		res = {
+		# 			ref_id: {
+		# 				'timestamp': time.time(),
+		# 				'type': tl.ORDER_CANCEL,
+		# 				'accepted': False
+		# 			}
+		# 		}
+
+		return result
 
 
-	def _on_account_update(self, account_id, update, ref_id):
-		if update.payloadType == 2126:
+	def _subscribe_account_updates(self):
+		stream_id = self.generateReference()
+		res = self.ctrl.brokerRequest(
+			'spotware', self.brokerId, '_subscribe_account_updates', stream_id
+		)
+		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
+
+
+	def _on_account_update(self, payload_type, account_id, update, ref_id):
+		print(f'_on_account_update: {payload_type} {account_id} {update}', flush=True)
+		if int(payload_type) == 2126:
 			# if not ref_id:
 			ref_id = self.generateReference()
 
 			print(f'Account Update: {update}')
-			execution_type = update.executionType
+			execution_type = update['executionType']
 
 			result = {}
 			# ORDER_FILLED
-			if execution_type == 3:
+			if execution_type == 'ORDER_FILLED':
 				# Check `closingOrder`
-				if update.order.closingOrder:
+				if update['order']['closingOrder']:
 					# Delete
 					for i in range(len(self.positions)):
 						pos = self.positions[i]
-						if str(update.position.positionId) == pos.order_id:
-							if update.order.orderType == 4:
-								pos.close_price = update.order.executionPrice
-								pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+						if str(update['position']['positionId']) == pos.order_id:
+							if int(update['order']['orderType']) == 'STOP_LOSS_TAKE_PROFIT':
+								pos.close_price = float(update['order']['executionPrice'])
+								pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 								del self.positions[i]
 
-								if update.order.limitPrice:
-									tp_dist = abs(update.order.executionPrice - update.order.limitPrice)
+								if update['order']['limitPrice']:
+									tp_dist = abs(float(update['order']['executionPrice']) - float(update['order']['limitPrice']))
 								else:
 									tp_dist = None
 
-								if update.order.limitPrice:
-									sl_dist = abs(update.order.executionPrice - update.order.stopPrice)
+								if update['order']['stopPrice']:
+									sl_dist = abs(float(update['order']['executionPrice']) - float(update['order']['stopPrice']))
 								else:
 									sl_dist = None
 
@@ -1114,9 +1270,9 @@ class Spotware(Broker):
 								})
 							else:
 								# Fully Closed
-								if update.position.tradeData.volume == 0:
-									pos.close_price = update.order.executionPrice
-									pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+								if float(update['position']['tradeData']['volume']) == 0:
+									pos.close_price = float(update['order']['executionPrice'])
+									pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 									del self.positions[i]
 
@@ -1131,12 +1287,12 @@ class Spotware(Broker):
 
 								# Partially Closed
 								else:
-									pos.lotsize -= update.order.executedVolume
+									pos.lotsize -= float(update['order']['executedVolume'])
 
 									del_pos = tl.Position.fromDict(self, pos)
-									del_pos.lotsize = update.order.executedVolume
-									del_pos.close_price = update.order.executionPrice
-									del_pos.close_time = update.order.utcLastUpdateTimestamp / 1000
+									del_pos.lotsize = float(update['order']['executedVolume'])
+									del_pos.close_price = float(update['order']['executionPrice'])
+									del_pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 									result.update({
 										ref_id: {
@@ -1152,8 +1308,8 @@ class Spotware(Broker):
 					order_type = tl.MARKET_ENTRY
 					for i in range(len(self.orders)):
 						order = self.orders[i]
-						if str(update.order.orderId) == order.order_id:
-							order.close_time = update.order.utcLastUpdateTimestamp / 1000
+						if str(update['order']['orderId']) == order.order_id:
+							order.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 							if order.order_type == tl.STOP_ORDER:
 								order_type = tl.STOP_ENTRY
 							elif order.order_type == tl.LIMIT_ORDER:
@@ -1174,7 +1330,7 @@ class Spotware(Broker):
 							break
 
 					# Create
-					new_pos = self.convert_sw_position(account_id, update.position)
+					new_pos = self.convert_sw_position(account_id, update['position'])
 					self.positions.append(new_pos)
 
 					result.update({
@@ -1187,15 +1343,15 @@ class Spotware(Broker):
 					})
 
 			# ORDER_ACCEPTED
-			elif execution_type == 2:
+			elif execution_type == 'ORDER_ACCEPTED':
 				# Check if `STOP` or `LIMIT`
-				if update.order.orderType in (2,3):
-					new_order = self.convert_sw_order(account_id, update.order)
+				if update['order']['orderType'] in ('LIMIT','STOP'):
+					new_order = self.convert_sw_order(account_id, update['order'])
 					self.orders.append(new_order)
 
 					result.update({
 						ref_id: {
-							'timestamp': update.order.utcLastUpdateTimestamp/1000,
+							'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 							'type': new_order.order_type,
 							'accepted': True,
 							'item': new_order
@@ -1203,17 +1359,17 @@ class Spotware(Broker):
 					})
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
-				elif update.order.orderType == 4:
+				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					for pos in self.positions:
-						if str(update.position.positionId) == pos.order_id:
-							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
+						if str(update['position']['positionId']) == pos.order_id:
+							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
+							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order'][utcLastUpdateTimestamp])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
@@ -1223,15 +1379,15 @@ class Spotware(Broker):
 							break
 
 			# ORDER_CANCELLED
-			elif execution_type == 5:
+			elif execution_type == 'ORDER_CANCELLED':
 				# Check if `STOP` or `LIMIT`
-				if update.order.orderType in (2,3):
+				if update['order']['orderType'] in ('LIMIT','STOP'):
 					# Update current order
-					new_order = self.convert_sw_order(account_id, update.order)
+					new_order = self.convert_sw_order(account_id, update['order'])
 					for i in range(len(self.orders)):
 						order = self.orders[i]
-						if str(update.order.orderId) == order.order_id:
-							order.close_time = update.order.utcLastUpdateTimestamp / 1000
+						if str(update['order']['orderId']) == order.order_id:
+							order.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
 							del self.orders[i]
 
@@ -1247,17 +1403,17 @@ class Spotware(Broker):
 							break
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
-				elif update.order.orderType == 4:
+				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					for pos in self.positions:
-						if str(update.position.positionId) == pos.order_id:
-							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
+						if str(update['position']['positionId']) == pos.order_id:
+							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
+							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
@@ -1267,18 +1423,18 @@ class Spotware(Broker):
 							break
 
 			# ORDER_REPLACED
-			elif execution_type == 4:
+			elif execution_type == 'ORDER_REPLACED':
 				# Check if `STOP` or `LIMIT`
-				if update.order.orderType in (2,3):
+				if update['order']['orderType'] in ('LIMIT','STOP'):
 					# Update current order
-					new_order = self.convert_sw_order(account_id, update.order)
+					new_order = self.convert_sw_order(account_id, update['order'])
 					for order in self.orders:
-						if str(update.order.orderId) == order.order_id:
+						if str(update['order']['orderId']) == order.order_id:
 							order.update(new_order)
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': order
@@ -1286,18 +1442,18 @@ class Spotware(Broker):
 							})
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
-				elif update.order.orderType == 4:
+				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 					# Update current position
 					for pos in self.positions:
-						if str(update.position.positionId) == pos.order_id:
-							new_sl = None if update.position.stopLoss == 0 else update.position.stopLoss
+						if str(update['position']['positionId']) == pos.order_id:
+							new_sl = None if float(update['position']['stopLoss']) == 0 else float(update['position']['stopLoss'])
 							pos.sl = new_sl
-							new_tp = None if update.position.takeProfit == 0 else update.position.takeProfit
+							new_tp = None if float(update['position']['takeProfit']) == 0 else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({
 								ref_id: {
-									'timestamp': update.order.utcLastUpdateTimestamp/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
@@ -1311,34 +1467,38 @@ class Spotware(Broker):
 				return None
 
 
-	def _subscribe_chart_updates(self, product, listener):
-		ref_id = self.generateReference()
+	def _subscribe_chart_updates(self, instrument, listener):
+		# ref_id = self.generateReference()
 
-		product = self._convert_product('Spotware', product)
-		self.parent._subscriptions[str(product)] = listener
+		# product = self._convert_product('Spotware', product)
+		# self.parent._subscriptions[str(product)] = listener
 
-		sub_req = o2.ProtoOASubscribeSpotsReq(
-			ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-			symbolId=[product]
-		)
-		self._get_client(list(self.accounts.keys())[0]).send(sub_req, msgid=ref_id)
-		self.parent._wait(ref_id)
-
-		# sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# sub_req = o2.ProtoOASubscribeSpotsReq(
 		# 	ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-		# 	symbolId=product, period=1
+		# 	symbolId=[product]
 		# )
-		# self._get_client(list(self.accounts.keys())[0]).send(sub_req)
+		# self._get_client(list(self.accounts.keys())[0]).send(sub_req, msgid=ref_id)
+		# self.parent._wait(ref_id)
 
-		for i in range(14):
-			if i % 5 == 0:
-				time.sleep(1)
+		# # sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# # 	ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# # 	symbolId=product, period=1
+		# # )
+		# # self._get_client(list(self.accounts.keys())[0]).send(sub_req)
 
-			sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
-				ctidTraderAccountId=int(list(self.accounts.keys())[0]),
-				symbolId=product, period=i+1
-			)
-			self._get_client(list(self.accounts.keys())[0]).send(sub_req)
+		# for i in range(14):
+		# 	if i % 5 == 0:
+		# 		time.sleep(1)
+
+		# 	sub_req = o2.ProtoOASubscribeLiveTrendbarReq(
+		# 		ctidTraderAccountId=int(list(self.accounts.keys())[0]),
+		# 		symbolId=product, period=i+1
+		# 	)
+		# 	self._get_client(list(self.accounts.keys())[0]).send(sub_req)
+
+		stream_id = self.generateReference()
+		res = self.ctrl.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', stream_id, instrument)
+		self.ctrl.addBrokerListener(stream_id, listener)
 
 
 	def _subscribe_multiple_chart_updates(self, products, listener):
@@ -1382,8 +1542,15 @@ class Spotware(Broker):
 				# chart, update_time, bid, ask, volume = self._price_queue[0]
 				del self._price_queue[0]
 
-				ask = payload.ask / 100000
-				bid = payload.bid / 100000
+				if 'ask' in payload:
+					ask = float(payload['ask']) / 100000
+				else:
+					ask = None
+
+				if 'bid' in payload:
+					bid = float(payload['bid']) / 100000
+				else:
+					bid = None
 
 				volume = None
 				c_ts = time.time()+self.time_off
@@ -1409,23 +1576,49 @@ class Spotware(Broker):
 						}
 					})
 
+				if 'trendbar' in payload:
+					for i in payload['trendbar']:
+						period = self._convert_sw_period(i['period'])
+						if period in chart.getActivePeriods():
+							if (isinstance(chart.bid.get(period), np.ndarray) and 
+								isinstance(chart.ask.get(period), np.ndarray)):
 
-				for i in payload.trendbar:
-					period = self._convert_sw_period(i.period)
-					if period in chart.getActivePeriods():
-						if (isinstance(chart.bid.get(period), np.ndarray) and 
-							isinstance(chart.ask.get(period), np.ndarray)):
+								bar_ts = float(i['utcTimestampInMinutes'])*60
+								# Handle period bar end
+								if chart.lastTs[period] is None:
+									chart.lastTs[period] = bar_ts
+								elif bar_ts > chart.lastTs[period]:
+									result.append({
+										'broker': self.name,
+										'product': chart.product,
+										'period': period,
+										'bar_end': True,
+										'timestamp': chart.lastTs[period],
+										'item': {
+											'ask': chart.ask[period].tolist(),
+											'mid': chart.mid[period].tolist(),
+											'bid': chart.bid[period].tolist()
+										}
+									})
 
-							bar_ts = i.utcTimestampInMinutes*60
-							# Handle period bar end
-							if chart.lastTs[period] is None:
-								chart.lastTs[period] = bar_ts
-							elif bar_ts > chart.lastTs[period]:
+									chart.lastTs[period] = bar_ts
+									print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
+
+								new_low = float(i['low']) / 100000
+								new_open = (float(i['low']) + float(i['deltaOpen'])) / 100000
+								new_high = (float(i['low']) + float(i['deltaHigh'])) / 100000
+								new_close = chart.mid[tl.period.TICK]
+								new_ohlc = np.array([new_open, new_high, new_low, new_close], dtype=np.float64)
+
+								chart.ask[period] = new_ohlc
+								chart.mid[period] = new_ohlc
+								chart.bid[period] = new_ohlc
+
 								result.append({
 									'broker': self.name,
 									'product': chart.product,
 									'period': period,
-									'bar_end': True,
+									'bar_end': False,
 									'timestamp': chart.lastTs[period],
 									'item': {
 										'ask': chart.ask[period].tolist(),
@@ -1433,32 +1626,6 @@ class Spotware(Broker):
 										'bid': chart.bid[period].tolist()
 									}
 								})
-
-								chart.lastTs[period] = bar_ts
-								print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
-
-							new_low = i.low / 100000
-							new_open = (i.low + i.deltaOpen) / 100000
-							new_high = (i.low + i.deltaHigh) / 100000
-							new_close = chart.mid[tl.period.TICK]
-							new_ohlc = np.array([new_open, new_high, new_low, new_close], dtype=np.float64)
-
-							chart.ask[period] = new_ohlc
-							chart.mid[period] = new_ohlc
-							chart.bid[period] = new_ohlc
-
-							result.append({
-								'broker': self.name,
-								'product': chart.product,
-								'period': period,
-								'bar_end': False,
-								'timestamp': chart.lastTs[period],
-								'item': {
-									'ask': chart.ask[period].tolist(),
-									'mid': chart.mid[period].tolist(),
-									'bid': chart.bid[period].tolist()
-								}
-							})
 
 			else:
 				for chart in self.charts:
@@ -1579,34 +1746,64 @@ class Spotware(Broker):
 			return 14
 
 
+	# def _convert_sw_period(self, period):
+	# 	if period == 1:
+	# 		return tl.period.ONE_MINUTE
+	# 	elif period == 2:
+	# 		return tl.period.TWO_MINUTES
+	# 	elif period == 3:
+	# 		return tl.period.THREE_MINUTES
+	# 	elif period == 4:
+	# 		return tl.period.FOUR_MINUTES
+	# 	elif period == 5:
+	# 		return tl.period.FIVE_MINUTES
+	# 	elif period == 6:
+	# 		return tl.period.TEN_MINUTES
+	# 	elif period == 7:
+	# 		return tl.period.FIFTEEN_MINUTES
+	# 	elif period == 8:
+	# 		return tl.period.THIRTY_MINUTES
+	# 	elif period == 9:
+	# 		return tl.period.ONE_HOUR
+	# 	elif period == 10:
+	# 		return tl.period.FOUR_HOURS
+	# 	elif period == 11:
+	# 		return tl.period.TWELVE_HOURS
+	# 	elif period == 12:
+	# 		return tl.period.DAILY
+	# 	elif period == 13:
+	# 		return tl.period.WEEKLY
+	# 	elif period == 14:
+	# 		return tl.period.MONTHLY
+
 	def _convert_sw_period(self, period):
-		if period == 1:
+		if period == 'M1':
 			return tl.period.ONE_MINUTE
-		elif period == 2:
+		elif period == 'M2':
 			return tl.period.TWO_MINUTES
-		elif period == 3:
+		elif period == 'M3':
 			return tl.period.THREE_MINUTES
-		elif period == 4:
+		elif period == 'M4':
 			return tl.period.FOUR_MINUTES
-		elif period == 5:
+		elif period == 'M5':
 			return tl.period.FIVE_MINUTES
-		elif period == 6:
+		elif period == 'M10':
 			return tl.period.TEN_MINUTES
-		elif period == 7:
+		elif period == 'M15':
 			return tl.period.FIFTEEN_MINUTES
-		elif period == 8:
+		elif period == 'M30':
 			return tl.period.THIRTY_MINUTES
-		elif period == 9:
+		elif period == 'H1':
 			return tl.period.ONE_HOUR
-		elif period == 10:
+		elif period == 'H4':
 			return tl.period.FOUR_HOURS
-		elif period == 11:
+		elif period == 'H12':
 			return tl.period.TWELVE_HOURS
-		elif period == 12:
+		elif period == 'D1':
 			return tl.period.DAILY
-		elif period == 13:
+		elif period == 'W1':
 			return tl.period.WEEKLY
-		elif period == 14:
+		elif period == 'MN1':
 			return tl.period.MONTHLY
 
 
