@@ -1239,7 +1239,7 @@ class Spotware(Broker):
 					for i in range(len(self.positions)):
 						pos = self.positions[i]
 						if str(update['position']['positionId']) == pos.order_id:
-							if int(update['order']['orderType']) == 'STOP_LOSS_TAKE_PROFIT':
+							if update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
 								pos.close_price = float(update['order']['executionPrice'])
 								pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
