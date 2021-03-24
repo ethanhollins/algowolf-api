@@ -1369,7 +1369,7 @@ class Spotware(Broker):
 
 							result.update({
 								ref_id: {
-									'timestamp': float(update['order'][utcLastUpdateTimestamp])/1000,
+									'timestamp': float(update['order']['utcLastUpdateTimestamp'])/1000,
 									'type': tl.MODIFY,
 									'accepted': True,
 									'item': pos
