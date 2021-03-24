@@ -574,8 +574,8 @@ class Spotware(Broker):
 		direction = tl.LONG if pos['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
 		lotsize = float(pos['tradeData']['volume'])
 		entry_price = float(pos['price'])
-		sl = None if float(pos['stopLoss']) == 0 else round(float(pos['stopLoss']), 5)
-		tp = None if float(pos['takeProfit']) == 0 else round(float(pos['takeProfit']), 5)
+		sl = None if pos.get('stopLoss') is None or float(pos['stopLoss']) == 0 else round(float(pos['stopLoss']), 5)
+		tp = None if pos.get('takeProfit') is None or float(pos['takeProfit']) == 0 else round(float(pos['takeProfit']), 5)
 		open_time = float(pos['tradeData']['openTimestamp']) / 1000
 
 		return tl.Position(
@@ -599,8 +599,8 @@ class Spotware(Broker):
 		product = self._convert_sw_product(int(order['tradeData']['symbolId']))
 		direction = tl.LONG if order['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
 		lotsize = float(order['tradeData']['volume'])
-		sl = None if float(order['stopLoss']) == 0 else round(float(order['stopLoss']), 5)
-		tp = None if float(order['takeProfit']) == 0 else round(float(order['takeProfit']), 5)
+		sl = None if order.get('stopLoss') is None or float(order['stopLoss']) == 0 else round(float(order['stopLoss']), 5)
+		tp = None if order.get('takeProfit') is None or float(order['takeProfit']) == 0 else round(float(order['takeProfit']), 5)
 		open_time = float(order['tradeData']['openTimestamp']) / 1000
 
 		return tl.Order(
