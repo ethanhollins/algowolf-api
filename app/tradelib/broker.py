@@ -109,6 +109,7 @@ class Broker(object):
 				self._run_backtest(from_ts)
 
 			self.acceptLive = True
+			print('ACCEPT LIVE')
 			Thread(target=self.saveTransactions).start()
 
 
@@ -598,7 +599,8 @@ class Broker(object):
 	def _handle_tick_checks(self, item):
 		product = item['product']
 		timestamp = int(item['timestamp'])
-		ohlc = np.array([item['item']['ask'][3]]*4 + [item['item']['bid'][3]]*4, dtype=np.float64)
+		# ohlc = np.array([item['item']['ask'][3]]*4 + [item['item']['bid'][3]]*4, dtype=np.float64)
+		ohlc = np.array([item['item']['mid'][3]]*4 + [item['item']['mid'][3]]*4, dtype=np.float64)
 
 		self.backtester.handleOrders(product, timestamp, ohlc)
 		self.backtester.handleStopLoss(product, timestamp, ohlc)

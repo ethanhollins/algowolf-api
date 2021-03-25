@@ -273,6 +273,15 @@ class Backtester(object):
 								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 							)
 
+							# ORDER CANCEL
+							self.broker.handleOnTrade(order.account_id, {
+								self.broker.generateReference(): {
+									'timestamp': math.floor(time.time()),
+									'type': tl.ORDER_CANCEL,
+									'accepted': True,
+									'item': order
+								}
+							})
 							self.broker.handleOnTrade(order.account_id, res)
 
 						# Update transaction history
@@ -288,7 +297,30 @@ class Backtester(object):
 						order.close_time = timestamp
 						
 						# Delete Order
-						del self.broker.orders[self.broker.orders.index(order)]						
+						del self.broker.orders[self.broker.orders.index(order)]		
+
+						# On Trade
+						if pos and self.broker.acceptLive:
+							# Delete Strategy Position
+							self.broker.userAccount.updateTrades(
+								self.broker.strategyId,
+								self.broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
+								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
+							)
+
+							# ORDER CANCEL
+							self.broker.handleOnTrade(order.account_id, {
+								self.broker.generateReference(): {
+									'timestamp': math.floor(time.time()),
+									'type': tl.ORDER_CANCEL,
+									'accepted': True,
+									'item': order
+								}
+							})
+							self.broker.handleOnTrade(order.account_id, res)
+
+						# Update transaction history
+						self.broker.handleTransaction(res)				
 
 						
 
@@ -314,6 +346,15 @@ class Backtester(object):
 								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 							)
 
+							# ORDER CANCEL
+							self.broker.handleOnTrade(order.account_id, {
+								self.broker.generateReference(): {
+									'timestamp': math.floor(time.time()),
+									'type': tl.ORDER_CANCEL,
+									'accepted': True,
+									'item': order
+								}
+							})
 							self.broker.handleOnTrade(order.account_id, res)
 
 						# Update transaction history
@@ -340,6 +381,15 @@ class Backtester(object):
 								self.broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 							)
 
+							# ORDER CANCEL
+							self.broker.handleOnTrade(order.account_id, {
+								self.broker.generateReference(): {
+									'timestamp': math.floor(time.time()),
+									'type': tl.ORDER_CANCEL,
+									'accepted': True,
+									'item': order
+								}
+							})
 							self.broker.handleOnTrade(order.account_id, res)
 
 						# Update transaction history

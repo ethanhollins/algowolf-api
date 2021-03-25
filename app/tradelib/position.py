@@ -62,7 +62,6 @@ class Position(dict):
 
 		res = cls(
 			broker,
-			order['broker'],
 			order['order_id'],
 			order['account_id'],
 			order['product'],
