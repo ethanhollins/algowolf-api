@@ -815,7 +815,7 @@ class Spotware(Broker):
 		# 		}
 
 		# print(f'MODIFY POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
-		return res
+		return result
 
 
 	def deletePosition(self, pos, lotsize, override=False):
