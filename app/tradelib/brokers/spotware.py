@@ -38,10 +38,10 @@ class Spotware(Broker):
 		# self._spotware_connected = False
 		# self._last_update = time.time()
 		# self._subscriptions = {}
-		# self._handled_position_events = {
-		# 	tl.MARKET_ENTRY: {},
-		# 	tl.POSITION_CLOSE: {}
-		# }
+		self._handled_position_events = {
+			tl.MARKET_ENTRY: {},
+			tl.POSITION_CLOSE: {}
+		}
 		# self.assets = assets
 		# self.symbols = symbols
 
@@ -100,8 +100,7 @@ class Spotware(Broker):
 
 			# Start refresh thread
 			# Thread(target=self._periodic_refresh).start()
-			t = Thread(target=self._handle_updates)
-			t.start()
+			
 
 		else:
 			self.access_token = access_token
@@ -114,6 +113,9 @@ class Spotware(Broker):
 
 			# self.client = self.parent.client
 			# self._authorize_accounts(accounts)
+
+		t = Thread(target=self._handle_updates)
+		t.start()
 
 		if not is_dummy:
 			self._subscribe_account_updates()
@@ -459,8 +461,6 @@ class Spotware(Broker):
 			count=count, force_download=force_download
 		)
 
-		print(f'DOWN SW RES: {res}')
-
 		if 'error' in res:
 			result = pd.concat((
 				self._create_empty_asks_df(), 
@@ -674,12 +674,63 @@ class Spotware(Broker):
 				override=override
 			)
 
+		sl_tp_prices = {}
+		sl_tp_ranges = {}
+		if sl_price:
+			sl_tp_prices['stopLoss'] = sl_price
+
+			# Get range from current price for temp sl
+			chart = self.getChart(product)
+			if direction == tl.LONG:
+				sl_tp_ranges['relativeStopLoss'] = int((chart.ask[tl.period.ONE_MINUTE][3] - sl_price) * 100000)
+			else:
+				sl_tp_ranges['relativeStopLoss'] = int((sl_price - chart.bid[tl.period.ONE_MINUTE][3]) * 100000)
+
+		if sl_range:
+			sl_tp_ranges['relativeStopLoss'] = int(sl_range)
+
+		if tp_price:
+			sl_tp_prices['takeProfit'] = tp_price
+			# Get range from current price for temp tp
+			chart = self.getChart(product)
+			if direction == tl.LONG:
+				sl_tp_ranges['relativeTakeProfit'] = int((tp_price - chart.ask[tl.period.ONE_MINUTE][3]) * 100000)
+			else:
+				sl_tp_ranges['relativeTakeProfit'] = int((chart.bid[tl.period.ONE_MINUTE][3] - tp_price) * 100000)
+
+		if tp_range:
+			sl_tp_ranges['relativeTakeProfit'] = int(tp_range)
+
+
 		result = self.ctrl.brokerRequest(
 			self.name, self.brokerId, 'createPosition',
 			product, lotsize, direction,
 			account_id, entry_range, entry_price,
-			sl_range, tp_range, sl_price, tp_price
+			sl_tp_prices, sl_tp_ranges
 		)
+
+		if 'order_id' in result:
+			order_id = str(result.get('order_id'))
+			pos_res = self._wait_for_position(order_id)
+			if not pos_res is None:
+				ref_id = list(pos_res.keys())[0]
+				item = pos_res[ref_id]
+				pos = item['item']
+				print(f'CREATE POS -> {pos}')
+
+				# Modify to correct SL/TP
+				if len(sl_tp_prices) > 0:
+					if not tp_price:
+						tp_price = pos.tp
+					if not sl_price:
+						sl_price = pos.sl
+
+					print('CREATE POS -> MODIFY')
+					self.modifyPosition(pos, sl_price, tp_price)
+
+				result = pos_res
+
+		return result
 
 		# ref_id = self.generateReference()
 
@@ -799,6 +850,29 @@ class Spotware(Broker):
 			pos.account_id, pos.order_id, sl_price, tp_price
 		)
 
+		res = self._wait(result.get('ref_id'))
+
+		if not isinstance(res, dict):
+			# if not res is None and res.payloadType in (50, 2132):
+			# 	res = {
+			# 		ref_id: {
+			# 			'timestamp': time.time(),
+			# 			'type': order_type,
+			# 			'accepted': False,
+			# 			'message': res.errorCode
+			# 		}
+			# 	}
+			# else:
+			res = {
+				ref_id: {
+					'timestamp': time.time(),
+					'type': tl.MODIFY,
+					'accepted': False
+				}
+			}
+
+		return res
+
 		# ref_id = self.generateReference()
 
 		# start_time = time.time()
@@ -830,7 +904,7 @@ class Spotware(Broker):
 		# 		}
 
 		# print(f'MODIFY POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
-		return result
+		# return result
 
 
 	def deletePosition(self, pos, lotsize, override=False):
@@ -847,6 +921,17 @@ class Spotware(Broker):
 			pos.account_id, pos.order_id, lotsize
 		)
 
+		if 'order_id' in result:
+			order_id = str(result.get('order_id'))
+			pos_res = self._wait_for_close(order_id)
+			if not pos_res is None:
+				ref_id = list(pos_res.keys())[0]
+				item = pos_res[ref_id]
+				print(f'Pos Res [delete]: {pos_res}', flush=True)
+
+				result = pos_res
+
+		return result
 		# ref_id = self.generateReference()
 
 		# close_req = o2.ProtoOAClosePositionReq(
@@ -890,7 +975,7 @@ class Spotware(Broker):
 		# 	})
 
 		# print(f'DELETE POSITION END: {self.brokerId} {round(time.time() - start_time, 2)}s')
-		return result
+		# return result
 
 
 	def _get_all_orders(self, account_id):
@@ -1037,6 +1122,35 @@ class Spotware(Broker):
 			sl_range, tp_range, sl_price, tp_price
 		)
 
+		print(f'CREATE ORDER: {result}')
+
+		if 'ref_id' in result:
+			ref_id = result.get('ref_id')
+			res = self._wait(ref_id)
+
+			if not isinstance(res, dict):
+				# if not res is None and res.payloadType in (50, 2132):
+				# 	res = {
+				# 		ref_id: {
+				# 			'timestamp': time.time(),
+				# 			'type': order_type,
+				# 			'accepted': False,
+				# 			'message': res.errorCode
+				# 		}
+				# 	}
+				# else:
+				res = {
+					ref_id: {
+						'timestamp': time.time(),
+						'type': order_type,
+						'accepted': False
+					}
+				}
+		else:
+			res = result
+
+
+		return res
 		# ref_id = self.generateReference()
 
 		# # Convert symbol
@@ -1104,7 +1218,7 @@ class Spotware(Broker):
 		# 			}
 		# 		}
 
-		return result
+		# return result
 
 
 	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price, override=False):
@@ -1122,6 +1236,33 @@ class Spotware(Broker):
 			self.name, self.brokerId, 'modifyOrder',
 			order.account_id, order.order_id, order.order_type, lotsize, entry_price, sl_price, tp_price
 		)
+
+		if 'ref_id' in result:
+			ref_id = result.get('ref_id')
+			res = self._wait(ref_id)
+
+			if not isinstance(res, dict):
+				# if not res is None and res.payloadType in (50, 2132):
+				# 	res = {
+				# 		ref_id: {
+				# 			'timestamp': time.time(),
+				# 			'type': order_type,
+				# 			'accepted': False,
+				# 			'message': res.errorCode
+				# 		}
+				# 	}
+				# else:
+				res = {
+					ref_id: {
+						'timestamp': time.time(),
+						'type': tl.MODIFY,
+						'accepted': False
+					}
+				}
+		else:
+			res = result
+
+		return res
 
 		# ref_id = self.generateReference()
 
@@ -1178,7 +1319,7 @@ class Spotware(Broker):
 
 		# print(f'MOD: {res}')
 
-		return result
+		# return result
 
 
 	def deleteOrder(self, order, override=False):
@@ -1193,6 +1334,33 @@ class Spotware(Broker):
 			self.name, self.brokerId, 'deleteOrder',
 			order.account_id, order.order_id
 		)
+
+		if 'ref_id' in result:
+			ref_id = result.get('ref_id')
+			res = self._wait(result.get('ref_id'))
+
+			if not isinstance(res, dict):
+				# if not res is None and res.payloadType in (50, 2132):
+				# 	res = {
+				# 		ref_id: {
+				# 			'timestamp': time.time(),
+				# 			'type': order_type,
+				# 			'accepted': False,
+				# 			'message': res.errorCode
+				# 		}
+				# 	}
+				# else:
+				res = {
+					ref_id: {
+						'timestamp': time.time(),
+						'type': tl.ORDER_CANCEL,
+						'accepted': False
+					}
+				}
+		else:
+			res = result
+
+		return res
 
 		# ref_id = self.generateReference()
 
@@ -1225,7 +1393,7 @@ class Spotware(Broker):
 		# 			}
 		# 		}
 
-		return result
+		# return result
 
 
 	def _subscribe_account_updates(self):
@@ -1271,10 +1439,10 @@ class Spotware(Broker):
 				time_off_timer = time.time()
 				self._set_time_off()
 
-			time.sleep(0.001)
+			time.sleep(1)
 
 
-	def _handle_account_update(self, payload_type, account_id, update, ref_id):
+	def _handle_account_update(self, payload_type, account_id, update, msg_id):
 		print(f'_on_account_update: {payload_type} {account_id} {update}', flush=True)
 		if int(payload_type) == 2126:
 			# if not ref_id:
@@ -1342,6 +1510,15 @@ class Spotware(Broker):
 										}
 									})
 
+									self._handled_position_events[tl.POSITION_CLOSE][pos.order_id] = {
+										ref_id: {
+											'timestamp': pos.close_time,
+											'type': tl.POSITION_CLOSE,
+											'accepted': True,
+											'item': pos
+										}
+									}
+
 								# Partially Closed
 								else:
 									pos.lotsize -= float(update['order']['executedVolume'])
@@ -1359,6 +1536,15 @@ class Spotware(Broker):
 											'item': del_pos
 										}
 									})
+
+									self._handled_position_events[tl.POSITION_CLOSE][del_pos.order_id] = {
+										ref_id: {
+											'timestamp': del_pos.close_time,
+											'type': tl.POSITION_CLOSE,
+											'accepted': True,
+											'item': del_pos
+										}
+									}
 
 							break
 				else:
@@ -1398,6 +1584,16 @@ class Spotware(Broker):
 							'item': new_pos
 						}
 					})
+
+					if order_type == tl.MARKET_ENTRY:
+						self._handled_position_events[tl.MARKET_ENTRY][new_pos.order_id] = {
+							ref_id: {
+								'timestamp': new_pos.open_time,
+								'type': order_type,
+								'accepted': True,
+								'item': new_pos
+							}
+						}
 
 			# ORDER_ACCEPTED
 			elif execution_type == 'ORDER_ACCEPTED':
@@ -1566,6 +1762,7 @@ class Spotware(Broker):
 
 			if len(result):
 				print(f'SEND IT: {result}', flush=True)
+				self._handled[msg_id] = result
 				self.handleOnTrade(account_id, result)
 				return result
 			else:

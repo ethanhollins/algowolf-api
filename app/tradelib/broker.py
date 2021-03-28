@@ -180,7 +180,7 @@ class Broker(object):
 				self.backtester.handleStopLoss(product, ts_data[i], ohlc_data[i], is_backtest=True)
 				self.backtester.handleTakeProfit(product, ts_data[i], ohlc_data[i], is_backtest=True)
 
-	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=5):
+	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=30):
 		start = time.time()
 		while not ref in self._handled:
 			if time.time() - start >= timeout:
