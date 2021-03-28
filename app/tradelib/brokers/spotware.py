@@ -51,6 +51,7 @@ class Spotware(Broker):
 		# self.symbols_by_name = {}
 
 		self._price_queue = []
+		self._account_update_queue = []
 		self.time_off = 0
 		self._set_time_off()
 
@@ -99,7 +100,7 @@ class Spotware(Broker):
 
 			# Start refresh thread
 			# Thread(target=self._periodic_refresh).start()
-			t = Thread(target=self._handle_chart_update)
+			t = Thread(target=self._handle_updates)
 			t.start()
 
 		else:
@@ -446,6 +447,11 @@ class Spotware(Broker):
 		start=None, end=None, count=None,
 		force_download=False
 	):
+
+		if isinstance(start, datetime):
+			start = tl.convertTimeToTimestamp(start)
+		if isinstance(end, datetime):
+			end = tl.convertTimeToTimestamp(end)
 
 		res = self.ctrl.brokerRequest(
 			self.name, self.brokerId, '_download_historical_data_broker',
@@ -1221,7 +1227,45 @@ class Spotware(Broker):
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 
-	def _on_account_update(self, payload_type, account_id, update, ref_id):
+	def _handle_updates(self):
+		time_off_timer = time.time()
+
+		while True:
+			# Handle Account Updates
+			if len(self._account_update_queue):
+				try:
+					payload_type, account_id, update, ref_id = self._account_update_queue[0]
+					self._handle_account_update(payload_type, account_id, update, ref_id)
+				except Exception:
+					print(traceback.format_exc())
+				finally:
+					del self._account_update_queue[0]
+
+			# Handle Chart Updates
+			if len(self._price_queue):
+				try:
+					chart, payload = self._price_queue[0]
+					self._handle_chart_update(chart, payload)
+				except Exception:
+					print(traceback.format_exc())
+				finally:
+					del self._price_queue[0]
+
+			# Handle Auto Bar End
+			try:
+				self._handle_chart_auto_bar_end()
+			except Exception:
+				print(traceback.format_exc())
+
+			# Refresh Time Adjustment
+			if time.time() - time_off_timer > ONE_HOUR:
+				time_off_timer = time.time()
+				self._set_time_off()
+
+			time.sleep(0.001)
+
+
+	def _handle_account_update(self, payload_type, account_id, update, ref_id):
 		print(f'_on_account_update: {payload_type} {account_id} {update}', flush=True)
 		if int(payload_type) == 2126:
 			# if not ref_id:
@@ -1464,11 +1508,63 @@ class Spotware(Broker):
 								}
 							})
 
+			# ORDER_REJECTED
+			elif execution_type == 'ORDER_REJECTED':
+				error_code = update.get('errorCode')
+				print(f'ORDER REJECTED: {error_code}')
+
+
+				position_id = str(update['position']['positionId'])
+				for i in range(len(self.positions)):
+					pos = self.positions[i]
+					if pos.order_id == position_id:
+						del pos[i]
+
+						pos.close_time = time.time()
+						result.update({
+							ref_id: {
+								'timestamp': time.time(),
+								'type': tl.POSITION_CLOSE,
+								'accepted': True,
+								'item': pos
+							}
+						})
+
+						print(f'REJECTING POSITION: {position_id}')
+
+						break
+
+				order_id = str(update['order']['orderId'])
+				for i in range(len(self.orders)):
+					order = self.orders[i]
+					if order.order_id == order_id:
+						del order[i]
+
+						order.close_time = time.time()
+						result.update({
+							ref_id: {
+								'timestamp': time.time(),
+								'type': tl.ORDER_CANCEL,
+								'accepted': True,
+								'item': order
+							}
+						})
+
+						print(f'REJECTING ORDER: {order_id}')
+
+						break
+
+
 			if len(result):
 				self.handleOnTrade(account_id, result)
 				return result
 			else:
 				return None
+
+
+
+	def _on_account_update(self, payload_type, account_id, update, ref_id):
+		self._account_update_queue.append((payload_type, account_id, update, ref_id))
 
 
 	def _subscribe_chart_updates(self, instrument, listener):
@@ -1536,141 +1632,134 @@ class Spotware(Broker):
 			self.client.send(sub_req)
 
 
-	def _handle_chart_update(self):
-		time_off_timer = time.time()
+	def _handle_chart_update(self, chart, payload):
+		result = []
 
-		while True:
+		if 'ask' in payload:
+			ask = float(payload['ask']) / 100000
+		else:
+			ask = None
+
+		if 'bid' in payload:
+			bid = float(payload['bid']) / 100000
+		else:
+			bid = None
+
+		volume = None
+		c_ts = time.time()+self.time_off
+		# Iterate periods
+		if tl.period.TICK in chart.getActivePeriods():
+			if ask:
+				chart.ask[tl.period.TICK] = ask
+			if bid:
+				chart.bid[tl.period.TICK] = bid
+			if chart.bid[tl.period.TICK] is not None and chart.ask[tl.period.TICK] is not None:
+				chart.mid[tl.period.TICK] = np.around((chart.ask[tl.period.TICK] + chart.bid[tl.period.TICK])/2, decimals=5)
+
+			result.append({
+				'broker': self.name,
+				'product': chart.product,
+				'period': tl.period.TICK,
+				'bar_end': False,
+				'timestamp': time.time()+self.time_off,
+				'item': {
+					'ask': chart.ask[tl.period.TICK],
+					'mid': chart.mid[tl.period.TICK],
+					'bid': chart.bid[tl.period.TICK]
+				}
+			})
+
+		if 'trendbar' in payload:
+			for i in payload['trendbar']:
+				period = self._convert_sw_period(i['period'])
+				if period in chart.getActivePeriods():
+					if (isinstance(chart.bid.get(period), np.ndarray) and 
+						isinstance(chart.ask.get(period), np.ndarray)):
+
+						bar_ts = float(i['utcTimestampInMinutes'])*60
+						# Handle period bar end
+						if chart.lastTs[period] is None:
+							chart.lastTs[period] = bar_ts
+						elif bar_ts > chart.lastTs[period]:
+							result.append({
+								'broker': self.name,
+								'product': chart.product,
+								'period': period,
+								'bar_end': True,
+								'timestamp': chart.lastTs[period],
+								'item': {
+									'ask': chart.ask[period].tolist(),
+									'mid': chart.mid[period].tolist(),
+									'bid': chart.bid[period].tolist()
+								}
+							})
+
+							chart.lastTs[period] = bar_ts
+							print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
+
+						new_low = float(i['low']) / 100000
+						new_open = (float(i['low']) + float(i['deltaOpen'])) / 100000
+						new_high = (float(i['low']) + float(i['deltaHigh'])) / 100000
+						new_close = chart.mid[tl.period.TICK]
+						new_ohlc = np.array([new_open, new_high, new_low, new_close], dtype=np.float64)
+
+						chart.ask[period] = new_ohlc
+						chart.mid[period] = new_ohlc
+						chart.bid[period] = new_ohlc
+
+						result.append({
+							'broker': self.name,
+							'product': chart.product,
+							'period': period,
+							'bar_end': False,
+							'timestamp': chart.lastTs[period],
+							'item': {
+								'ask': chart.ask[period].tolist(),
+								'mid': chart.mid[period].tolist(),
+								'bid': chart.bid[period].tolist()
+							}
+						})
+
+		if len(result):
+			chart.handleTick(result)
+
+
+	def _handle_chart_auto_bar_end(self):
+		for chart in self.charts:
 			result = []
-			if len(self._price_queue):
-				chart, payload = self._price_queue[0]
-				# chart, update_time, bid, ask, volume = self._price_queue[0]
-				del self._price_queue[0]
-
-				if 'ask' in payload:
-					ask = float(payload['ask']) / 100000
-				else:
-					ask = None
-
-				if 'bid' in payload:
-					bid = float(payload['bid']) / 100000
-				else:
-					bid = None
-
-				volume = None
-				c_ts = time.time()+self.time_off
-				# Iterate periods
-				if tl.period.TICK in chart.getActivePeriods():
-					if ask:
-						chart.ask[tl.period.TICK] = ask
-					if bid:
-						chart.bid[tl.period.TICK] = bid
-					if chart.bid[tl.period.TICK] is not None and chart.ask[tl.period.TICK] is not None:
-						chart.mid[tl.period.TICK] = np.around((chart.ask[tl.period.TICK] + chart.bid[tl.period.TICK])/2, decimals=5)
-
-					result.append({
-						'broker': self.name,
-						'product': chart.product,
-						'period': tl.period.TICK,
-						'bar_end': False,
-						'timestamp': time.time()+self.time_off,
-						'item': {
-							'ask': chart.ask[tl.period.TICK],
-							'mid': chart.mid[tl.period.TICK],
-							'bid': chart.bid[tl.period.TICK]
-						}
-					})
-
-				if 'trendbar' in payload:
-					for i in payload['trendbar']:
-						period = self._convert_sw_period(i['period'])
-						if period in chart.getActivePeriods():
-							if (isinstance(chart.bid.get(period), np.ndarray) and 
-								isinstance(chart.ask.get(period), np.ndarray)):
-
-								bar_ts = float(i['utcTimestampInMinutes'])*60
-								# Handle period bar end
-								if chart.lastTs[period] is None:
-									chart.lastTs[period] = bar_ts
-								elif bar_ts > chart.lastTs[period]:
-									result.append({
-										'broker': self.name,
-										'product': chart.product,
-										'period': period,
-										'bar_end': True,
-										'timestamp': chart.lastTs[period],
-										'item': {
-											'ask': chart.ask[period].tolist(),
-											'mid': chart.mid[period].tolist(),
-											'bid': chart.bid[period].tolist()
-										}
-									})
-
-									chart.lastTs[period] = bar_ts
-									print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
-
-								new_low = float(i['low']) / 100000
-								new_open = (float(i['low']) + float(i['deltaOpen'])) / 100000
-								new_high = (float(i['low']) + float(i['deltaHigh'])) / 100000
-								new_close = chart.mid[tl.period.TICK]
-								new_ohlc = np.array([new_open, new_high, new_low, new_close], dtype=np.float64)
-
-								chart.ask[period] = new_ohlc
-								chart.mid[period] = new_ohlc
-								chart.bid[period] = new_ohlc
-
-								result.append({
-									'broker': self.name,
-									'product': chart.product,
-									'period': period,
-									'bar_end': False,
-									'timestamp': chart.lastTs[period],
-									'item': {
-										'ask': chart.ask[period].tolist(),
-										'mid': chart.mid[period].tolist(),
-										'bid': chart.bid[period].tolist()
-									}
-								})
-
-			else:
-				for chart in self.charts:
-					c_ts = time.time()+self.time_off-1
-					for period in chart.getActivePeriods():
-						if period != tl.period.TICK and chart.volume[period] > 0:
-							# Handle period bar end
-							is_new_bar = chart.isNewBar(period, c_ts)
-							if is_new_bar:
-								chart.volume[period] = 0
-								result.append({
-									'broker': self.name,
-									'product': chart.product,
-									'period': period,
-									'bar_end': True,
-									'timestamp': chart.lastTs[period],
-									'item': {
-										'ask': chart.ask[period].tolist(),
-										'mid': chart.mid[period].tolist(),
-										'bid': chart.bid[period].tolist()
-									}
-								})
-								chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
-								print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
-								chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
-								chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
-								chart.mid[period] = np.array(
-									[np.around(
-										(chart.ask[period][3] + chart.bid[period][3])/2,
-										decimals=5
-									)]*4, 
-								dtype=np.float64)
+			c_ts = time.time()+self.time_off-1
+			for period in chart.getActivePeriods():
+				if period != tl.period.TICK and chart.volume[period] > 0:
+					# Handle period bar end
+					is_new_bar = chart.isNewBar(period, c_ts)
+					if is_new_bar:
+						chart.volume[period] = 0
+						result.append({
+							'broker': self.name,
+							'product': chart.product,
+							'period': period,
+							'bar_end': True,
+							'timestamp': chart.lastTs[period],
+							'item': {
+								'ask': chart.ask[period].tolist(),
+								'mid': chart.mid[period].tolist(),
+								'bid': chart.bid[period].tolist()
+							}
+						})
+						chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
+						print(f'[SW] ({period}) Next: {chart.lastTs[period]}')
+						chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
+						chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
+						chart.mid[period] = np.array(
+							[np.around(
+								(chart.ask[period][3] + chart.bid[period][3])/2,
+								decimals=5
+							)]*4, 
+						dtype=np.float64)
 
 			if len(result):
 				chart.handleTick(result)
 
-			if time.time() - time_off_timer > ONE_HOUR:
-				time_off_timer = time.time()
-				self._set_time_off()
-
-			time.sleep(0.01)
 
 
 	def onChartUpdate(self, chart, payload):

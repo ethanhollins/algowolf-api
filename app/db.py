@@ -60,8 +60,12 @@ class Database(object):
 		while True:
 			if len(self._job_queue):
 				i = self._job_queue[0]
-				result = i[0](*i[1], **i[2])
-				del self._job_queue[0]
+				try:
+					result = i[0](*i[1], **i[2])
+				except Exception:
+					print(traceback.format_exc(), flush=True)
+				finally:
+					del self._job_queue[0]
 			time.sleep(0.1)
 
 

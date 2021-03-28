@@ -2,6 +2,7 @@ import os
 import time
 import math
 import json, jwt
+import gzip
 import re, string, random
 import requests
 from datetime import datetime
@@ -364,10 +365,32 @@ def get_strategy_info_ept(strategy_id):
 	strategy['input_variables'] = account.getStrategyInputVariables(strategy_id, script_id)
 	# strategy.update(account.getStrategyTransactions(strategy_id))
 
+	def data_stream(data):
+		data = json.dumps(data).encode('utf-8')
+
+		blocksize = 512
+		chunkindex = 0
+		chunkbyteoffest = 0
+		totalfilesize = len(data)
+		totalchunkcount = math.ceil(totalfilesize / blocksize)
+
+		while chunkindex < totalchunkcount:
+			t_data = data[chunkbyteoffest:chunkbyteoffest+blocksize]
+			yield(t_data)
+
+			chunkindex += 1
+			chunkbyteoffest += blocksize
+
 	return Response(
-		json.dumps(strategy, indent=2), 
-		status=200, content_type='application/json'
+		stream_with_context(data_stream(strategy)),
+		status=200,
+		content_type='application/json'
 	)
+
+	# return Response(
+	# 	json.dumps(strategy, indent=2), 
+	# 	status=200, content_type='application/json'
+	# )
 
 
 @bp.route('/strategy/<strategy_id>/init', methods=('POST',))
@@ -390,10 +413,32 @@ def get_strategy_account_info_ept(strategy_id, broker_id, account_id):
 
 	account_code = '.'.join((broker_id, account_id))
 	result = account.getAccountInfo(strategy_id, account_code)
+
+	def data_stream(data):
+		data = json.dumps(data).encode('utf-8')
+
+		blocksize = 512
+		chunkindex = 0
+		chunkbyteoffest = 0
+		totalfilesize = len(data)
+		totalchunkcount = math.ceil(totalfilesize / blocksize)
+
+		while chunkindex < totalchunkcount:
+			t_data = data[chunkbyteoffest:chunkbyteoffest+blocksize]
+			yield(t_data)
+
+			chunkindex += 1
+			chunkbyteoffest += blocksize
+
 	return Response(
-		json.dumps(result, indent=2), 
-		status=200, content_type='application/json'
+		stream_with_context(data_stream(result)),
+		status=200,
+		content_type='application/json'
 	)
+	# return Response(
+	# 	json.dumps(result, indent=2), 
+	# 	status=200, content_type='application/json'
+	# )
 
 
 @bp.route('/scripts/<script_id>', methods=('POST',))
@@ -1028,24 +1073,47 @@ def get_historical_prices_ept(broker, product, period):
 
 	# Get historical prices 
 	ts = prices.index.values[:page_count]
-	asks = prices.values[:page_count, :4]
+	# asks = prices.values[:page_count, :4]
 	mids = prices.values[:page_count, 4:8]
-	bids = prices.values[:page_count, 8:]
+	# bids = prices.values[:page_count, 8:]
 	res = {
 		'product': product,
 		'period': period,
 		'ohlc': {
 			'timestamps': ts.tolist(),
-			'asks': asks.tolist(),
-			'mids': mids.tolist(),
-			'bids': bids.tolist()
+			# 'asks': asks.tolist(),
+			'mids': mids.tolist()
+			# 'bids': bids.tolist()
 		}
 	}
+
+	def data_stream(data):
+		data = json.dumps(data).encode('utf-8')
+
+		blocksize = 512
+		chunkindex = 0
+		chunkbyteoffest = 0
+		totalfilesize = len(data)
+		totalchunkcount = math.ceil(totalfilesize / blocksize)
+
+		while chunkindex < totalchunkcount:
+			t_data = data[chunkbyteoffest:chunkbyteoffest+blocksize]
+			yield(t_data)
+
+			chunkindex += 1
+			chunkbyteoffest += blocksize
+
 	return Response(
-		json.dumps(res, indent=2), 
+		stream_with_context(data_stream(res)),
 		status=200,
 		content_type='application/json'
 	)
+
+	# return Response(
+	# 	res, 
+	# 	status=200,
+	# 	content_type='application/json'
+	# )
 
 # `/gui` ept
 @bp.route('/strategy/<strategy_id>/gui', methods=('GET',))
@@ -1346,10 +1414,32 @@ def get_backtest_transactions_ept(strategy_id, backtest_id):
 	result = {}
 	result.update(account.getBacktestChartInfo(strategy_id, backtest_id))
 	result.update(account.getBacktestTransactions(strategy_id, backtest_id))
+
+	def data_stream(data):
+		data = json.dumps(data).encode('utf-8')
+
+		blocksize = 512
+		chunkindex = 0
+		chunkbyteoffest = 0
+		totalfilesize = len(data)
+		totalchunkcount = math.ceil(totalfilesize / blocksize)
+
+		while chunkindex < totalchunkcount:
+			t_data = data[chunkbyteoffest:chunkbyteoffest+blocksize]
+			yield(t_data)
+
+			chunkindex += 1
+			chunkbyteoffest += blocksize
+
 	return Response(
-		json.dumps(result, indent=2),
-		status=200, content_type='application/json'
+		stream_with_context(data_stream(result)),
+		status=200,
+		content_type='application/json'
 	)
+	# return Response(
+	# 	json.dumps(result, indent=2),
+	# 	status=200, content_type='application/json'
+	# )
 
 
 @bp.route('/strategy/<strategy_id>/backtest/<backtest_id>/reports/<name>', methods=('GET',))
@@ -1401,8 +1491,9 @@ def create_chart_ept(strategy_id):
 
 	body = getJson()
 
+	print('CREATE CHARTS')
 	print(ctrl.brokers)
-	print(body.get('broker'))
+	print(body)
 	broker = ctrl.brokers.getBroker(body.get('broker'))
 	# broker = account.getStrategyBroker(strategy_id)
 

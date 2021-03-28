@@ -159,6 +159,8 @@ class DataSaver(object):
 				'bid_open', 'bid_high', 'bid_low', 'bid_close'
 			]
 		).set_index('timestamp')
+
+		print(f'COUNT: {product}, {period}, {count}')
 		while result.shape[0] < count:
 			path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{load_period}/{c_dt.strftime("%Y%m%d")}.csv.gz')
 
