@@ -1207,6 +1207,7 @@ def update_account_gui_details_ept(strategy_id, broker_id, account_id):
 		with open(path, 'r') as f:
 			body = json.loads(f.read())
 
+		print(f'UPLOADING GUI: {body}')
 		account_code = '.'.join((broker_id, account_id))
 		account.appendAccountGui(strategy_id, account_code, body)
 		account = ctrl.accounts.getAccount(user_id)

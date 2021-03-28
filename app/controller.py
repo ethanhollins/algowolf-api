@@ -106,7 +106,7 @@ class Controller(object):
 				self._msg_queue[data['msg_id']] = data
 
 
-	def _wait_broker_response(self, msg_id, timeout=30):
+	def _wait_broker_response(self, msg_id, timeout=60):
 		start = time.time()
 
 		while time.time() - start < timeout:

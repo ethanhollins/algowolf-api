@@ -183,6 +183,8 @@ class FXCM(Broker):
 		include_current=True,
 		**kwargs
 	):
+		print(f'FXCM DOWNLOAD HIST: {product}, {period}, {start}, {end}, {count}')
+
 		if count is not None:
 			result = self.data_saver.get(product, period, count=count)
 		else:

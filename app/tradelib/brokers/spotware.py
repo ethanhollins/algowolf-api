@@ -459,8 +459,17 @@ class Spotware(Broker):
 			count=count, force_download=force_download
 		)
 
-		result = pd.DataFrame.from_dict(res, dtype=float)
-		result.index = result.index.astype(int)
+		print(f'DOWN SW RES: {res}')
+
+		if 'error' in res:
+			result = pd.concat((
+				self._create_empty_asks_df(), 
+				self._create_empty_mids_df(), 
+				self._create_empty_bids_df()
+			))
+		else:
+			result = pd.DataFrame.from_dict(res, dtype=float)
+			result.index = result.index.astype(int)
 
 		# sw_product = self._convert_product('Spotware', product)
 		# sw_period = self._convert_period(period)
@@ -1556,6 +1565,7 @@ class Spotware(Broker):
 
 
 			if len(result):
+				print(f'SEND IT: {result}', flush=True)
 				self.handleOnTrade(account_id, result)
 				return result
 			else:

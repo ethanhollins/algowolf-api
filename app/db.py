@@ -796,10 +796,12 @@ class Database(object):
 
 
 	def appendAccountGui(self, user_id, strategy_id, account_code, obj):
+		print(f'APPEND: {account_code}')
 		self.addAsyncJob(self._handle_append_account_gui, user_id, strategy_id, account_code, obj)
 
 
 	def _handle_append_account_gui(self, user_id, strategy_id, account_code, obj):
+		print('HANDLE APPEND ACCOUNT GUI')
 		MAX_GUI = 1000
 		MAX_TRANSACTIONS = 3000
 
