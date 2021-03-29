@@ -29,6 +29,7 @@ class Database(object):
 			self.scriptTable = self._generate_table('algowolf-scripts-dev')
 			self.holygrailAccessTable = self._generate_table('algowolf-holygrail-access')
 			self.holygrailTokenTable = self._generate_table('algowolf-holygrail-tokens')
+			self.resetPasswordTokenTable = self._generate_table('algowolf-reset-password-tokens')
 			self.strategyBucketName = 'algowolf-strategies-dev'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 		else:
@@ -36,6 +37,7 @@ class Database(object):
 			self.scriptTable = self._generate_table('algowolf-scripts')
 			self.holygrailAccessTable = self._generate_table('algowolf-holygrail-access')
 			self.holygrailTokenTable = self._generate_table('algowolf-holygrail-tokens')
+			self.resetPasswordTokenTable = self._generate_table('algowolf-reset-password-tokens')
 			self.strategyBucketName = 'algowolf-strategies'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 
@@ -1505,3 +1507,38 @@ class Database(object):
 			}
 		)
 		return True
+
+
+	'''
+	Password Reset
+	'''
+
+	def addPasswordResetToken(self, token):
+		res = self.resetPasswordTokenTable.put_item(
+			Item={
+				'token': token
+			}
+		)
+
+		return token
+
+
+	def deletePasswordResetToken(self, token):
+		res = self.resetPasswordTokenTable.delete_item(
+			Key={
+				'token': token,
+			}
+		)
+		return True
+
+
+	def checkResetPasswordToken(self, token):
+		res = self.resetPasswordTokenTable.get_item(
+			Key={ 'token': token }
+		)
+		if res.get('Item'):
+			return True
+		else:
+			return False
+
+

@@ -5,6 +5,7 @@ import json, jwt
 import gzip
 import re, string, random
 import requests
+import shortuuid
 from datetime import datetime
 from enum import Enum
 from flask import (
@@ -1823,4 +1824,110 @@ def check_holygrail_token_ept():
 		content_type='application/json'
 	)
 
+
+@bp.route("/reset-password/send", methods=("POST",))
+def send_reset_password_email_ept():
+	body = getJson()
+
+	if 'email' in body:
+		email = body.get('email')
+		# Check email exists
+		user = ctrl.getDb().getUserByEmail(email)
+
+		if user:
+			RESET_PASSWORD_ZOHO_EPT = 'https://flow.zoho.com.au/7001001266/flow/webhook/incoming?zapikey=1001.8aec610d5eba8a37c0648d19844a9dcb.5ad8e950c9a7e264265572296bf99972&isdebug=false'
+			email = body.get('email')
+			jwt_payload = {
+				'sub': email,
+				'iat': time.time()
+			}
+			token = jwt.encode(jwt_payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf-8')
+			ctrl.getDb().addPasswordResetToken(token)
+
+			BASE_CLIENT_URL = current_app.config['BASE_CLIENT_URL']
+			payload = {
+				'email': email,
+				'entry_id': shortuuid.uuid(),
+				'url': f'{BASE_CLIENT_URL}/reset?code={token}'
+			}
+			requests.post(
+				RESET_PASSWORD_ZOHO_EPT,
+				data=json.dumps(payload)
+			)
+		else:
+			res = { 
+				'error': 'User does not exist.'
+			}
+			return Response(
+				json.dumps(res, indent=2), status=400,
+				content_type='application/json'
+			)
+
+	else:
+		res = { 
+			'completed': False
+		}
+		return Response(
+			json.dumps(res, indent=2), status=400,
+			content_type='application/json'
+		)
+
+	res = { 
+		'completed': True
+	}
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+
+@bp.route("/reset-password", methods=("POST",))
+def reset_password_ept():
+	body = getJson()
+
+	token = request.args.get('code')
+	new_password = body.get('password')
+
+	if token and new_password:	
+		token_exists = ctrl.getDb().checkResetPasswordToken(token)
+		if token_exists:
+			email = jwt.decode(
+				token, ctrl.app.config['SECRET_KEY'], algorithms=['HS256']
+			).get('sub')
+
+			if email:
+				user = ctrl.getDb().getUserByEmail(email)
+				if user:
+					ctrl.getDb().deletePasswordResetToken(token)
+					
+					password_hash = generate_password_hash(new_password)
+					ctrl.getDb().updateUser(
+						user.get('user_id'),
+						{ 'password': password_hash }
+					)
+
+					res = { 
+						'completed': True
+					}
+					return Response(
+						json.dumps(res, indent=2), status=200,
+						content_type='application/json'
+					)
+
+		else:
+			res = { 
+				'error': 'Token does not exist.'
+			}
+			return Response(
+				json.dumps(res, indent=2), status=400,
+				content_type='application/json'
+			)
+
+	res = { 
+		'completed': False
+	}
+	return Response(
+		json.dumps(res, indent=2), status=400,
+		content_type='application/json'
+	)
 
