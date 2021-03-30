@@ -43,6 +43,7 @@ class Account(object):
 			'brokers': list(user.get('brokers').keys()),
 			'strategies': list(user.get('strategies').keys()),
 			'metadata': user.get('metadata'),
+			'admin': user.get('admin')
 		}
 
 	def generateId(self):
