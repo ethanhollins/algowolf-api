@@ -61,7 +61,7 @@ class Controller(object):
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
 		])
 
-		Thread(target=self.restartScripts).start()
+		# Thread(target=self.restartScripts).start()
 		
 
 	def closeApp(self):

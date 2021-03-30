@@ -139,26 +139,27 @@ class Account(object):
 
 
 	def _set_running(self, strategy_id, broker_id, account_id, script_id, input_variables):
-		user = self.ctrl.getDb().getUser(self.userId)
-		user_brokers = user.get('brokers')
+		# user = self.ctrl.getDb().getUser(self.userId)
+		# user_brokers = user.get('brokers')
 
-		if not isinstance(user['strategies'][strategy_id].get('running'), dict):
-			user['strategies'][strategy_id]['running'] = {}
-		if not isinstance(user['strategies'][strategy_id]['running'].get(broker_id), dict):
-			user['strategies'][strategy_id]['running'][broker_id] = {}
-		if not isinstance(user['strategies'][strategy_id]['running'][broker_id].get(account_id), dict):
-			user['strategies'][strategy_id]['running'][broker_id][account_id] = {}
+		# if not isinstance(user['strategies'][strategy_id].get('running'), dict):
+		# 	user['strategies'][strategy_id]['running'] = {}
+		# if not isinstance(user['strategies'][strategy_id]['running'].get(broker_id), dict):
+		# 	user['strategies'][strategy_id]['running'][broker_id] = {}
+		# if not isinstance(user['strategies'][strategy_id]['running'][broker_id].get(account_id), dict):
+		# 	user['strategies'][strategy_id]['running'][broker_id][account_id] = {}
 
-		user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id'] = script_id
-		user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables'] = input_variables
+		# user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id'] = script_id
+		# user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables'] = input_variables
 
-		# Clean user running
-		for broker_id in copy(list(user['strategies'][strategy_id]['running'].keys())):
-			if broker_id != strategy_id and broker_id not in user_brokers:
-				del user['strategies'][strategy_id]['running'][broker_id]
+		# # Clean user running
+		# for broker_id in copy(list(user['strategies'][strategy_id]['running'].keys())):
+		# 	if broker_id != strategy_id and broker_id not in user_brokers:
+		# 		del user['strategies'][strategy_id]['running'][broker_id]
 
-		# Update user running
-		self.ctrl.getDb().updateUser(self.userId, { 'strategies': user['strategies'] })
+		# # Update user running
+		# self.ctrl.getDb().updateUser(self.userId, { 'strategies': user['strategies'] })
+		return
 
 
 	def isScriptRunning(self, strategy_id, broker_id, account_id):
