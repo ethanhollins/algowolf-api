@@ -406,6 +406,27 @@ def init_strategy_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/<broker_id>', methods=('GET',))
+def is_broker_authorized_ept(strategy_id, broker_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+	account.startStrategy(strategy_id)
+	is_auth = account.brokers.get(broker_id).is_auth
+
+	res = {
+		'Authorized': is_auth
+	}
+	if is_auth:
+		status = 200
+	else:
+		status = 400
+
+	return Response(
+		res, status=status,
+		content_type='application/json'
+	)
+
+
 @bp.route('/strategy/<strategy_id>/<broker_id>/<account_id>', methods=('GET',))
 def get_strategy_account_info_ept(strategy_id, broker_id, account_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
@@ -1930,3 +1951,14 @@ def reset_password_ept():
 		content_type='application/json'
 	)
 
+
+
+@bp.route("/spotware/<access_token>", methods=("GET",))
+def check_access_token_ept(access_token):
+	broker = ctrl.brokers.getBroker('spotware')
+	res = broker.checkAccessToken(access_token)
+
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)

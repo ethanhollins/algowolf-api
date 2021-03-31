@@ -61,7 +61,8 @@ class Controller(object):
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
 		])
 
-		# Thread(target=self.restartScripts).start()
+		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
+			Thread(target=self.restartScripts).start()
 		
 
 	def closeApp(self):

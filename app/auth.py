@@ -339,6 +339,8 @@ def spotware_broker_auth():
 	code = request.args.get('code')
 	print('SPOTWARE BROKER AUTH')
 	print(request.args)
+
+	broker_id = ''
 	if not code is None:
 		res = requests.get(
 			'https://connect.spotware.com/apps/token',
@@ -369,10 +371,10 @@ def spotware_broker_auth():
 					"access_token": access_token,
 					"refresh_token": refresh_token,
 				}
-				g.user.createBroker(broker_id, 'My Broker', 'spotware', **props)
+				broker_id = g.user.createBroker(broker_id, 'My Broker', 'spotware', **props)
 
 
-	res_ = { 'message': 'done' }
+	res_ = { 'broker_id': broker_id }
 	return Response(
 		json.dumps(res_, indent=2),
 		status=res.status_code, content_type='application/json'

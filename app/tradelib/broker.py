@@ -49,7 +49,7 @@ class Broker(object):
 	__slots__ = (
 		'ctrl', 'userAccount', 'strategyId', 'brokerId', 'name', 'backtester', 'acceptLive', 
 		'accounts', 'charts', 'positions', 'orders', 'is_running', '_handled', 'transactions',
-		'ontrade_subs', 'display_name', 'is_dummy'
+		'ontrade_subs', 'display_name', 'is_dummy', 'is_auth'
 	)
 	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name, is_dummy):
 		self.ctrl = ctrl
@@ -79,7 +79,7 @@ class Broker(object):
 		self._handled = {}
 
 		self.is_running = True
-
+		self.is_auth = True
 
 		# Handle mandatory strategy startup functions
 		if self.userAccount:

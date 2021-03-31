@@ -80,24 +80,44 @@ class Account(object):
 
 		brokers = self._set_brokers(strategy_id, None)
 
-		# Generate broker information
-		broker_info = {
-			broker_id: {
-				'name': brokers[broker_id]['name'],
-				'broker': brokers[broker_id]['broker'],
-				'accounts': {
-					acc: { 
-						'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
-						'balance': self.brokers.get(broker_id).getAccountInfo(acc)[acc].get('balance'),
-						**brokers.get(broker_id)['accounts'][acc]
+		broker_info = {}
+
+		for broker_id in brokers:
+			if broker_id in self.brokers:
+				if self.brokers.get(broker_id).is_auth:
+					broker_info[broker_id] = {
+						'name': brokers[broker_id]['name'],
+						'broker': brokers[broker_id]['broker'],
+						'is_auth': True,
+						'accounts': {
+							acc: { 
+								'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
+								'balance': self.brokers.get(broker_id).getAccountInfo(acc)[acc].get('balance'),
+								**brokers.get(broker_id)['accounts'][acc]
+							}
+							for acc in brokers.get(broker_id)['accounts']
+						},
+						'positions': self.brokers.get(broker_id).getAllPositions(),
+						'orders': self.brokers.get(broker_id).getAllOrders()
 					}
-					for acc in brokers.get(broker_id)['accounts']
-				},
-				'positions': self.brokers.get(broker_id).getAllPositions(),
-				'orders': self.brokers.get(broker_id).getAllOrders()
-			}
-			for broker_id in brokers if broker_id in self.brokers
-		}
+
+				else:
+					broker_info[broker_id] = {
+						'name': brokers[broker_id]['name'],
+						'broker': brokers[broker_id]['broker'],
+						'is_auth': False,
+						'accounts': {
+							acc: { 
+								'strategy_status': False,
+								'balance': 0,
+								**brokers.get(broker_id)['accounts'][acc]
+							}
+							for acc in brokers.get(broker_id)['accounts']
+						},
+						'positions': [],
+						'orders': []
+					}
+
 		return {
 			'strategy_id': strategy_id,
 			'brokers': broker_info
@@ -140,27 +160,26 @@ class Account(object):
 
 
 	def _set_running(self, strategy_id, broker_id, account_id, script_id, input_variables):
-		# user = self.ctrl.getDb().getUser(self.userId)
-		# user_brokers = user.get('brokers')
+		user = self.ctrl.getDb().getUser(self.userId)
+		user_brokers = user.get('brokers')
 
-		# if not isinstance(user['strategies'][strategy_id].get('running'), dict):
-		# 	user['strategies'][strategy_id]['running'] = {}
-		# if not isinstance(user['strategies'][strategy_id]['running'].get(broker_id), dict):
-		# 	user['strategies'][strategy_id]['running'][broker_id] = {}
-		# if not isinstance(user['strategies'][strategy_id]['running'][broker_id].get(account_id), dict):
-		# 	user['strategies'][strategy_id]['running'][broker_id][account_id] = {}
+		if not isinstance(user['strategies'][strategy_id].get('running'), dict):
+			user['strategies'][strategy_id]['running'] = {}
+		if not isinstance(user['strategies'][strategy_id]['running'].get(broker_id), dict):
+			user['strategies'][strategy_id]['running'][broker_id] = {}
+		if not isinstance(user['strategies'][strategy_id]['running'][broker_id].get(account_id), dict):
+			user['strategies'][strategy_id]['running'][broker_id][account_id] = {}
 
-		# user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id'] = script_id
-		# user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables'] = input_variables
+		user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id'] = script_id
+		user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables'] = input_variables
 
-		# # Clean user running
-		# for broker_id in copy(list(user['strategies'][strategy_id]['running'].keys())):
-		# 	if broker_id != strategy_id and broker_id not in user_brokers:
-		# 		del user['strategies'][strategy_id]['running'][broker_id]
+		# Clean user running
+		for broker_id in copy(list(user['strategies'][strategy_id]['running'].keys())):
+			if broker_id != strategy_id and broker_id not in user_brokers:
+				del user['strategies'][strategy_id]['running'][broker_id]
 
-		# # Update user running
-		# self.ctrl.getDb().updateUser(self.userId, { 'strategies': user['strategies'] })
-		return
+		# Update user running
+		self.ctrl.getDb().updateUser(self.userId, { 'strategies': user['strategies'] })
 
 
 	def isScriptRunning(self, strategy_id, broker_id, account_id):

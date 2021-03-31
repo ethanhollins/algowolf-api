@@ -99,7 +99,6 @@ class Spotware(Broker):
 				chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
-			# Thread(target=self._periodic_refresh).start()
 			
 
 		else:
@@ -109,7 +108,7 @@ class Spotware(Broker):
 			self.parent = ctrl.brokers.getBroker(tl.broker.SPOTWARE_NAME)
 			self.parent.addChild(self)
 
-			self._add_user()
+			self.is_auth = self._add_user()
 
 			# self.client = self.parent.client
 			# self._authorize_accounts(accounts)
@@ -137,6 +136,40 @@ class Spotware(Broker):
 			pass
 
 
+	def _set_tokens(self):
+		res = self.ctrl.brokerRequest(
+			'spotware', self.brokerId, 'get_tokens', self.brokerId
+		)
+		print(f'UPDATING TOKENS {self.brokerId}: {res}')
+
+		if not 'error' in res:
+			self._update_tokens(res)
+
+
+	def _update_tokens(self, res):
+		self.access_token = res['access_token']
+		self.refresh_token = res['refresh_token']
+		if self.is_parent:
+			print(f'UPDATE PARENT {res}')
+			self.ctrl.getDb().updateUser(
+				'spotware',
+				{
+					'access_token': self.access_token,
+					'refresh_token': self.refresh_token
+				}
+			)
+
+		else:
+			print(f'UPDATE ACCOUNT {res}')
+			self.ctrl.getDb().updateBroker(
+				self.userAccount.userId, self.brokerId, 
+				{ 
+					'access_token': self.access_token,
+					'refresh_token': self.refresh_token
+				}
+			)
+
+
 	'''
 	Spotware messages
 	'''
@@ -160,39 +193,29 @@ class Spotware(Broker):
 	def _add_user(self):
 		print('Add User')
 
+		if self.userAccount is not None:
+			user_id = self.userAccount.userId
+		else:
+			user_id = None
+
 		res = self.ctrl.brokerRequest(
 			'spotware', self.brokerId, 'add_user',
-			self.brokerId, self.access_token, self.refresh_token, self.accounts,
+			user_id, self.brokerId, 
+			self.access_token, self.refresh_token, self.accounts,
 			is_parent=self.is_parent, is_dummy=self.is_dummy
 		)
 
 		if 'error' in res:
-			return self._add_user()
+			if res['error'] == 'No response.':
+				return self._add_user()
+			elif res['error'] == 'Not Authorised':
+				return False
+
 		else:
-			if not self.is_dummy:
-				self.access_token = res['access_token']
-				self.refresh_token = res['refresh_token']
-				if self.is_parent:
-					print(f'UPDATE PARENT {res}')
-					self.ctrl.getDb().updateUser(
-						'spotware',
-						{
-							'access_token': self.access_token,
-							'refresh_token': self.refresh_token
-						}
-					)
+		# 	if not self.is_dummy:
+		# 		self._update_tokens(res)
 
-				else:
-					print(f'UPDATE ACCOUNT {res}')
-					self.ctrl.getDb().updateBroker(
-						self.userAccount.userId, self.brokerId, 
-						{ 
-							'access_token': self.access_token,
-							'refresh_token': self.refresh_token
-						}
-					)
-
-			return res
+			return True
 
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
@@ -1052,6 +1075,15 @@ class Spotware(Broker):
 		# 	return None
 
 
+	def checkAccessToken(self, access_token):
+
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'checkAccessToken', access_token
+		)
+
+		return result
+
+
 	def getAccountInfo(self, account_id, override=False):
 		# Check auth
 		if not override:
@@ -1438,6 +1470,7 @@ class Spotware(Broker):
 			if time.time() - time_off_timer > ONE_HOUR:
 				time_off_timer = time.time()
 				self._set_time_off()
+				# self._set_tokens()
 
 			time.sleep(1)
 
@@ -2184,6 +2217,7 @@ class Spotware(Broker):
 		self.children.append(child)
 
 
-	def deleteChild(self, child):
-		if child in self.children:
-			del self.children[self.children.index(child)]
+	def deleteChild(self):
+		res = self.ctrl.brokerRequest(
+			'spotware', self.brokerId, 'deleteChild', self.brokerId
+		)

@@ -526,7 +526,7 @@ class Database(object):
 				self.ctrl, props.get('is_demo'), props.get('access_token'), broker_id=broker_id, is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
-			dummy_broker.parent.deleteChild(dummy_broker)
+			dummy_broker.deleteChild()
 
 			if accounts is None:
 				raise BrokerException('Unable to connect to broker.')
@@ -534,16 +534,26 @@ class Database(object):
 			# Set Accounts Information
 			props['is_demo'] = True
 
-			props['accounts'] = {
-				account['id']: { 
+			props['accounts'] = {}
+			for account in accounts:
+				props['accounts'][account['id']] = { 
 					'active': True, 
 					'nickname': '', 
 					'is_demo': account['is_demo'],
 					'account_id': account.get('account_id'), 
 					'broker': account.get('broker')
 				}
-				for account in accounts
-			}
+
+			# Check if account is already being used
+			for v in user['brokers'].values():
+				v = jwt.decode(
+					v, self.ctrl.app.config['SECRET_KEY'], 
+					algorithms=['HS256']
+				)
+				if v.get('accounts'):
+					for x in v['accounts']:
+						if str(account['id']) == str(x):
+							raise BrokerException('One or more accounts is already being used. Please delete the broker container that account and try again.')
 
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
@@ -552,7 +562,7 @@ class Database(object):
 		# Update changes
 		update = { 'brokers': user.get('brokers') }
 		result = self.updateUser(user_id, update)
-		return props
+		return broker_id
 
 
 	def updateBroker(self, user_id, broker_id, props):

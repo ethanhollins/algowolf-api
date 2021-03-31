@@ -198,11 +198,13 @@ class Chart(object):
 
 
 	def getLatestAsk(self, period):
-		return self.ask[period]
+		# return self.ask[period]
+		return self.mid[period]
 
 
 	def getLatestBid(self, period):
-		return self.bid[period]
+		# return self.bid[period]
+		return self.mid[period]
 
 
 	def subscribe(self, period, strategy_id, sub_id, func):
