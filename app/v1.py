@@ -1165,8 +1165,8 @@ def get_strategy_gui_details_ept(strategy_id):
 def update_strategy_gui_items_ept(strategy_id):
 	account = g.user
 
-	body = getJson()
-	item_ids = account.updateStrategyGuiItems(strategy_id, body)
+	# body = getJson()
+	# item_ids = account.updateStrategyGuiItems(strategy_id, body)
 
 	res = {
 		'item_ids': []
