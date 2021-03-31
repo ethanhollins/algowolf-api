@@ -1169,7 +1169,7 @@ def update_strategy_gui_items_ept(strategy_id):
 	item_ids = account.updateStrategyGuiItems(strategy_id, body)
 
 	res = {
-		'item_ids': item_ids
+		'item_ids': []
 	}
 	return Response(
 		json.dumps(res, indent=2),
@@ -1250,11 +1250,14 @@ def update_account_gui_details_ept(strategy_id, broker_id, account_id):
 def delete_strategy_gui_items_ept(strategy_id):
 	account = g.user
 
-	body = getJson()
-	item_ids = account.deleteStrategyGuiItems(strategy_id, body)
+	# body = getJson()
+	# item_ids = account.deleteStrategyGuiItems(strategy_id, body)
 
+	# res = {
+	# 	'item_ids': item_ids
+	# }
 	res = {
-		'item_ids': item_ids
+		'item_ids': []
 	}
 	return Response(
 		json.dumps(res, indent=2),
