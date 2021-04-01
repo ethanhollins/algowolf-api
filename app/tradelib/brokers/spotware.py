@@ -637,8 +637,27 @@ class Spotware(Broker):
 		product = self._convert_sw_product(int(order['tradeData']['symbolId']))
 		direction = tl.LONG if order['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
 		lotsize = float(order['tradeData']['volume'])
-		sl = None if order.get('stopLoss') is None or float(order['stopLoss']) == 0 else round(float(order['stopLoss']), 5)
-		tp = None if order.get('takeProfit') is None or float(order['takeProfit']) == 0 else round(float(order['takeProfit']), 5)
+
+		if order.get('stopLoss') is not None:
+			sl = float(order['stopLoss'])
+		elif order.get('relativeStopLoss') is not None:
+			if direction == tl.LONG:
+				sl = entry_price - tl.utils.convertToPrice(float(order.get('relativeStopLoss'))/10)
+			else:
+				sl = entry_price + tl.utils.convertToPrice(float(order.get('relativeStopLoss'))/10)
+		else:
+			sl = None
+
+		if order.get('takeProfit') is not None:
+			tp = float(order['takeProfit'])
+		elif order.get('relativeTakeProfit') is not None:
+			if direction == tl.LONG:
+				tp = entry_price + tl.utils.convertToPrice(float(order.get('relativeTakeProfit'))/10)
+			else:
+				tp = entry_price - tl.utils.convertToPrice(float(order.get('relativeTakeProfit'))/10)
+		else:
+			tp = None
+
 		open_time = float(order['tradeData']['openTimestamp']) / 1000
 
 		return tl.Order(
@@ -1486,6 +1505,7 @@ class Spotware(Broker):
 
 			result = {}
 			# ORDER_FILLED
+			# if execution_type in ('ORDER_FILLED', 'ORDER_PARTIAL_FILL'):
 			if execution_type == 'ORDER_FILLED':
 				# Check `closingOrder`
 				if update['order']['closingOrder']:
