@@ -68,7 +68,7 @@ class Spotware(Broker):
 			self.access_token = user.get('access_token')
 			self.refresh_token = user.get('refresh_token')
 
-			self._add_user()
+			self.is_auth = self._add_user()
 			self._subscribe_account_updates()
 
 			# self.demo_client = Client(True)
@@ -91,12 +91,13 @@ class Spotware(Broker):
 
 			# self._authorize_accounts(self.accounts, is_parent=True)
 
-			CHARTS = ['EUR_USD']
-			# self._subscribe_multiple_chart_updates(CHARTS)
-			for instrument in CHARTS:
-				print(f'LOADING {instrument}')
-				# instrument = self._get_symbol(i)['symbolName']
-				chart = self.createChart(instrument, await_completion=True)
+			if self.is_auth:
+				CHARTS = ['EUR_USD']
+				# self._subscribe_multiple_chart_updates(CHARTS)
+				for instrument in CHARTS:
+					print(f'LOADING {instrument}')
+					# instrument = self._get_symbol(i)['symbolName']
+					chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
 			
@@ -116,7 +117,7 @@ class Spotware(Broker):
 		t = Thread(target=self._handle_updates)
 		t.start()
 
-		if not is_dummy:
+		if not is_dummy and self.is_auth:
 			self._subscribe_account_updates()
 			# for account_id in self.getAccounts():
 			# 	if account_id != tl.broker.PAPERTRADER_NAME:
@@ -209,6 +210,8 @@ class Spotware(Broker):
 			if res['error'] == 'No response.':
 				return self._add_user()
 			elif res['error'] == 'Not Authorised':
+				return False
+			else:
 				return False
 
 		else:
