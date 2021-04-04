@@ -893,10 +893,14 @@ class Database(object):
 			for name in obj['reports']:
 				old_df = self.getStrategyAccountReport(user_id, strategy_id, account_code, name)
 				if old_df is not None:
+					update_df = pd.DataFrame(data=obj['reports'][name])
 					new_df = pd.concat((
-						old_df, 
-						pd.DataFrame(data=obj['reports'][name])
+						old_df, update_df
 					))
+
+					columns = sorted(new_df.columns, key=lambda x: update_df.columns.get_loc(x) if x in update_df.columns else None)
+					new_df = new_df[columns]
+
 					self.updateStrategyAccountReport(user_id, strategy_id, account_code, name, new_df)
 				else:
 					self.updateStrategyAccountReport(

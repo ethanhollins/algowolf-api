@@ -215,9 +215,6 @@ class Spotware(Broker):
 				return False
 
 		else:
-		# 	if not self.is_dummy:
-		# 		self._update_tokens(res)
-
 			return True
 
 
