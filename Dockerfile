@@ -9,7 +9,7 @@ ADD . /app
 
 # Install the dependencies
 RUN pip install -r requirements.txt
-RUN pip install forexconnect-1.6.3-py3-none-any.whl
+
 
 # run the command to start uWSGI
 CMD ["uwsgi", "app.ini"]

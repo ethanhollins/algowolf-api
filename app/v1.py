@@ -1160,6 +1160,35 @@ def get_strategy_gui_details_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/current_account', methods=('PUT',))
+@auth.login_required
+def update_strategy_account_ept(strategy_id):
+	body = getJson()
+	account_code = body.get('account_code')
+
+	if account_code is not None:
+		account = g.user
+		account.updateStrategyAccount(strategy_id, account_code)
+
+		res = {
+			'account_code': account_code
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+
+	else:
+		res = {
+			'error': 'BadRequest',
+			'message': 'Account code missing.'
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+
 @bp.route('/strategy/<strategy_id>/gui', methods=('PUT',))
 @auth.login_required
 def update_strategy_gui_items_ept(strategy_id):

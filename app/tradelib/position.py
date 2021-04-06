@@ -28,6 +28,9 @@ class Position(dict):
 		self.tp = tp
 		self.tp_id = tp_id
 
+		self.order = None
+		self.handled_check = False
+
 		if open_time:
 			self.open_time = int(open_time)
 		else:
@@ -93,6 +96,11 @@ class Position(dict):
 
 	def __str__(self):
 		return json.dumps(self, indent=2)
+
+
+	def setOrder(self, order):
+		self.order = order
+
 
 	def close(self, lotsize=None, override=False):
 		if not lotsize: lotsize = self.lotsize

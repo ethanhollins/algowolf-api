@@ -639,22 +639,22 @@ class Spotware(Broker):
 		lotsize = float(order['tradeData']['volume'])
 
 		if order.get('stopLoss') is not None:
-			sl = float(order['stopLoss'])
+			sl = round(float(order['stopLoss']), 5)
 		elif order.get('relativeStopLoss') is not None:
 			if direction == tl.LONG:
-				sl = entry_price - tl.utils.convertToPrice(float(order.get('relativeStopLoss'))/10)
+				sl = round(entry_price - tl.utils.convertToPrice(float(order.get('relativeStopLoss'))/10), 5)
 			else:
-				sl = entry_price + tl.utils.convertToPrice(float(order.get('relativeStopLoss'))/10)
+				sl = round(entry_price + tl.utils.convertToPrice(float(order.get('relativeStopLoss'))/10), 5)
 		else:
 			sl = None
 
 		if order.get('takeProfit') is not None:
-			tp = float(order['takeProfit'])
+			tp = round(float(order['takeProfit']), 5)
 		elif order.get('relativeTakeProfit') is not None:
 			if direction == tl.LONG:
-				tp = entry_price + tl.utils.convertToPrice(float(order.get('relativeTakeProfit'))/10)
+				tp = round(entry_price + tl.utils.convertToPrice(float(order.get('relativeTakeProfit'))/10), 5)
 			else:
-				tp = entry_price - tl.utils.convertToPrice(float(order.get('relativeTakeProfit'))/10)
+				tp = round(entry_price - tl.utils.convertToPrice(float(order.get('relativeTakeProfit'))/10), 5)
 		else:
 			tp = None
 
@@ -1601,10 +1601,12 @@ class Spotware(Broker):
 
 							break
 				else:
+					pos_order = None
 					order_type = tl.MARKET_ENTRY
 					for i in range(len(self.orders)):
 						order = self.orders[i]
 						if str(update['order']['orderId']) == order.order_id:
+							pos_order = order
 							order.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 							if order.order_type == tl.STOP_ORDER:
 								order_type = tl.STOP_ENTRY
@@ -1627,6 +1629,12 @@ class Spotware(Broker):
 
 					# Create
 					new_pos = self.convert_sw_position(account_id, update['position'])
+					new_pos.setOrder(pos_order)
+					if pos_order is not None:
+						new_pos.handled_check = False
+					else:
+						new_pos.handled_check = True
+
 					self.positions.append(new_pos)
 
 					result.update({
@@ -1666,11 +1674,21 @@ class Spotware(Broker):
 
 				# Check if `STOP_LOSS_TAKE_PROFIT`
 				elif update['order']['orderType'] == 'STOP_LOSS_TAKE_PROFIT':
-					for pos in self.positions:
+					for i in range(len(self.positions)):
+						pos = self.positions[i]
 						if str(update['position']['positionId']) == pos.order_id:
-							new_sl = None if update['position'].get('stopLoss') is None else float(update['position']['stopLoss'])
+							new_sl = None if update['position'].get('stopLoss') is None else round(float(update['position']['stopLoss']), 5)
+							new_tp = None if update['position'].get('takeProfit') is None else round(float(update['position']['takeProfit']), 5)
+
+							if not pos.handled_check and pos.order is not None:
+								pos.handled_check = True
+
+								if pos.order.sl != new_sl or pos.order.tp != new_tp:
+									Thread(target=pos.close, kwargs={'override': True}).start()
+									print(f'ORDER NOT FULFILLED CORRECTLY, CLOSING POSITION: {pos.order_id}')
+									return
+
 							pos.sl = new_sl
-							new_tp = None if update['position'].get('takeProfit') is None else float(update['position']['takeProfit'])
 							pos.tp = new_tp
 
 							result.update({

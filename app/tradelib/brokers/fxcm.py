@@ -13,48 +13,48 @@ from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
 from app.error import OrderException, BrokerException
-from forexconnect import ForexConnect, fxcorepy, Common
+# from forexconnect import ForexConnect, fxcorepy, Common
 from threading import Thread
 
 
-class OffersTableListener(object):
-	def __init__(self, instruments=[], listeners=[]):
-		self.__instruments = instruments
-		self.__listeners = listeners
+# class OffersTableListener(object):
+# 	def __init__(self, instruments=[], listeners=[]):
+# 		self.__instruments = instruments
+# 		self.__listeners = listeners
 
-	def addInstrument(self, instrument, listener):
-		if instrument not in self.__instruments:
-			self.__instruments.append(instrument)
-			self.__listeners.append(listener)
+# 	def addInstrument(self, instrument, listener):
+# 		if instrument not in self.__instruments:
+# 			self.__instruments.append(instrument)
+# 			self.__listeners.append(listener)
 
-	def on_added(self, table_listener, row_id, row):
-		pass
+# 	def on_added(self, table_listener, row_id, row):
+# 		pass
 
-	def on_changed(self, table_listener, row_id, row):
-		if row.table_type == ForexConnect.OFFERS:
-			self.print_offer(row, self.__instruments, self.__listeners)
+# 	def on_changed(self, table_listener, row_id, row):
+# 		if row.table_type == ForexConnect.OFFERS:
+# 			self.print_offer(row, self.__instruments, self.__listeners)
 
-	def on_deleted(self, table_listener, row_id, row):
-		pass
+# 	def on_deleted(self, table_listener, row_id, row):
+# 		pass
 
-	def on_status_changed(self, table_listener, status):
-		pass
+# 	def on_status_changed(self, table_listener, status):
+# 		pass
 
-	def print_offer(self, offer_row, selected_instruments, listeners):
-		offer_id = offer_row.offer_id
-		instrument = offer_row.instrument
-		time = offer_row.time
-		bid = round(offer_row.bid, 5)
-		ask = round(offer_row.ask, 5)
-		volume = offer_row.volume
+# 	def print_offer(self, offer_row, selected_instruments, listeners):
+# 		offer_id = offer_row.offer_id
+# 		instrument = offer_row.instrument
+# 		time = offer_row.time
+# 		bid = round(offer_row.bid, 5)
+# 		ask = round(offer_row.ask, 5)
+# 		volume = offer_row.volume
 
-		try:
-			idx = selected_instruments.index(instrument)
-			listener = listeners[idx]
-			listener(time, bid, ask, volume)
+# 		try:
+# 			idx = selected_instruments.index(instrument)
+# 			listener = listeners[idx]
+# 			listener(time, bid, ask, volume)
 
-		except ValueError:
-			pass
+# 		except ValueError:
+# 			pass
 
 
 ONE_HOUR = 60*60
@@ -151,17 +151,17 @@ class FXCM(Broker):
 			return res
 
 
-	def _get_offers_listener(self):
-		offers = self.fx.get_table(ForexConnect.OFFERS)
-		self.offers_listener = OffersTableListener()
+	# def _get_offers_listener(self):
+	# 	offers = self.fx.get_table(ForexConnect.OFFERS)
+	# 	self.offers_listener = OffersTableListener()
 
-		table_listener = Common.subscribe_table_updates(
-			offers,
-			on_change_callback=self.offers_listener.on_changed,
-			on_add_callback=self.offers_listener.on_added,
-			on_delete_callback=self.offers_listener.on_deleted,
-			on_status_change_callback=self.offers_listener.on_changed
-		)
+	# 	table_listener = Common.subscribe_table_updates(
+	# 		offers,
+	# 		on_change_callback=self.offers_listener.on_changed,
+	# 		on_add_callback=self.offers_listener.on_added,
+	# 		on_delete_callback=self.offers_listener.on_deleted,
+	# 		on_status_change_callback=self.offers_listener.on_changed
+	# 	)
 
 
 	def _set_time_off(self):
@@ -217,7 +217,6 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		**kwargs
 	):
-		# if tl.isWeekend(datetime.utcnow()) or not self._login():
 		if tl.isWeekend(datetime.utcnow()):
 			return self._download_historical_data(
 				product, period, tz=tz, 

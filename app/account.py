@@ -499,6 +499,12 @@ class Account(object):
 		self.ctrl.getDb().appendAccountGui(self.userId, strategy_id, account_code, new_gui)		
 
 
+	def updateStrategyAccount(self, strategy_id, account_code):
+		gui = self.getStrategyGui(strategy_id)
+		gui['account'] = account_code
+		self.updateStrategyGui(strategy_id, gui)
+
+
 	def updateStrategyGuiItems(self, strategy_id, items):
 		gui = self.getStrategyGui(strategy_id)
 		item_ids = [i['id'] for i in gui['windows']]
