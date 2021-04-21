@@ -854,6 +854,7 @@ class Database(object):
 			if 'info' not in gui or not isinstance(gui['info'], dict):
 				gui['info'] = {}
 
+			i = None
 			for i in obj['info']:
 				if i['product'] not in gui['info']:
 					gui['info'][i['product']] = {}
@@ -864,7 +865,7 @@ class Database(object):
 
 				gui['info'][i['product']][i['period']][str(int(i['timestamp']))].append(i['item'])
 
-			if len(gui['info'][i['product']][i['period']]) > MAX_GUI:
+			if i and len(gui['info'][i['product']][i['period']]) > MAX_GUI:
 				gui['info'][i['product']][i['period']] = dict(
 					sorted(
 						gui['info'][i['product']][i['period']].items(), 

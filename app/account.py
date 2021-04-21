@@ -905,7 +905,7 @@ class Account(object):
 		return self.ctrl.getDb().createAccountBacktest(self.userId, strategy_id, broker_id, account_id, backtest)
 
 
-	def performBacktest(self, strategy_id, broker, start, end, auth_key, input_variables, spread):
+	def performBacktest(self, strategy_id, broker, start, end, auth_key, input_variables, spread, process_mode):
 		# strategy = self.getStrategyInfo(strategy_id)
 		# backtest_id = strategy.backtest(start, end, mode, input_variables=input_variables)
 
@@ -928,7 +928,8 @@ class Account(object):
 			'broker': broker,
 			'start': start,
 			'end': end,
-			'spread': spread
+			'spread': spread,
+			'process_mode': process_mode
 		}
 
 		url = self.ctrl.app.config.get('LOADER_URL')
