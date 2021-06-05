@@ -503,7 +503,7 @@ class Database(object):
 
 			# Run broker API call check
 			dummy_broker = tl.broker.Oanda(
-				self.ctrl, props.get('key'), props.get('is_demo'), is_dummy=True
+				self.ctrl, props.get('key'), props.get('is_demo'), broker_id=broker_id, is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
 
@@ -555,6 +555,17 @@ class Database(object):
 					for x in v['accounts']:
 						if str(account['id']) == str(x):
 							raise BrokerException('One or more accounts is already being used. Please delete the broker container that account and try again.')
+
+		elif broker_name == tl.broker.IB_NAME:
+			print(f'ADDING IB: {broker_id}, {props}')
+			account = self.ctrl.accounts.getAccount(user_id)
+			ib_broker = tl.broker.IB(
+				self.ctrl, broker_id=broker_id, user_account=account
+			)
+
+			account.brokers[broker_id] = ib_broker
+			props['accounts'] = {}
+			props['broker'] = tl.broker.IB_NAME
 
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')

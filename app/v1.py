@@ -6,6 +6,7 @@ import gzip
 import re, string, random
 import requests
 import shortuuid
+import traceback
 from datetime import datetime
 from enum import Enum
 from flask import (
@@ -1194,8 +1195,8 @@ def update_strategy_account_ept(strategy_id):
 def update_strategy_gui_items_ept(strategy_id):
 	account = g.user
 
-	# body = getJson()
-	# item_ids = account.updateStrategyGuiItems(strategy_id, body)
+	body = getJson()
+	item_ids = account.updateStrategyGuiItems(strategy_id, body)
 
 	res = {
 		'item_ids': []
@@ -1995,3 +1996,126 @@ def check_access_token_ept(access_token):
 		json.dumps(res, indent=2), status=200,
 		content_type='application/json'
 	)
+
+
+@bp.route("/ib/broker", methods=("POST",))
+@auth.login_required
+def reserve_ib_broker_ept():
+
+	# Look for unused Port
+	used_ports = ctrl.brokers.getUsedPorts()
+
+	# Get/Create IB Client
+
+
+	# If no ports available, create new IB Client
+
+
+
+	res = { 'port': port, 'token': token }
+	return Response(
+		json.dumps(res, indent=2), status=200,
+		content_type='application/json'
+	)
+
+@bp.route("/ib/auth/<broker_id>", methods=("GET",))
+@auth.login_required
+def get_ib_auth_ept(broker_id):
+	account = g.user
+	ib_broker = account.brokers.get(broker_id)
+
+	if ib_broker is not None and not ib_broker.is_auth:
+		port = ib_broker.findUnusedPort()
+		payload = { 'sub': str(port), 'iat': time.time() }
+		token = jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf-8')
+
+		res = { 'port': port, 'token': token }
+
+		start_time = time.time()
+		while not ib_broker._gateway_loaded:
+			if time.time() - start_time > 10:
+				return Response(
+					json.dumps(res, indent=2), status=400,
+					content_type='application/json'
+				)
+
+		return Response(
+			json.dumps(res, indent=2), status=200,
+			content_type='application/json'
+		)
+
+	res = { 'message': 'Unsuccessful' }
+	return Response(
+		json.dumps(res, indent=2), status=400,
+		content_type='application/json'
+	)
+
+
+
+@bp.route("/ib/auth", methods=("POST",))
+def ib_auth_ept():
+	body = getJson()
+	ip = body.get('ip')
+	port = str(body.get('port'))
+	token = body.get('token')
+
+	print(f'[ib_auth_ept] {ip}, {port}, {token}\n{ctrl.brokers.ib_port_sessions}')
+
+	try:
+		if port in ctrl.brokers.ib_port_sessions:
+			print('[ib_auth_ept] 1')
+			if (
+				ip in ctrl.brokers.ib_port_sessions[port]['ips'] and
+				time.time() < ctrl.brokers.ib_port_sessions[port]['expiry']
+			):
+				print('[ib_auth_ept] 2')
+				return Response(
+					json.dumps({}, indent=2), status=200,
+					content_type='application/json'
+				)
+			elif token is not None:
+				print('[ib_auth_ept] 3')
+				payload = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+				if str(payload.get('sub')) == port:
+					print('[ib_auth_ept] 4')
+					# if not port in ctrl.brokers.ib_port_sessions:
+					# 	ctrl.brokers.ib_port_sessions[port] = { 'client': None, 'expiry': time.time() + (60*10), 'ips': [ip] }
+					# else:
+					ctrl.brokers.ib_port_sessions[port]['expiry'] = time.time() + (60*10)
+					ctrl.brokers.ib_port_sessions[port]['ips'].append(ip)
+
+					return Response(
+						json.dumps({}, indent=2), status=200,
+						content_type='application/json'
+					)
+
+	except Exception:
+		print(traceback.format_exc())
+
+	return Response(
+		json.dumps({}, indent=2), status=401,
+		content_type='application/json'
+	)
+	
+
+@bp.route("/ib/auth/confirmed", methods=("POST",))
+def ib_auth_confirmed_ept():
+	body = getJson()
+	port = str(body.get('port'))
+
+	print(f'[ib_auth_confirmed_ept] {port} {ctrl.brokers.ib_port_sessions}')
+
+	if port in ctrl.brokers.ib_port_sessions:
+		time.sleep(1)
+		ib_broker = ctrl.brokers.ib_port_sessions[port]['client']
+		if ib_broker.isLoggedIn():
+			ib_broker.getAllAccounts()
+
+
+	return Response(
+		json.dumps({}, indent=2), status=200,
+		content_type='application/json'
+	)
+
+	
+

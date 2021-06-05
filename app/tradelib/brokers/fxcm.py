@@ -14,7 +14,6 @@ from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
 from app.error import OrderException, BrokerException
 # from forexconnect import ForexConnect, fxcorepy, Common
-from threading import Thread
 
 
 # class OffersTableListener(object):
@@ -66,7 +65,9 @@ class FXCM(Broker):
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
-		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.FXCM_NAME, accounts, display_name, is_dummy)
+		print('FXCM INIT')
+
+		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.FXCM_NAME, accounts, display_name, is_dummy, True)
 
 		self.data_saver = tl.DataSaver(broker=self)
 
@@ -90,7 +91,7 @@ class FXCM(Broker):
 		if is_parent:
 
 			# Create Connection to FXCM Container
-			self._add_user()
+			# self._add_user()
 
 			
 			# while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
@@ -99,7 +100,7 @@ class FXCM(Broker):
 			# 	self._get_offers_listener()
 
 			# Load Charts
-			CHARTS = ['EUR_USD']
+			CHARTS = ['EUR_USD', 'GBP_USD']
 			PERIODS = [tl.period.ONE_MINUTE]
 			for instrument in CHARTS:
 				chart = self.createChart(instrument, await_completion=True)
@@ -192,22 +193,24 @@ class FXCM(Broker):
 			end = end.replace(tzinfo=None)
 			result = self.data_saver.get(product, period, start=start, end=end)
 
-		if include_current:
-			chart = self.getChart(product)
-			timestamp = chart.lastTs[period]
+		# if include_current:
+		# 	chart = self.getChart(product)
 
-			if tl.convertTimeToTimestamp(end) >= timestamp:
-				current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
+		# 	if period in chart.lastTs:
+		# 		timestamp = chart.lastTs[period]
 
-				result = result.append(pd.DataFrame(
-					index=pd.Index(data=[timestamp], name='timestamp'),
-					columns=[
-						'ask_open', 'ask_high', 'ask_low', 'ask_close',
-						'mid_open', 'mid_high', 'mid_low', 'mid_close',
-						'bid_open', 'bid_high', 'bid_low', 'bid_close'
-					],
-					data=[current_bars]
-				))
+		# 		if tl.convertTimeToTimestamp(end) >= timestamp:
+		# 			current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
+
+		# 			result = result.append(pd.DataFrame(
+		# 				index=pd.Index(data=[timestamp], name='timestamp'),
+		# 				columns=[
+		# 					'ask_open', 'ask_high', 'ask_low', 'ask_close',
+		# 					'mid_open', 'mid_high', 'mid_low', 'mid_close',
+		# 					'bid_open', 'bid_high', 'bid_low', 'bid_close'
+		# 				],
+		# 				data=[current_bars]
+		# 			))
 
 		return result
 
@@ -217,7 +220,8 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		**kwargs
 	):
-		if tl.isWeekend(datetime.utcnow()):
+		# if tl.isWeekend(datetime.utcnow()):
+		if True:
 			return self._download_historical_data(
 				product, period, tz=tz, 
 				start=start, end=end, count=count,
@@ -414,7 +418,9 @@ class FXCM(Broker):
 							if period != tl.period.TICK:
 								is_new_bar = chart.isNewBar(period, c_ts)
 								if is_new_bar:
+									print(f'NEW BAR: {chart.volume[period]}', flush=True)
 									if chart.volume[period] > 0:
+										print(f'ADD NEW BAR 1: {period}', flush=True)
 										chart.volume[period] = 0
 										result.append({
 											'broker': self.name,
@@ -498,6 +504,9 @@ class FXCM(Broker):
 								}
 							})
 
+				if len(result):
+					chart.handleTick(result)
+
 				# print(result)
 
 			else:
@@ -508,6 +517,7 @@ class FXCM(Broker):
 							# Handle period bar end
 							is_new_bar = chart.isNewBar(period, c_ts)
 							if is_new_bar:
+								print(f'ADD NEW BAR 2: {period}', flush=True)
 								chart.volume[period] = 0
 								result.append({
 									'broker': self.name,
@@ -532,8 +542,10 @@ class FXCM(Broker):
 									)]*4, 
 								dtype=np.float64)
 
-			if len(result):
-				chart.handleTick(result)
+					if len(result):
+						chart.handleTick(result)
+
+			
 
 			if time.time() - time_off_timer > ONE_HOUR:
 				time_off_timer = time.time()

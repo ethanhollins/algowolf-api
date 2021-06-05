@@ -3,6 +3,7 @@ import math
 import time
 import string, random
 import requests
+import shortuuid
 from app.controller import DictQueue
 from app import tradelib as tl
 from threading import Thread
@@ -24,6 +25,7 @@ class Account(object):
 		self._user_validation()
 
 		# Queues
+		self._queue = []
 		self._set_broker_queue = DictQueue()
 
 	# Public
@@ -45,6 +47,11 @@ class Account(object):
 			'metadata': user.get('metadata'),
 			'admin': user.get('admin')
 		}
+
+
+	def generateReference(self):
+		return shortuuid.uuid()
+
 
 	def generateId(self):
 		letters = string.ascii_uppercase + string.digits
@@ -373,7 +380,19 @@ class Account(object):
 
 
 	def createBroker(self, broker_id, name, broker_name, **props):
-		return self.ctrl.getDb().createBroker(self.userId, broker_id, name, broker_name, props)
+		queue_id = self.generateReference()
+		self._queue.append(queue_id)
+		while self._queue.index(queue_id) > 0: pass
+
+		result = None
+		try:
+			if not broker_id in self.brokers:
+				result = self.ctrl.getDb().createBroker(self.userId, broker_id, name, broker_name, props)
+		except Exception:
+			pass
+		
+		del self._queue[0]
+		return result
 
 
 	def updateBroker(self, broker_id, props):
@@ -737,7 +756,8 @@ class Account(object):
 				broker_args.update({
 					'name': tl.broker.OANDA_NAME,
 					'display_name': 'Paper Trader',
-					'is_dummy': False
+					'is_dummy': False,
+					'is_auth': True
 				})
 				self._init_broker(broker_name, broker_args)
 
@@ -767,6 +787,8 @@ class Account(object):
 				self.brokers[broker_args['broker_id']] = tl.broker.Oanda(**broker_args)
 			elif broker_name == tl.broker.SPOTWARE_NAME:
 				self.brokers[broker_args['broker_id']] = tl.broker.Spotware(**broker_args)
+			elif broker_name == tl.broker.IB_NAME:
+				self.brokers[broker_args['broker_id']] = tl.broker.IB(**broker_args)
 
 		return self.brokers[broker_args['broker_id']]
 

@@ -20,6 +20,7 @@ IG_NAME = 'ig'
 OANDA_NAME = 'oanda'
 FXCM_NAME = 'fxcm'
 SPOTWARE_NAME = 'spotware'
+IB_NAME = 'ib'
 PAPERTRADER_NAME = 'papertrader'
 
 '''
@@ -51,7 +52,7 @@ class Broker(object):
 		'accounts', 'charts', 'positions', 'orders', 'is_running', '_handled', 'transactions',
 		'ontrade_subs', 'display_name', 'is_dummy', 'is_auth'
 	)
-	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name, is_dummy):
+	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name, is_dummy, is_auth):
 		self.ctrl = ctrl
 		self.userAccount = user_account
 		self.strategyId = strategy_id
@@ -79,7 +80,7 @@ class Broker(object):
 		self._handled = {}
 
 		self.is_running = True
-		self.is_auth = True
+		self.is_auth = is_auth
 
 		# Handle mandatory strategy startup functions
 		if self.userAccount:
@@ -469,6 +470,23 @@ class Broker(object):
 			)
 
 
+	def handleOnGui(self, account_id, message):
+		print(f'[handleOnGui] {self.brokerId}')
+		if self.brokerId is not None:
+			print(f'[handleOnGui] 1')
+			self.ctrl.sio.emit(
+				'ongui', 
+				{
+					'strategy_id': self.strategyId, 
+					'item': {
+						'account_code': '.'.join((self.brokerId, str(account_id))),
+						'type': message,
+					}
+				}, 
+				namespace='/admin'
+			)
+
+
 	# Update Handlers
 	def handleOnSessionStatus(self, res):
 		self.ctrl.sio.emit(
@@ -634,6 +652,7 @@ class Broker(object):
 			tl.period.WEEKLY, tl.period.MONTHLY
 		]
 
+
 from .brokers import (
-	Oanda, FXCM, IG, Spotware
+	Oanda, FXCM, IG, Spotware, IB
 )

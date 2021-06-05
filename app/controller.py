@@ -198,6 +198,8 @@ class Brokers(dict):
 
 	def __init__(self, ctrl):
 		self.ctrl = ctrl
+		self.ib_port_sessions = {}
+
 		options = self._get_options()
 
 		for k, v in options.items():
@@ -246,6 +248,9 @@ class Brokers(dict):
 			accounts = options.get('accounts')
 			assets, symbols = self._get_spotware_items()
 			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True, assets=assets, symbols=symbols)
+		elif name == tl.broker.IB_NAME:
+			PARENT_PORT = 5000
+			tl.broker.IB(self.ctrl, port=PARENT_PORT, is_parent=True)
 
 	def getBroker(self, name):
 		return self.get(name)
@@ -257,6 +262,31 @@ class Brokers(dict):
 		path = self.ctrl.app.config['BROKERS']
 		with open(path, 'w') as f:
 			f.write(json.dumps(f, indent=2))
+
+	def getUsedPorts(self):
+		used_ports = []
+		for port in self.ib_port_sessions:
+			port = str(port)
+			if self.ib_port_sessions[port]['client'].is_auth:
+				used_ports.append(port)
+			
+			elif time.time() < self.ib_port_sessions[port]['expiry']:
+				used_ports.append(port)
+
+			else:
+				self.ib_port_sessions[port]['client'].setPort(None)
+
+
+		return used_ports
+
+	def assignPort(self, client, port):
+		port = str(port)
+		if port in self.ib_port_sessions:
+			self.ib_port_sessions[port]['expiry'] = time.time() + (60*10)
+			self.ib_port_sessions[port]['client'] = client
+		else:
+			self.ib_port_sessions[port] = { 'client': client, 'expiry': time.time() + (60*10), 'ips': [] }
+
 
 
 class Charts(dict):

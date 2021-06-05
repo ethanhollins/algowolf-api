@@ -29,7 +29,7 @@ class Spotware(Broker):
 		self.accounts = accounts
 
 		if not is_parent:
-			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy, True)
 
 		self.ctrl = ctrl
 		self.is_demo = is_demo
@@ -59,7 +59,7 @@ class Spotware(Broker):
 		Setup Spotware Funcs
 		'''
 		if self.is_parent:
-			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy)
+			super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.SPOTWARE_NAME, accounts, display_name, is_dummy, True)
 
 			self.parent = self
 			self.children = []
