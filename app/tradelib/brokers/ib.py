@@ -19,6 +19,8 @@ class IB(Broker):
 		ctrl, port=None, user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
+		print('IB INIT')
+
 		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.IB_NAME, accounts, display_name, is_dummy, False)
 
 		if port is not None:
@@ -48,7 +50,7 @@ class IB(Broker):
 
 
 	def _add_user(self):
-		print('Add User')
+		print('Add User IB')
 
 		if self.userAccount is not None:
 			user_id = self.userAccount.userId
