@@ -13,47 +13,6 @@ from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
 from app.error import OrderException, BrokerException
-# from forexconnect import ForexConnect, fxcorepy, Common
-
-
-# class OffersTableListener(object):
-# 	def __init__(self, instruments=[], listeners=[]):
-# 		self.__instruments = instruments
-# 		self.__listeners = listeners
-
-# 	def addInstrument(self, instrument, listener):
-# 		if instrument not in self.__instruments:
-# 			self.__instruments.append(instrument)
-# 			self.__listeners.append(listener)
-
-# 	def on_added(self, table_listener, row_id, row):
-# 		pass
-
-# 	def on_changed(self, table_listener, row_id, row):
-# 		if row.table_type == ForexConnect.OFFERS:
-# 			self.print_offer(row, self.__instruments, self.__listeners)
-
-# 	def on_deleted(self, table_listener, row_id, row):
-# 		pass
-
-# 	def on_status_changed(self, table_listener, status):
-# 		pass
-
-# 	def print_offer(self, offer_row, selected_instruments, listeners):
-# 		offer_id = offer_row.offer_id
-# 		instrument = offer_row.instrument
-# 		time = offer_row.time
-# 		bid = round(offer_row.bid, 5)
-# 		ask = round(offer_row.ask, 5)
-# 		volume = offer_row.volume
-
-# 		try:
-# 			idx = selected_instruments.index(instrument)
-# 			listener = listeners[idx]
-# 			listener(time, bid, ask, volume)
-
-# 		except ValueError:
-# 			pass
 
 
 ONE_HOUR = 60*60
@@ -84,23 +43,13 @@ class FXCM(Broker):
 		self.time_off = 0
 		self._set_time_off()
 
-		# self.fx = ForexConnect()
-		# self._login()
-		# self.offers_listener = None
-
 		if is_parent:
 
 			# Create Connection to FXCM Container
-			# self._add_user()
-
-			
-			# while self.session is None or self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTING:
-			# 	time.sleep(0.01)
-			# if self.session.session_status == fxcorepy.AO2GSessionStatus.O2GSessionStatus.CONNECTED:
-			# 	self._get_offers_listener()
+			self._add_user()
 
 			# Load Charts
-			CHARTS = ['EUR_USD', 'GBP_USD']
+			CHARTS = ['EUR_USD']
 			PERIODS = [tl.period.ONE_MINUTE]
 			for instrument in CHARTS:
 				chart = self.createChart(instrument, await_completion=True)
@@ -109,10 +58,6 @@ class FXCM(Broker):
 		self._initialized = True
 
 		if not is_dummy:
-			# for account_id in self.getAccounts():
-			# 	if account_id != tl.broker.PAPERTRADER_NAME:
-			# 		self._subscribe_account_updates(account_id)
-
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
@@ -152,19 +97,6 @@ class FXCM(Broker):
 			return res
 
 
-	# def _get_offers_listener(self):
-	# 	offers = self.fx.get_table(ForexConnect.OFFERS)
-	# 	self.offers_listener = OffersTableListener()
-
-	# 	table_listener = Common.subscribe_table_updates(
-	# 		offers,
-	# 		on_change_callback=self.offers_listener.on_changed,
-	# 		on_add_callback=self.offers_listener.on_added,
-	# 		on_delete_callback=self.offers_listener.on_deleted,
-	# 		on_status_change_callback=self.offers_listener.on_changed
-	# 	)
-
-
 	def _set_time_off(self):
 		try:
 			client = ntplib.NTPClient()
@@ -193,24 +125,24 @@ class FXCM(Broker):
 			end = end.replace(tzinfo=None)
 			result = self.data_saver.get(product, period, start=start, end=end)
 
-		# if include_current:
-		# 	chart = self.getChart(product)
+		if include_current:
+			chart = self.getChart(product)
 
-		# 	if period in chart.lastTs:
-		# 		timestamp = chart.lastTs[period]
+			if period in chart.lastTs:
+				timestamp = chart.lastTs[period]
 
-		# 		if tl.convertTimeToTimestamp(end) >= timestamp:
-		# 			current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
+				if tl.convertTimeToTimestamp(end) >= timestamp:
+					current_bars = np.concatenate((chart.ask[period], chart.mid[period], chart.bid[period]))
 
-		# 			result = result.append(pd.DataFrame(
-		# 				index=pd.Index(data=[timestamp], name='timestamp'),
-		# 				columns=[
-		# 					'ask_open', 'ask_high', 'ask_low', 'ask_close',
-		# 					'mid_open', 'mid_high', 'mid_low', 'mid_close',
-		# 					'bid_open', 'bid_high', 'bid_low', 'bid_close'
-		# 				],
-		# 				data=[current_bars]
-		# 			))
+					result = result.append(pd.DataFrame(
+						index=pd.Index(data=[timestamp], name='timestamp'),
+						columns=[
+							'ask_open', 'ask_high', 'ask_low', 'ask_close',
+							'mid_open', 'mid_high', 'mid_low', 'mid_close',
+							'bid_open', 'bid_high', 'bid_low', 'bid_close'
+						],
+						data=[current_bars]
+					))
 
 		return result
 
@@ -220,8 +152,8 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		**kwargs
 	):
-		# if tl.isWeekend(datetime.utcnow()):
-		if True:
+		if tl.isWeekend(datetime.utcnow()):
+		# if True:
 			return self._download_historical_data(
 				product, period, tz=tz, 
 				start=start, end=end, count=count,

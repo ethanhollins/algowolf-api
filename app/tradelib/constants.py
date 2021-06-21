@@ -20,6 +20,8 @@ STOP_LOSS = 'stoploss'
 TAKE_PROFIT = 'takeprofit'
 
 MODIFY = 'modify'
+ORDER_MODIFY = 'ordermodify'
+POSITION_MODIFY = 'positionmodify'
 
 TRACK = 'track'
 TERMINATE = 'terminate'

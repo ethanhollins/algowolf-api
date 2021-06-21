@@ -251,6 +251,10 @@ class Brokers(dict):
 		elif name == tl.broker.IB_NAME:
 			PARENT_PORT = 5000
 			tl.broker.IB(self.ctrl, port=PARENT_PORT, is_parent=True)
+		elif name == tl.broker.DUKASCOPY_NAME:
+			username = options.get('username')
+			password = options.get('password')
+			return tl.broker.Dukascopy(self.ctrl, username=username, password=password, is_demo=is_demo, broker_id='PARENT', is_parent=True)
 
 	def getBroker(self, name):
 		return self.get(name)

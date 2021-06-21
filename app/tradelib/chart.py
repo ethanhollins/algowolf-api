@@ -14,6 +14,8 @@ class Chart(object):
 		'lastTs', '_subscriptions', '_unsubscriptions', '_tick_queue'
 	)
 	def __init__(self, ctrl, broker, product, await_completion=False):
+		print(f'[Chart] {broker.name} {product}')
+
 		self.ctrl = ctrl
 		self.broker = broker
 		self.product = product
@@ -77,6 +79,7 @@ class Chart(object):
 
 
 	def _load_current_bars(self, periods):
+		print(f'[_load_current_bars] {periods}')
 		# Use _load_data to load current bar
 		for period in periods:
 			df = self._load_data(period, count=2, force_download=True)
@@ -94,6 +97,7 @@ class Chart(object):
 
 
 	def _load_data(self, period, start=None, end=None, count=None, force_download=False):
+		print(f'[_load_data] {period}, {start}, {end}, {count}')
 		if self.broker.name == 'fxcm':
 			df = self.broker._download_historical_data_broker(
 				self.product, period, start=start, end=end,

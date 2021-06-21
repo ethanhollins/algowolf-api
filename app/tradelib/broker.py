@@ -21,6 +21,7 @@ OANDA_NAME = 'oanda'
 FXCM_NAME = 'fxcm'
 SPOTWARE_NAME = 'spotware'
 IB_NAME = 'ib'
+DUKASCOPY_NAME = 'dukascopy'
 PAPERTRADER_NAME = 'papertrader'
 
 '''
@@ -138,8 +139,8 @@ class Broker(object):
 	def _handle_live_strategy_setup(self):
 		# Handle saved IG strategy positions
 		self._handle_live_strategy_positions()
-
 		self._handle_live_strategy_orders()
+
 
 	def _handle_live_strategy_positions(self):
 		# Get open positions
@@ -147,7 +148,7 @@ class Broker(object):
 			if acc != tl.broker.PAPERTRADER_NAME:
 				# LIVE positions
 				live_positions = self._get_all_positions(acc)[acc]
-				self.positions += live_positions
+				self.positions = live_positions
 
 	def _handle_live_strategy_orders(self):
 		# Get open positions
@@ -155,7 +156,7 @@ class Broker(object):
 			if acc != tl.broker.PAPERTRADER_NAME:
 				# LIVE positions
 				live_orders = self._get_all_orders(acc)[acc]
-				self.orders += live_orders
+				self.orders = live_orders
 
 	def _run_backtest(self, from_ts):
 		products = []
@@ -229,6 +230,7 @@ class Broker(object):
 		return self.accounts
 
 	def createChart(self, product, await_completion=False):
+		print(f'[createChart] {self.name} {product}')
 		chart = self.ctrl.charts.getChart(self, product, await_completion=await_completion)
 		self.charts.append(chart)
 
@@ -654,5 +656,5 @@ class Broker(object):
 
 
 from .brokers import (
-	Oanda, FXCM, IG, Spotware, IB
+	Oanda, FXCM, IG, Spotware, IB, Dukascopy
 )

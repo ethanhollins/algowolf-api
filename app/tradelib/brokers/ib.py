@@ -199,9 +199,11 @@ class IB(Broker):
 					}
 
 				if acc in self.accounts:
+					self.accounts[acc].update(res['accounts'][acc])
 					self.accounts[acc].update(accounts[acc])
 				else:
-					self.accounts[acc] = accounts[acc]
+					self.accounts[acc] = res['accounts'][acc]
+					self.accounts[acc].update(accounts[acc])
 
 			self.userAccount.updateBroker(self.brokerId, { 'accounts': accounts })
 

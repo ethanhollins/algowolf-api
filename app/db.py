@@ -567,6 +567,21 @@ class Database(object):
 			props['accounts'] = {}
 			props['broker'] = tl.broker.IB_NAME
 
+		elif broker_name == tl.broker.DUKASCOPY_NAME:
+			print(f'ADDING Dukscopy: {broker_id}, {props}')
+			account = self.ctrl.accounts.getAccount(user_id)
+			dukascopy_broker = tl.broker.Dukascopy(
+				self.ctrl, broker_id=broker_id, user_account=account
+			)
+
+			account.brokers[broker_id] = dukascopy_broker
+			props['username'] = None
+			props['password'] = None
+			props['is_demo'] = None
+			props['accounts'] = {}
+			props['broker'] = tl.broker.DUKASCOPY_NAME
+			props['complete'] = False
+
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 		user['brokers'][broker_id] = key

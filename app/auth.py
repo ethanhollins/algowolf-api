@@ -225,8 +225,12 @@ def load_logged_in_user():
 @bp.route('/authorize', methods=('POST',))
 @login_required
 def check_auth():
+	user_info = ctrl.getDb().getUser(g.user.userId)
+
 	res = {
-		'user_id': g.user.userId
+		'user_id': g.user.userId,
+		'first_name': user_info.get('first_name'),
+		'last_name': user_info.get('last_name')
 	}
 	return Response(
 		json.dumps(res, indent=2),

@@ -2118,4 +2118,60 @@ def ib_auth_confirmed_ept():
 	)
 
 	
+@bp.route("/dukascopy/auth/captcha/<broker_id>", methods=("GET",))
+@auth.login_required
+def dukascopy_get_auth_captcha_ept(broker_id):
+	account = g.user
+	broker = account.brokers.get(broker_id)
 
+	res = { 'image': None }
+	if broker is not None:
+		res['image'] = broker.getLoginCaptchaBytes()
+
+		return Response(
+			json.dumps(res, indent=2), status=200,
+			content_type='application/json'
+		)
+
+	else:
+		return Response(
+			json.dumps(res, indent=2), status=400,
+			content_type='application/json'
+		)
+
+
+@bp.route("/dukascopy/auth/complete/<broker_id>", methods=("POST",))
+@auth.login_required
+def dukascopy_complete_login_ept(broker_id):
+	body = getJson()
+
+	account = g.user
+	broker = account.brokers.get(broker_id)
+	username = body.get('username')
+	password = body.get('password')
+	is_demo = body.get('is_demo')
+	captcha_result = body.get('captcha_result')
+
+	res = { 'result': False }
+	if broker is not None and all((
+		username is not None,
+		password is not None,
+		is_demo is not None,
+		captcha_result is not None
+	)):
+		res['result'] = broker.completeLogin(username, password, is_demo, captcha_result)
+
+		if res['result']:
+			status = 200
+		else:
+			status = 401
+
+		return Response(
+			json.dumps(res, indent=2), status=status,
+			content_type='application/json'
+		)
+	else:
+		return Response(
+			json.dumps(res, indent=2), status=401,
+			content_type='application/json'
+		)

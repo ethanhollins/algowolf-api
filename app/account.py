@@ -367,10 +367,12 @@ class Account(object):
 			return None
 
 		for k, v in result.items():
-			result[k] = jwt.decode(
+			info = jwt.decode(
 				v, self.ctrl.app.config['SECRET_KEY'], 
 				algorithms=['HS256']
 			)
+			if 'accounts' in info:
+				result[k] = info
 		return result
 
 
@@ -720,6 +722,7 @@ class Account(object):
 				} 
 			}
 		}
+		delete = []
 		for broker_id in brokers:
 			self._set_broker_queue.handle(
 				broker_id,
@@ -729,13 +732,23 @@ class Account(object):
 			)
 
 			broker = self.brokers.get(broker_id)
-			if broker is not None:
+
+			print(f'[_set_brokers] {brokers[broker_id].get("broker") == tl.broker.DUKASCOPY_NAME}, {not brokers[broker_id].get("complete")}, {brokers[broker_id]}')
+			if brokers[broker_id].get('broker') == tl.broker.DUKASCOPY_NAME and not brokers[broker_id].get('complete'):
+				delete.append(broker_id)
+			elif broker is not None:
 				if tl.broker.PAPERTRADER_NAME in broker.getAccounts():
 					self.updateTrades(
 						strategy_id,
 						broker.getAllPositions(account_id=tl.broker.PAPERTRADER_NAME),
 						broker.getAllOrders(account_id=tl.broker.PAPERTRADER_NAME)
 					)
+			else:
+				delete.append(broker_id)
+
+		print(f'[_set_brokers] {delete}')
+		for i in delete:
+			del brokers[i]
 
 		return brokers
 
@@ -789,6 +802,13 @@ class Account(object):
 				self.brokers[broker_args['broker_id']] = tl.broker.Spotware(**broker_args)
 			elif broker_name == tl.broker.IB_NAME:
 				self.brokers[broker_args['broker_id']] = tl.broker.IB(**broker_args)
+			elif broker_name == tl.broker.DUKASCOPY_NAME:
+				print(f'[_init_broker] {broker_args}')
+				if broker_args.get('complete'):
+					self.brokers[broker_args['broker_id']] = tl.broker.Dukascopy(**broker_args)
+				else:
+					self.ctrl.getDb().deleteBroker(self.userId, broker_args['broker_id'])
+					return None
 
 		return self.brokers[broker_args['broker_id']]
 
