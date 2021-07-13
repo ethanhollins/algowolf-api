@@ -673,7 +673,30 @@ class Dukascopy(Broker):
 		result = {}
 		for ref_id in res:
 			update = res[ref_id]
-			if update.get('accepted'):
+			if update.get('type') == 'connected':
+				print('[handleResponse] CONNECTED')
+				if not self.is_parent and self.userAccount and self.brokerId:
+					print('[handleResponse] Re-Handling Setup')
+					self._handle_live_strategy_setup()
+
+					result = {
+						self.generateReference(): {
+							'timestamp': time.time(),
+							'type': 'update',
+							'accepted': True,
+							'item': {
+								'positions': self.positions,
+								'orders': self.orders
+							}
+						}
+					}
+					account_id = list(self.accounts.keys())[0]
+					self.handleOnTrade(account_id, result)
+
+			elif update.get('type') == 'disconnected':
+				print('[handleResponse] DISCONNECTED')
+
+			elif update.get('accepted'):
 				func = self.getTradeHandler(update['type'])
 				if func is not None:
 					result.update(func(ref_id, update))

@@ -1496,7 +1496,14 @@ class Spotware(Broker):
 
 	def _handle_account_update(self, payload_type, account_id, update, msg_id):
 		print(f'_on_account_update: {payload_type} {account_id} {update}', flush=True)
-		if int(payload_type) == 2126:
+
+		if update.get('type') == 'connected':
+			print(f'[_on_account_update] RECONNECTED')
+			if self.userAccount and self.brokerId:
+				print(f'[_on_account_update] Retrieving positions/orders')
+				self._handle_live_strategy_setup()
+
+		elif payload_type is not None and int(payload_type) == 2126:
 			# if not ref_id:
 			ref_id = self.generateReference()
 

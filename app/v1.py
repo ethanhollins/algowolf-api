@@ -1,4 +1,5 @@
 import os
+import io
 import time
 import math
 import json, jwt
@@ -7,6 +8,7 @@ import re, string, random
 import requests
 import shortuuid
 import traceback
+import pandas as pd
 from datetime import datetime
 from enum import Enum
 from flask import (
@@ -163,25 +165,25 @@ def create_strategy_ept():
 			json.dumps(error, indent=2),
 			status=400, content_type='application/json'
 		)
-	elif body.get('brokers') is None:
-		error = {
-			'error': 'ValueError',
-			'message': '`brokers` not submitted.'
-		}
-		return Response(
-			json.dumps(error, indent=2),
-			status=400, content_type='application/json'
-		)
 
 	strategy_id = g.user.createStrategy(body)
 
-	res = {
-		'strategy_id': strategy_id
-	}
-	return Response(
-		json.dumps(res, indent=2),
-		status=200, content_type='application/json'
-	)
+	if not strategy_id:
+		res = {
+			'message': 'Package in use.'
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+	else:
+		res = {
+			'strategy_id': strategy_id
+		}
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
 
 
 @bp.route('/strategy/<strategy_id>', methods=('PUT',))
@@ -197,6 +199,72 @@ def delete_strategy_ept(strategy_id):
 
 	res = {
 		'strategy_id': strategy_id
+	}
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/strategy/details', methods=('GET',))
+@auth.login_required
+def get_all_strategy_details_ept():
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	details = []
+	for strategy_id in user['strategies']:
+		details.append({
+			'strategy_id': strategy_id,
+			**user['strategies'][strategy_id]
+		})
+
+	res = {
+		'strategies': details
+	}
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/package/<package_id>', methods=('GET',))
+@auth.login_required
+def is_package_in_use_ept(package_id):
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	for strategy_id in user['strategies']:
+		if user['strategies'][strategy_id].get('package').split('.')[0] == package_id:
+			res = {
+				'strategy_id': strategy_id
+			}
+			return Response(
+				json.dumps(res, indent=2),
+				status=200, content_type='application/json'
+			)
+
+	res = {
+		'strategy_id': None
+	}
+	return Response(
+		json.dumps(res, indent=2),
+		status=400, content_type='application/json'
+	)
+
+
+@bp.route('/package/available', methods=('POST',))
+@auth.login_required
+def is_multiple_packages_in_use_ept():
+	body = getJson()
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	result = []
+	for package_id in body.get('packages'):
+		for strategy_id in user['strategies']:
+			if user['strategies'][strategy_id].get('package').split('.')[0] == package_id:
+				result.append(package_id)
+
+	res = {
+		'packages': result
 	}
 	return Response(
 		json.dumps(res, indent=2),
@@ -477,6 +545,42 @@ def update_script_ept(script_id):
 		json.dumps(result, indent=2), 
 		status=200, content_type='application/json'
 	)
+
+
+@bp.route('/scripts/<script_id>/<file_name>', methods=('GET',))
+def get_script_file_ept(script_id, file_name):
+	file_name = file_name.replace('.gz', '')
+
+	file_type = None
+	if file_name.endswith('.csv'):
+		file_type = 'csv'
+	elif file_name.endswith('.json'):
+		file_type = 'json'
+	else:
+		return None
+
+	result = ctrl.getDb().getScriptFile(script_id, file_name)
+
+	if result is not None:
+		if file_type == 'csv':
+			result = pd.read_csv(io.BytesIO(result), sep=',', dtype=str).to_dict()
+		elif file_type == 'json':
+			result = json.loads(result)
+		else:
+			result = None
+
+	if result is None:
+		res = { 'message': 'Bad Request.' }
+		return Response(
+			json.dumps(result, indent=2), 
+			status=400, content_type='application/json'
+		)
+	else:
+		res = { 'item': result }
+		return Response(
+			json.dumps(res, indent=2), 
+			status=200, content_type='application/json'
+		)
 
 
 @bp.route('/strategy/<strategy_id>/start/<broker_id>', methods=('POST',))

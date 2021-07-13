@@ -43,7 +43,7 @@ class Account(object):
 			'notify_me': user.get('notify_me'),
 			'email_confirmed': user.get('email_confirmed'),
 			'brokers': list(user.get('brokers').keys()),
-			'strategies': list(user.get('strategies').keys()),
+			'strategies': user.get('strategies'),
 			'metadata': user.get('metadata'),
 			'admin': user.get('admin')
 		}
@@ -134,8 +134,6 @@ class Account(object):
 	def createStrategy(self, info):
 		strategy = {
 			'name': info.get('name'),
-			'brokers': info.get('brokers'),
-			'keys': [],
 			'package': info.get('package')
 		}
 		strategy_id = self.ctrl.getDb().createStrategy(self.userId, strategy)

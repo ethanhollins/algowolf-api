@@ -203,7 +203,7 @@ class Oanda(Broker):
 		account_id = res.get('accountID')
 		product = res.get('instrument')
 		direction = tl.LONG if float(res.get('units')) > 0 else tl.SHORT
-		lotsize = abs(float(res.get('units')))
+		lotsize = self.convertToLotsize(abs(float(res.get('units'))))
 		entry_price = float(res.get('price'))
 
 		sl = None
@@ -273,7 +273,7 @@ class Oanda(Broker):
 			account_id = res['accountID']
 			product = res.get('instrument')
 			direction = tl.LONG if float(res['tradeOpened'].get('units')) > 0 else tl.SHORT
-			lotsize = abs(float(res['tradeOpened'].get('units')))
+			lotsize = self.convertToLotsize(abs(float(res['tradeOpened'].get('units'))))
 			entry_price = float(res.get('price'))
 			
 			if res.get('reason') == 'LIMIT_ORDER':
@@ -305,14 +305,14 @@ class Oanda(Broker):
 
 			if pos is not None:
 				cpy = tl.Position.fromDict(self, pos)
-				cpy.lotsize = abs(float(res['tradeReduced'].get('units')))
+				cpy.lotsize = self.convertToLotsize(abs(float(res['tradeReduced'].get('units'))))
 				cpy.close_price = float(res['tradeReduced'].get('price'))
 				cpy.close_time = tl.convertTimeToTimestamp(datetime.strptime(
 					res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
 				))
 
 				# Modify open position
-				pos.lotsize += float(res['tradeReduced'].get('units'))
+				pos.lotsize -= self.convertToLotsize(abs(float(res['tradeReduced'].get('units'))))
 
 				result[self.generateReference()] = {
 					'timestamp': ts,
@@ -477,48 +477,6 @@ class Oanda(Broker):
 
 		return result
 
-		# endpoint = f'/v3/accounts/{account_id}/openTrades'
-		# res = self._session.get(
-		# 	self._url + endpoint,
-		# 	headers=self._headers
-		# )
-
-		# if res.status_code == 200:
-		# 	result = {account_id: []}
-		# 	res = res.json()
-		# 	print(res)
-		# 	for pos in res.get('trades'):
-		# 		order_id = pos.get('id')
-		# 		product = pos.get('instrument')
-		# 		direction = tl.LONG if float(pos.get('currentUnits')) > 0 else tl.SHORT
-		# 		lotsize = abs(float(pos.get('currentUnits')))
-		# 		entry_price = float(pos.get('price'))
-		# 		sl = None
-		# 		sl_id = None
-		# 		if pos.get('stopLossOrder'):
-		# 			sl = float(pos['stopLossOrder'].get('price'))
-		# 			sl_id = pos['stopLossOrder'].get('id')
-		# 		tp = None
-		# 		tp_id = None
-		# 		if pos.get('takeProfitOrder'):
-		# 			tp = float(pos['takeProfitOrder'].get('price'))
-		# 			tp_id = pos['takeProfitOrder'].get('id')
-		# 		open_time = datetime.strptime(pos.get('openTime').split('.')[0], '%Y-%m-%dT%H:%M:%S')
-
-		# 		new_pos = tl.Position(
-		# 			self,
-		# 			order_id, account_id, product,
-		# 			tl.MARKET_ENTRY, direction, lotsize,
-		# 			entry_price, sl, tp, 
-		# 			tl.utils.convertTimeToTimestamp(open_time),
-		# 			sl_id=sl_id, tp_id=tp_id
-		# 		)
-
-		# 		result[account_id].append(new_pos)
-
-		# 	return result
-		# else:
-		# 	return None
 
 	def _handle_tp_sl(self, order, sl_range, tp_range, sl_price, tp_price):
 		payload = {}
@@ -595,6 +553,15 @@ class Oanda(Broker):
 
 		return result
 
+
+	def convertToLotsize(self, size):
+		return size / 100000
+
+
+	def convertToUnitSize(self, size):
+		return size * 100000
+
+
 	def createPosition(self,
 		product, lotsize, direction,
 		account_id, entry_range, entry_price,
@@ -606,15 +573,6 @@ class Oanda(Broker):
 			status = 200
 		else:
 			_, status = key_or_login_required(self.brokerId, AccessLevel.DEVELOPER, disable_abort=True)
-		
-		if (status != 200 or account_id == tl.broker.PAPERTRADER_NAME):
-			return super().createPosition(
-				product, lotsize, direction,
-				account_id, entry_range, entry_price,
-				sl_range, tp_range, sl_price, tp_price,
-				override=override
-			)
-
 
 		broker_result = self.ctrl.brokerRequest(
 			self.name, self.brokerId, 'createPosition',
@@ -625,26 +583,6 @@ class Oanda(Broker):
 
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
-
-		# Flip lotsize if direction is short
-		# if direction == tl.SHORT: lotsize *= -1
-
-		# payload = {
-		# 	'order': {
-		# 		'instrument': product,
-		# 		'units': str(int(lotsize)),
-		# 		'type': 'MARKET',
-		# 		'timeInForce': 'FOK',
-		# 		'positionFill': 'DEFAULT',
-		# 	}
-		# }
-
-		# endpoint = f'/v3/accounts/{account_id}/orders'
-		# res = self._session.post(
-		# 	self._url + endpoint,
-		# 	headers=self._headers,
-		# 	data=json.dumps(payload)
-		# )
 
 		result = {}
 		# status_code = res.status_code
@@ -707,10 +645,6 @@ class Oanda(Broker):
 
 
 	def modifyPosition(self, pos, sl_price, tp_price, override=False):
-		if pos.account_id == tl.broker.PAPERTRADER_NAME:
-			return super().modifyPosition(
-				pos, sl_price, tp_price, override=override
-			)
 		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
@@ -723,44 +657,6 @@ class Oanda(Broker):
 
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
-
-		# payload = {}
-
-		# if sl_price is None:
-		# 	payload['stopLoss'] = {
-		# 		'timeInForce': 'GTC',
-		# 		'price': sl_price
-		# 	}
-
-		# elif sl_price != pos.sl:
-		# 	sl_price = str(round(sl_price, 5))
-		# 	payload['stopLoss'] = {
-		# 		'timeInForce': 'GTC',
-		# 		'price': sl_price
-		# 	}
-
-		# if tp_price is None:
-		# 	payload['takeProfit'] = {
-		# 		'timeInForce': 'GTC',
-		# 		'price': tp_price
-		# 	}
-
-		# elif tp_price != pos.tp:
-		# 	tp_price = str(round(tp_price, 5))
-		# 	payload['takeProfit'] = {
-		# 		'timeInForce': 'GTC',
-		# 		'price': tp_price
-		# 	}
-				
-		# if len(payload):
-		# 	endpoint = f'/v3/accounts/{pos.account_id}/trades/{pos.order_id}/orders'
-		# 	res = self._session.put(
-		# 		self._url + endpoint,
-		# 		headers=self._headers,
-		# 		data=json.dumps(payload)
-		# 	)
-		# else:
-		# 	raise OrderException('No specified stop loss or take profit to modify.')
 
 		result = {}
 		# status_code = res.status_code
@@ -814,10 +710,6 @@ class Oanda(Broker):
 
 
 	def deletePosition(self, pos, lotsize, override=False):
-		if pos.account_id == tl.broker.PAPERTRADER_NAME:
-			return super().deletePosition(
-				pos, lotsize, override=override
-			)
 		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
@@ -831,23 +723,7 @@ class Oanda(Broker):
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
 
-		# if lotsize >= pos.lotsize: units = 'ALL'
-		# else: units = str(int(lotsize))
-
-		# payload = {
-		# 	'units': units
-		# }
-
-		# endpoint = f'/v3/accounts/{pos.account_id}/trades/{pos.order_id}/close'
-		# res = self._session.put(
-		# 	self._url + endpoint,
-		# 	headers=self._headers,
-		# 	data=json.dumps(payload)
-		# )
-
 		result = {}
-		# status_code = res.status_code
-		# res = res.json()
 		if status_code == 200:
 			if res.get('orderFillTransaction'):
 				result.update(self._wait(
@@ -919,49 +795,6 @@ class Oanda(Broker):
 		return result
 
 
-		# endpoint = f'/v3/accounts/{account_id}/pendingOrders'
-		# res = self._session.get(
-		# 	self._url + endpoint,
-		# 	headers=self._headers
-		# )
-
-		# if res.status_code == 200:
-		# 	result = {account_id: []}
-		# 	res = res.json()
-		# 	for order in res.get('orders'):
-		# 		if order.get('type') == 'LIMIT' or order.get('type') == 'STOP':
-		# 			order_id = order.get('id')
-		# 			product = order.get('instrument')
-		# 			direction = tl.LONG if float(order.get('units')) > 0 else tl.SHORT
-		# 			lotsize =  abs(float(order.get('units')))
-		# 			entry_price = float(order.get('price'))
-		# 			sl = None
-		# 			if order.get('stopLossOnFill'):
-		# 				sl = float(order['stopLossOnFill'].get('price'))
-		# 			tp = None
-		# 			if order.get('takeProfitOnFill'):
-		# 				tp = float(order['takeProfitOnFill'].get('price'))
-		# 			open_time = datetime.strptime(order.get('createTime').split('.')[0], '%Y-%m-%dT%H:%M:%S')
-
-		# 			if order.get('type') == 'LIMIT':
-		# 				order_type = tl.LIMIT_ORDER
-		# 			elif order.get('type') == 'STOP':
-		# 				order_type = tl.STOP_ORDER
-
-		# 			new_order = tl.Order(
-		# 				self,
-		# 				order_id, account_id, product, order_type,
-		# 				direction, lotsize, entry_price, sl, tp,
-		# 				tl.convertTimeToTimestamp(open_time)
-		# 			)
-
-		# 			result[account_id].append(new_order)
-
-		# 	return result
-		# else:
-		# 	return None
-
-
 	def getAllAccounts(self):
 
 		result = self.ctrl.brokerRequest(
@@ -971,23 +804,6 @@ class Oanda(Broker):
 		print(result)
 
 		return result
-
-		# endpoint = f'/v3/accounts'
-		# res = self._session.get(
-		# 	self._url + endpoint,
-		# 	headers=self._headers
-		# )
-
-		# result = []
-		# status_code = res.status_code
-		# data = res.json()
-		# if 200 <= status_code < 300:
-		# 	for account in data['accounts']:
-		# 		result.append(account.get('id'))
-
-		# 	return result
-		# else:
-		# 	return None
 
 
 	def getAccountInfo(self, account_id, override=False):
@@ -1003,35 +819,6 @@ class Oanda(Broker):
 
 		print(f'ACCOUNT INFO: {result}')
 
-		# endpoint = f'/v3/accounts/{account_id}'
-		# res = self._session.get(
-		# 	self._url + endpoint,
-		# 	headers=self._headers
-		# )
-
-		# result = {}
-		# status_code = res.status_code
-		# res = res.json()
-		# if 200 <= status_code < 300:
-		# 	result[account_id] = {
-		# 		'currency': res['account'].get('currency'),
-		# 		'balance': float(res['account'].get('balance')),
-		# 		'pl': float(res['account'].get('pl')),
-		# 		'margin': float(res['account'].get('marginUsed')),
-		# 		'available': float(res['account'].get('balance')) + float(res['account'].get('pl'))
-		# 	}
-			
-		# elif 400 <= status_code < 500:
-		# 	# Response error
-		# 	msg = 'No message available.'
-		# 	if res.get('errorMessage'):
-		# 		msg = res.get('errorMessage')
-
-		# 	raise BrokerException(msg)
-
-		# else:
-		# 	raise BrokerException('Oanda internal server error')
-
 		return result
 
 	def createOrder(self, 
@@ -1045,15 +832,6 @@ class Oanda(Broker):
 			status = 200
 		else:
 			_, status = key_or_login_required(self.brokerId, AccessLevel.DEVELOPER, disable_abort=True)
-		
-		if (status != 200 or account_id == tl.broker.PAPERTRADER_NAME):
-			return super().createOrder(
-				product, lotsize, direction,
-				account_id, order_type, entry_range, entry_price,
-				sl_range, tp_range, sl_price, tp_price,
-				override=override
-			)
-
 
 		broker_result = self.ctrl.brokerRequest(
 			self.name, self.brokerId, 'createOrder',
@@ -1065,86 +843,7 @@ class Oanda(Broker):
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
 
-		# # Flip lotsize if direction is short
-		# if direction == tl.SHORT: lotsize *= -1
-
-		# # Convert `entry_range` to `entry_price`
-		# if entry_range:
-		# 	entry_range = tl.convertToPrice(entry_range)
-		# 	if order_type == tl.LIMIT_ORDER:
-		# 		if direction == tl.LONG:
-		# 			entry_price = round(self.getAsk(product) - entry_range, 5)
-		# 		else:
-		# 			entry_price = round(self.getBid(product) + entry_range, 5)
-
-		# 	elif order_type == tl.STOP_ORDER:
-		# 		if direction == tl.LONG:
-		# 			entry_price = round(self.getAsk(product) + entry_range, 5)
-		# 		else:
-		# 			entry_price = round(self.getBid(product) - entry_range, 5)
-
-
-
-		# # Convert order_type to Oanda readable string
-		# payload_order_type = None
-		# if order_type == tl.LIMIT_ORDER:
-		# 	payload_order_type = 'LIMIT'
-		# elif order_type == tl.STOP_ORDER:
-		# 	payload_order_type = 'STOP'
-
-		# payload = {
-		# 	'order': {
-		# 		'price': str(entry_price),
-		# 		'instrument': product,
-		# 		'units': str(int(lotsize)),
-		# 		'type': payload_order_type,
-		# 		'timeInForce': 'FOK',
-		# 		'positionFill': 'DEFAULT',
-		# 	}
-		# }
-		
-		# if sl_price:
-		# 	payload['order']['stopLossOnFill'] = {
-		# 		'price': str(round(sl_price, 5))
-		# 	}
-
-		# elif sl_range:
-		# 	sl_range = tl.convertToPrice(sl_range)
-		# 	if direction == tl.LONG:
-		# 		sl_price = round(entry_price + sl_range, 5)
-		# 	else:
-		# 		sl_price = round(entry_price - sl_range, 5)
-
-		# 	payload['order']['stopLossOnFill'] = {
-		# 		'price': str(sl_price)
-		# 	}
-
-		# if tp_price:
-		# 	payload['order']['takeProfitOnFill'] = {
-		# 		'price': str(round(tp_price, 5))
-		# 	}
-
-		# elif tp_range:
-		# 	tp_range = tl.convertToPrice(tp_range)
-		# 	if direction == tl.LONG:
-		# 		tp_price = round(entry_price + tp_range, 5)
-		# 	else:
-		# 		tp_price = round(entry_price - tp_range, 5)
-
-		# 	payload['order']['takeProfitOnFill'] = {
-		# 		'price': str(tp_price)
-		# 	}
-
-		# endpoint = f'/v3/accounts/{account_id}/orders'
-		# res = self._session.post(
-		# 	self._url + endpoint,
-		# 	headers=self._headers,
-		# 	data=json.dumps(payload)
-		# )
-
 		result = {}
-		# status_code = res.status_code
-		# res = res.json()
 		if 200 <= status_code < 300:
 			print(json.dumps(res, indent=2))
 
@@ -1194,11 +893,6 @@ class Oanda(Broker):
 		return result
 
 	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price, override=False):
-		if order.account_id == tl.broker.PAPERTRADER_NAME:
-			return super().modifyOrder(
-				order, lotsize, entry_price, sl_price, tp_price, override=override
-			)
-
 		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
@@ -1212,45 +906,7 @@ class Oanda(Broker):
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
 
-		# payload_order_type = None
-		# if order.order_type == tl.LIMIT_ORDER:
-		# 	payload_order_type = 'LIMIT'
-		# elif order.order_type == tl.STOP_ORDER:
-		# 	payload_order_type = 'STOP'
-
-
-		# payload = {
-		# 	'order': {
-		# 		'price': str(entry_price),
-		# 		'instrument': order.product,
-		# 		'units': str(int(lotsize)),
-		# 		'type': payload_order_type,
-		# 		'timeInForce': 'FOK',
-		# 		'positionFill': 'DEFAULT',
-		# 	}
-		# }
-
-		# if sl_price:
-		# 	payload['order']['stopLossOnFill'] = {
-		# 		'price': str(round(sl_price, 5))
-		# 	}
-
-		# if tp_price:
-		# 	payload['order']['takeProfitOnFill'] = {
-		# 		'price': str(round(tp_price, 5))
-		# 	}
-
-
-		# endpoint = f'/v3/accounts/{order.account_id}/orders/{order.order_id}'
-		# res = self._session.put(
-		# 	self._url + endpoint,
-		# 	headers=self._headers,
-		# 	data=json.dumps(payload)
-		# )
-
 		result = {}
-		# status_code = res.status_code
-		# res = res.json()
 		if 200 <= status_code < 300:
 			if res.get('orderCancelTransaction'):
 				result.update(self._wait(
@@ -1313,9 +969,6 @@ class Oanda(Broker):
 		return result
 
 	def deleteOrder(self, order, override=False):
-		if order.account_id == tl.broker.PAPERTRADER_NAME:
-			return super().deleteOrder(order, override=override)
-		# Check auth
 		if not override:
 			key_or_login_required(self.brokerId, AccessLevel.DEVELOPER)
 
@@ -1328,15 +981,7 @@ class Oanda(Broker):
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
 
-		# endpoint = f'/v3/accounts/{order.account_id}/orders/{order.order_id}/cancel'
-		# res = self._session.put(
-		# 	self._url + endpoint,
-		# 	headers=self._headers
-		# )
-
 		result = {}
-		# status_code = res.status_code
-		# res = res.json()
 		if 200 <= status_code < 300:
 			print(json.dumps(res, indent=2))
 
@@ -1404,10 +1049,6 @@ class Oanda(Broker):
 
 
 	def _subscribe_chart_updates(self, instrument, listener):
-		# sub = Subscription(Subscription.CHART, listener, [product])
-		# self._subscriptions.append(sub)
-		# self._perform_chart_connection(sub)	
-
 		print(f'SUBSCRIBE CHART: {instrument}')
 		stream_id = self.generateReference()
 		res = self.ctrl.brokerRequest(
@@ -1474,10 +1115,6 @@ class Oanda(Broker):
 				)
 			else:
 				bid = float(update.get('bids')[:3][-1].get('price'))
-
-			# print(np.around((ask + bid)/2, decimals=5))
-			# print(bid)
-			# print(f'Ask: {ask}, Mid: {np.around((ask + bid)/2, decimals=5)}, Mid (^): {math.ceil((ask + bid)/2)}, Mid (v): {math.floor((ask + bid)/2)}, Bid: {bid}')
 
 			if update_time is not None:
 				# Convert time to datetime
@@ -1652,6 +1289,23 @@ class Oanda(Broker):
 		res = {}
 		if update.get('type') == 'HEARTBEAT':
 			self._last_update = time.time()
+
+		elif update.get('type') == 'connected':
+			if not self.is_dummy and self.userAccount and self.brokerId:
+				print(f'[_on_account_update] CONNECTED, Retrieving positions/orders')
+				self._handle_live_strategy_setup()
+
+				res.update({
+					self.generateReference(): {
+						'timestamp': time.time(),
+						'type': 'update',
+						'accepted': True,
+						'item': {
+							'positions': self.positions,
+							'orders': self.orders
+						}
+					}
+				})
 
 		elif update.get('type') == 'ORDER_FILL':
 			if self._handled.get(update.get('id')):

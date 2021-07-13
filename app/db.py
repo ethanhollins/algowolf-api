@@ -343,6 +343,12 @@ class Database(object):
 		if user is None:
 			return False
 
+		script_id = strategy['package'].split('.')[0]
+		# Check package not already in use
+		for strategy_id in user['strategies']:
+			if user['strategies'][strategy_id].get('package').split('.')[0] == script_id:
+				return False
+
 		# Make sure id is unique
 		strategy_id = self.generateId()
 		while strategy_id in user['strategies']:
@@ -354,7 +360,7 @@ class Database(object):
 		result = self.updateUser(user_id, update)
 		
 		# Add strategy to storage
-		self.initStrategyStorage(user_id, strategy_id, strategy['name'])
+		self.initStrategyStorage(user_id, strategy_id, strategy['name'], script_id)
 		
 		return strategy_id
 
@@ -496,6 +502,7 @@ class Database(object):
 			}
 		
 		elif broker_name == tl.broker.OANDA_NAME:
+			print(props)
 			if props.get('key') is None:
 				raise BrokerException('Invalid data submitted.')
 			if props.get('is_demo') is None:
@@ -647,14 +654,19 @@ class Database(object):
 	Strategy Storage Functions
 	'''
 
-	def initStrategyStorage(self, user_id, strategy_id, name):
-		empty_gui = {
-			'name': name,
-			'pages': 1,
-			'windows': [],
-			'drawings': {}
-		}
-		self.updateStrategyGui(user_id, strategy_id, empty_gui)
+	def initStrategyStorage(self, user_id, strategy_id, name, script_id):
+		gui = self.getScriptGui(script_id)
+		print(f'[initStrategyStorage] GUI: {gui}')
+
+		if not (isinstance(gui, dict) and len(gui)):
+			gui = {
+				'name': name,
+				'pages': ["main"],
+				'windows': [],
+				'drawings': {}
+			}
+
+		self.updateStrategyGui(user_id, strategy_id, gui)
 	
 		empty_trades = { 'positions': [], 'orders': [] }
 		self.updateStrategyTrades(user_id, strategy_id, empty_trades)
@@ -775,6 +787,36 @@ class Database(object):
 		
 		except Exception:
 			return {}
+
+
+	def getScriptGui(self, script_id):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.scriptBucketName,
+				Key=f'{script_id}/gui.json.gz'
+			)
+			if res.get('Body'):
+				return json.loads(gzip.decompress(res['Body'].read()))
+			else:
+				return {}
+		
+		except Exception:
+			return {}
+
+
+	def getScriptFile(self, script_id, file_name):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.scriptBucketName,
+				Key=f'{script_id}/{file_name}.gz'
+			)
+			if res.get('Body'):
+				return gzip.decompress(res['Body'].read())
+			else:
+				return None
+		
+		except Exception:
+			return None
 
 
 	def updateStrategyGui(self, user_id, strategy_id, obj):

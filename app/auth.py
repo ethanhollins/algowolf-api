@@ -252,6 +252,7 @@ def get_all_brokers():
 @login_required
 def create_broker():
 	body = request.get_json(force=True)
+	print(body)
 	broker_id = body.get('broker_id')
 	name = body.get('name')
 	broker_name = body.get('broker')
