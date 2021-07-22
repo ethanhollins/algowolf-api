@@ -247,7 +247,7 @@ class Brokers(dict):
 		elif name == tl.broker.SPOTWARE_NAME:
 			accounts = options.get('accounts')
 			assets, symbols = self._get_spotware_items()
-			return tl.broker.Spotware(self.ctrl, is_demo, accounts=accounts, is_parent=True, assets=assets, symbols=symbols)
+			return tl.broker.Spotware(self.ctrl, is_demo, broker_id="PARENT", accounts=accounts, is_parent=True, assets=assets, symbols=symbols)
 		elif name == tl.broker.IB_NAME:
 			PARENT_PORT = 5000
 			tl.broker.IB(self.ctrl, port=PARENT_PORT, is_parent=True)

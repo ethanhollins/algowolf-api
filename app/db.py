@@ -529,6 +529,7 @@ class Database(object):
 			# if props.get('is_demo') is None:
 			# 	raise BrokerException('Invalid data submitted.')
 
+			print(f'[createBroker] creating dummy broker: {props}')
 			# Run broker API call check
 			dummy_broker = tl.broker.Spotware(
 				self.ctrl, props.get('is_demo'), props.get('access_token'), broker_id=broker_id, is_dummy=True
@@ -553,15 +554,15 @@ class Database(object):
 				}
 
 			# Check if account is already being used
-			for v in user['brokers'].values():
-				v = jwt.decode(
-					v, self.ctrl.app.config['SECRET_KEY'], 
-					algorithms=['HS256']
-				)
-				if v.get('accounts'):
-					for x in v['accounts']:
-						if str(account['id']) == str(x):
-							raise BrokerException('One or more accounts is already being used. Please delete the broker container that account and try again.')
+			# for v in user['brokers'].values():
+			# 	v = jwt.decode(
+			# 		v, self.ctrl.app.config['SECRET_KEY'], 
+			# 		algorithms=['HS256']
+			# 	)
+			# 	if v.get('accounts'):
+			# 		for x in v['accounts']:
+			# 			if str(account['id']) == str(x):
+			# 				raise BrokerException('One or more accounts is already being used. Please delete the broker container that account and try again.')
 
 		elif broker_name == tl.broker.IB_NAME:
 			print(f'ADDING IB: {broker_id}, {props}')
@@ -591,6 +592,7 @@ class Database(object):
 
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
+		print(f'[createBroker] set broker: {broker_id}, {key}')
 		user['brokers'][broker_id] = key
 
 		# Update changes

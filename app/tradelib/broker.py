@@ -655,6 +655,18 @@ class Broker(object):
 		]
 
 
+	def _create_empty_df(self, period):
+		if period == tl.period.TICK:
+			return pd.DataFrame(columns=['timestamp', 'ask', 'bid'], dtype=float).set_index('timestamp')
+		else:
+			return pd.DataFrame(columns=[
+				'timestamp', 
+				'ask_open', 'ask_high', 'ask_low', 'ask_close',
+				'mid_open', 'mid_high', 'mid_low', 'mid_close',
+				'bid_open', 'bid_high', 'bid_low', 'bid_close'
+			], dtype=float).set_index('timestamp')
+
+
 from .brokers import (
 	Oanda, FXCM, IG, Spotware, IB, Dukascopy
 )

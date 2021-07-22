@@ -75,9 +75,12 @@ class Oanda(Broker):
 
 		self._last_update = time.time()
 		self._subscriptions = []
+		self._account_update_queue = []
 		self._is_connected = False
 
 		self.is_auth = self._add_user()
+
+		Thread(target=self._handle_account_updates).start()
 
 		if not is_dummy:
 			for account_id in self.getAccounts():
@@ -171,11 +174,7 @@ class Oanda(Broker):
 		)
 
 		if 'error' in res:
-			result = pd.concat((
-				self._create_empty_asks_df(), 
-				self._create_empty_mids_df(), 
-				self._create_empty_bids_df()
-			))
+			result = self._create_empty_df(period)
 		else:
 			for i in res:
 				res[i] = { float(k):v for k,v in res[i].items() }
@@ -1284,66 +1283,78 @@ class Oanda(Broker):
 
 
 	def _on_account_update(self, account_id, update):
-		print(f'UPDATE: {account_id}, {update}')
+		self._account_update_queue.append((account_id, update))
 
-		res = {}
-		if update.get('type') == 'HEARTBEAT':
-			self._last_update = time.time()
 
-		elif update.get('type') == 'connected':
-			if not self.is_dummy and self.userAccount and self.brokerId:
-				print(f'[_on_account_update] CONNECTED, Retrieving positions/orders')
-				self._handle_live_strategy_setup()
+	def _handle_account_updates(self):
 
-				res.update({
-					self.generateReference(): {
-						'timestamp': time.time(),
-						'type': 'update',
-						'accepted': True,
-						'item': {
-							'positions': self.positions,
-							'orders': self.orders
-						}
-					}
-				})
+		while True:
+			if len(self._account_update_queue):
+				account_id, update = self._account_update_queue[0]
+				del self._account_update_queue[0]
 
-		elif update.get('type') == 'ORDER_FILL':
-			if self._handled.get(update.get('id')):
-				res.update(self._wait(update.get('id')))
+				print(f'UPDATE: {account_id}, {update}')
 
-			else:
-				res.update(self._handle_order_fill(account_id, update))
+				res = {}
+				if update.get('type') == 'HEARTBEAT':
+					self._last_update = time.time()
 
-		elif update.get('type') == 'STOP_LOSS_ORDER':
-			if self._handled.get(update.get('id')):
-				res.update(self._wait(update.get('id')))
+				elif update.get('type') == 'connected':
+					if not self.is_dummy and self.userAccount and self.brokerId:
+						print(f'[_on_account_update] CONNECTED, Retrieving positions/orders')
+						self._handle_live_strategy_setup()
 
-			else:
-				res.update(self._handle_stop_loss_order(update))
+						res.update({
+							self.generateReference(): {
+								'timestamp': time.time(),
+								'type': 'update',
+								'accepted': True,
+								'item': {
+									'positions': self.positions,
+									'orders': self.orders
+								}
+							}
+						})
 
-		elif update.get('type') == 'TAKE_PROFIT_ORDER':
-			if self._handled.get(update.get('id')):
-				res.update(self._wait(update.get('id')))
+				elif update.get('type') == 'ORDER_FILL':
+					if self._handled.get(update.get('id')):
+						res.update(self._wait(update.get('id')))
 
-			else:
-				res.update(self._handle_take_profit_order(update))
+					else:
+						res.update(self._handle_order_fill(account_id, update))
 
-		elif update.get('type') == 'LIMIT_ORDER' or update.get('type') == 'STOP_ORDER':
-			if self._handled.get(update.get('id')):
-				res.update(self._wait(update.get('id')))
+				elif update.get('type') == 'STOP_LOSS_ORDER':
+					if self._handled.get(update.get('id')):
+						res.update(self._wait(update.get('id')))
 
-			else:
-				res.update(self._handle_order_create(update))
+					else:
+						res.update(self._handle_stop_loss_order(update))
 
-		elif update.get('type') == 'ORDER_CANCEL':
-			if self._handled.get(update.get('id')):
-				res.update(self._wait(update.get('id')))
+				elif update.get('type') == 'TAKE_PROFIT_ORDER':
+					if self._handled.get(update.get('id')):
+						res.update(self._wait(update.get('id')))
 
-			else:
-				res.update(self._handle_order_cancel(update))
+					else:
+						res.update(self._handle_take_profit_order(update))
 
-		if len(res):
-			self.handleOnTrade(account_id, res)
+				elif update.get('type') == 'LIMIT_ORDER' or update.get('type') == 'STOP_ORDER':
+					if self._handled.get(update.get('id')):
+						res.update(self._wait(update.get('id')))
+
+					else:
+						res.update(self._handle_order_create(update))
+
+				elif update.get('type') == 'ORDER_CANCEL':
+					if self._handled.get(update.get('id')):
+						res.update(self._wait(update.get('id')))
+
+					else:
+						res.update(self._handle_order_cancel(update))
+
+				if len(res):
+					self.handleOnTrade(account_id, res)
+
+			time.sleep(0.1)
 
 
 	def isPeriodCompatible(self, period):

@@ -152,11 +152,7 @@ class Dukascopy(Broker):
 		)
 
 		if 'error' in res:
-			result = pd.concat((
-				self._create_empty_asks_df(), 
-				self._create_empty_mids_df(), 
-				self._create_empty_bids_df()
-			))
+			result = self._create_empty_df(period)
 		else:
 			timestamps = np.array(res['timestamp']).reshape(-1,1)
 			asks = np.array(res['asks'])

@@ -485,11 +485,7 @@ class Spotware(Broker):
 		)
 
 		if 'error' in res:
-			result = pd.concat((
-				self._create_empty_asks_df(), 
-				self._create_empty_mids_df(), 
-				self._create_empty_bids_df()
-			))
+			result = self._create_empty_df(period)
 		else:
 			result = pd.DataFrame.from_dict(res, dtype=float)
 			result.index = result.index.astype(int)
@@ -610,7 +606,7 @@ class Spotware(Broker):
 		order_id = str(pos['positionId'])
 		product = self._convert_sw_product(int(pos['tradeData']['symbolId']))
 		direction = tl.LONG if pos['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
-		lotsize = float(pos['tradeData']['volume'])
+		lotsize = self._convert_from_sw_lotsize(float(pos['tradeData']['volume']))
 		entry_price = float(pos['price'])
 		sl = None if pos.get('stopLoss') is None or float(pos['stopLoss']) == 0 else round(float(pos['stopLoss']), 5)
 		tp = None if pos.get('takeProfit') is None or float(pos['takeProfit']) == 0 else round(float(pos['takeProfit']), 5)
@@ -636,7 +632,7 @@ class Spotware(Broker):
 		order_id = str(order['orderId'])
 		product = self._convert_sw_product(int(order['tradeData']['symbolId']))
 		direction = tl.LONG if order['tradeData']['tradeSide'] == 'BUY' else tl.SHORT
-		lotsize = float(order['tradeData']['volume'])
+		lotsize = self._convert_from_sw_lotsize(float(order['tradeData']['volume']))
 
 		if order.get('stopLoss') is not None:
 			sl = round(float(order['stopLoss']), 5)
@@ -669,15 +665,18 @@ class Spotware(Broker):
 
 
 	def _get_all_positions(self, account_id):
+		print(f'[_get_all_positions] GET POSITIONS', flush=True)
 
 		result = self.ctrl.brokerRequest(
 			self.name, self.brokerId, '_get_all_positions',
 			account_id
 		)
+		print(f'[_get_all_positions] {result}', flush=True)
 
 		for account_id in result:
 			for i in range(len(result[account_id])):
 				result[account_id][i] = tl.Position.fromDict(self, result[account_id][i])
+		print(f'[_get_all_positions] {result}', flush=True)
 
 		# ref_id = self.generateReference()
 		# pos_req = o2.ProtoOAReconcileReq(
@@ -1581,10 +1580,10 @@ class Spotware(Broker):
 
 								# Partially Closed
 								else:
-									pos.lotsize -= float(update['order']['executedVolume'])
+									pos.lotsize -= self._convert_from_sw_lotsize(float(update['order']['executedVolume']))
 
 									del_pos = tl.Position.fromDict(self, pos)
-									del_pos.lotsize = float(update['order']['executedVolume'])
+									del_pos.lotsize = self._convert_from_sw_lotsize(float(update['order']['executedVolume']))
 									del_pos.close_price = float(update['order']['executionPrice'])
 									del_pos.close_time = float(update['order']['utcLastUpdateTimestamp']) / 1000
 
@@ -2091,6 +2090,14 @@ class Spotware(Broker):
 			tl.period.TWELVE_HOURS, tl.period.DAILY, 
 			tl.period.WEEKLY, tl.period.MONTHLY
 		]
+
+
+	def _convert_to_sw_lotsize(self, lotsize):
+		return round((round(lotsize, 2) * 10000000) / 100000) * 100000
+
+
+	def _convert_from_sw_lotsize(self, lotsize):
+		return round(lotsize / 10000000, 2)
 
 
 	def _convert_period(self, period):

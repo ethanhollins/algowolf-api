@@ -24,6 +24,8 @@ class Account(object):
 
 		self._user_validation()
 
+		self._replace_broker = {}
+
 		# Queues
 		self._queue = []
 		self._set_broker_queue = DictQueue()
@@ -384,10 +386,22 @@ class Account(object):
 		self._queue.append(queue_id)
 		while self._queue.index(queue_id) > 0: pass
 
+		print(f'[account.createBroker] {broker_id}, {broker_name}, {props}, {self._replace_broker}')
+
 		result = None
 		try:
-			if not broker_id in self.brokers:
-				result = self.ctrl.getDb().createBroker(self.userId, broker_id, name, broker_name, props)
+			# if not broker_id in self.brokers:
+			if broker_name in self._replace_broker:
+				broker_id = self._replace_broker[broker_name]
+				print(f'[account.createBroker] found replacement {broker_id}')
+				del self._replace_broker[broker_name]
+
+			if broker_id in self.brokers:
+				print(f'[account.createBroker] deleting old broker: {broker_id}')
+				self.brokers[broker_id].deleteChild()
+				del self.brokers[broker_id]
+
+			result = self.ctrl.getDb().createBroker(self.userId, broker_id, name, broker_name, props)
 		except Exception:
 			pass
 		
@@ -1011,43 +1025,8 @@ class Account(object):
 		return input_variables
 
 
-	# def updateInputVariables(self, strategy_id, account_code, script_id, input_variables):
-	# 	global_vars = self.getStrategyInputVariables(strategy_id, script_id)
-	# 	local_vars = self.getAccountInputVariables(strategy_id, account_code, script_id)
-
-	# 	# Process input variable changes
-	# 	for name in global_vars:
-	# 		if name in input_variables['global']:
-	# 			if (
-	# 				input_variables['global'][name]['type'] != 'header' and
-	# 				input_variables['global'][name]['type'] == global_vars[name]['type'] and
-	# 				global_vars[name]['value'] is not None
-	# 			):
-	# 				input_variables['global'][name]['value'] = global_vars[name]['value']
-
-	# 	for name in local_vars:
-	# 		if name in input_variables['local']:
-	# 			if (
-	# 				input_variables['local'][name]['type'] != 'header' and
-	# 				input_variables['local'][name]['type'] == local_vars[name]['type'] and
-	# 				local_vars[name]['value'] is not None
-	# 			):
-	# 				input_variables['local'][name]['value'] = local_vars[name]['value']
-
-	# 	global_vars = input_variables['global']
-	# 	local_vars = input_variables['local']
-	# 	self.updateStrategyInputVariables(strategy_id, script_id, global_vars)
-	# 	self.updateAccountInputVariables(strategy_id, account_code, script_id, local_vars)
-	# 	return input_variables
-
-
-	# def compileStrategy(self, strategy_id):
-	# 	strategy = self.getStrategyInfo(strategy_id)
-
-	# 	properties = strategy.compile()
-	# 	self.updateInputVariables(strategy_id, account_code, script_id, properties['input_variables'])
-
-	# 	return properties
+	def setBrokerReplacement(self, broker_name, broker_id):
+		self._replace_broker[broker_name] = broker_id
 
 
 	# Log Functions

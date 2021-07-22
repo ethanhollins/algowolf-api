@@ -898,12 +898,13 @@ def get_all_positions(strategy_id, broker_id, accounts):
 		accounts = re.split(', |,', accounts)
 		for acc in accounts:
 			res[acc] = broker.getAllPositions(acc)
+
 	else:
 		for pos in broker.getAllPositions():
 			if not pos['account_id'] in res:
 				res[pos['account_id']] = []
 			res[pos['account_id']].append(pos)
-
+		
 	return res, 200
 
 
@@ -2100,6 +2101,25 @@ def check_access_token_ept(access_token):
 		json.dumps(res, indent=2), status=200,
 		content_type='application/json'
 	)
+
+
+@bp.route("/brokers/replace/<broker_name>/<broker_id>", methods=("POST",))
+@auth.login_required
+def set_replace_broker_ept(broker_name, broker_id):
+	result = g.user.setBrokerReplacement(broker_name, broker_id)
+
+	if result:
+		res = { "message": "Success" }
+		return Response(
+			json.dumps(res, indent=2), status=200,
+			content_type='application/json'
+		)
+	else:
+		res = { "message": "Failed" }
+		return Response(
+			json.dumps(res, indent=2), status=400,
+			content_type='application/json'
+		)
 
 
 @bp.route("/ib/broker", methods=("POST",))

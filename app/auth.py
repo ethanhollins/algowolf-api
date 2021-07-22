@@ -342,6 +342,7 @@ def delete_broker(broker_id):
 @login_required
 def spotware_broker_auth():
 	code = request.args.get('code')
+	broker_id = request.args.get('broker_id')
 	print('SPOTWARE BROKER AUTH')
 	print(request.args)
 
