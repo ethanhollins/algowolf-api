@@ -419,6 +419,14 @@ class Account(object):
 
 
 	def deleteBroker(self, name):
+		if name in self.brokers:
+			try:
+				self.brokers[name].deleteChild()
+			except Exception:
+				pass
+			finally:
+				del self.brokers[name]
+
 		result = self.ctrl.getDb().deleteBroker(self.userId, name)
 		return result
 
@@ -554,6 +562,8 @@ class Account(object):
 
 		if items.get('account') != None:
 			gui['account'] = items.get('account')
+		if items.get('settings') != None:
+			gui['settings'] = items.get('settings')
 
 		self.updateStrategyGui(strategy_id, gui)
 		return result

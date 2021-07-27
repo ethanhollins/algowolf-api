@@ -166,11 +166,13 @@ class Database(object):
 				'metadata': {
 					'current_strategy': '',
 					'open_strategies': []
-				}
+				},
+				'registration_date': datetime.utcnow().isoformat(),
+				'analytics': {}
 			}
 		)
 
-		self.generateHolyGrailStrategy(user_id)
+		# self.generateHolyGrailStrategy(user_id)
 
 		return user_id
 
@@ -355,8 +357,12 @@ class Database(object):
 			strategy_id = self.generateId()
 		# Add strategy to db
 		user['strategies'][strategy_id] = strategy
+		user['metadata']['current_strategy'] = strategy_id
+		if strategy_id not in user['metadata']['open_strategies']:
+			user['metadata']['open_strategies'].append(strategy_id)
+
 		# Update changes
-		update = { 'strategies': user.get('strategies') }
+		update = { 'strategies': user.get('strategies'), 'metadata': user.get('metadata') }
 		result = self.updateUser(user_id, update)
 		
 		# Add strategy to storage
