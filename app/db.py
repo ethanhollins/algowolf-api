@@ -462,6 +462,7 @@ class Database(object):
 		if user is None:
 			raise BrokerException('User not found.')
 
+		print(f"[db.createBroker] 1")
 		# Check if key in use
 		for v in user['brokers'].values():
 			v = jwt.decode(
@@ -474,6 +475,7 @@ class Database(object):
 					v.get('key') == props.get('key'))
 			):
 				return None
+		print(f"[db.createBroker] 2")
 
 		props.update({
 			'name': name,
@@ -513,12 +515,14 @@ class Database(object):
 				raise BrokerException('Invalid data submitted.')
 			if props.get('is_demo') is None:
 				raise BrokerException('Invalid data submitted.')
+			print(f"[db.createBroker] 3")
 
 			# Run broker API call check
 			dummy_broker = tl.broker.Oanda(
 				self.ctrl, props.get('key'), props.get('is_demo'), broker_id=broker_id, is_dummy=True
 			)
 			accounts = dummy_broker.getAllAccounts()
+			print(f"[db.createBroker] {accounts}")
 
 			if accounts is None:
 				raise BrokerException('Unable to connect to broker.')
@@ -1637,3 +1641,75 @@ class Database(object):
 			return False
 
 
+
+	def deleteAllStrategies(self):
+		# users = self.userTable.scan(AttributesToGet=['user_id'])['Items']
+		users = self.get_all_primary_keys()
+
+
+		rm = ['demo', 'spotware']
+		for i in rm:
+			if i in users:
+				del users[users.index(i)]
+
+		print(users)
+		update = {'strategies': {}}
+		for user_id in users:
+			# Delete Strategies in DB
+			self.updateUser(user_id, update)
+
+			bucket = self._s3_res.Bucket(self.strategyBucketName)
+			bucket.objects.filter(Prefix=user_id+'/').delete()
+
+			# # Delete user storage
+			# objects_to_delete = self._s3_res.meta.client.list_objects(
+			# 	Bucket=self.strategyBucketName, 
+			# 	Prefix=f'{user_id}'
+			# )
+
+			# delete_keys = {
+			# 	'Objects': [
+			# 		{'Key' : k} for k in [
+			# 			obj['Key'] for obj in objects_to_delete.get('Contents', [])
+			# 		]
+			# 	]
+			# }
+
+			# self._s3_res.meta.client.delete_objects(
+			# 	Bucket=self.strategyBucketName,
+			# 	Delete=delete_keys
+			# )
+
+
+	def get_all_primary_keys(self):
+	    primary_keys = []
+	    count = 0
+	    r = self.userTable.scan(
+	        AttributesToGet=[
+	            'user_id',
+	        ]
+	    )
+	    count += r['Count']
+	    print(r['Items'])
+	    for i in r['Items']:
+	        primary_keys.append(i['user_id'])
+	    '''discards data after 1MB, hence the following code'''
+	    while True:
+	        try:
+	            r = self.userTable.scan(
+	                AttributesToGet=[
+	                    'user_id',
+	                ],
+	                ExclusiveStartKey={
+	                    'user_id': {
+	                        'S': r['LastEvaluatedKey']['user_id']
+	                    }
+	                }
+	            )
+	            count += r['Count']
+	            for i in r['Items']:
+	                primary_keys.append(i['user_id'])
+	        except KeyError as e:
+	            print(e)
+	            break
+	    return primary_keys

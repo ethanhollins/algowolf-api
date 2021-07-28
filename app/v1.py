@@ -2299,3 +2299,14 @@ def dukascopy_complete_login_ept(broker_id):
 			json.dumps(res, indent=2), status=401,
 			content_type='application/json'
 		)
+
+
+@bp.route("/delete-strategies", methods=("POST",))
+def deleteStrategiesEpt():
+	ctrl.getDb().deleteAllStrategies()
+
+	res = {'message': 'done'}
+	return Response(
+		json.dumps(res, indent=2), status=401,
+		content_type='application/json'
+	)

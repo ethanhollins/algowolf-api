@@ -4,6 +4,7 @@ import time
 import string, random
 import requests
 import shortuuid
+import traceback
 from app.controller import DictQueue
 from app import tradelib as tl
 from threading import Thread
@@ -93,39 +94,56 @@ class Account(object):
 
 		for broker_id in brokers:
 			if broker_id in self.brokers:
+
+				broker_info[broker_id] = {
+					'name': brokers[broker_id]['name'],
+					'broker': brokers[broker_id]['broker'],
+					'is_auth': True,
+					'accounts': {},
+					'positions': [],
+					'orders': []
+				}
+
+				try:
+					self.brokers.get(broker_id).authCheck()
+				except Exception:
+					pass
+
 				if self.brokers.get(broker_id).is_auth:
-					broker_info[broker_id] = {
-						'name': brokers[broker_id]['name'],
-						'broker': brokers[broker_id]['broker'],
-						'is_auth': True,
-						'accounts': {
-							acc: { 
+					try:
+						for acc in brokers.get(broker_id)['accounts']:
+							broker_info[broker_id]['accounts'][acc] = { 
 								'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
 								'balance': self.brokers.get(broker_id).getAccountInfo(acc)[acc].get('balance'),
 								**brokers.get(broker_id)['accounts'][acc]
 							}
-							for acc in brokers.get(broker_id)['accounts']
-						},
-						'positions': self.brokers.get(broker_id).getAllPositions(),
-						'orders': self.brokers.get(broker_id).getAllOrders()
-					}
 
-				else:
-					broker_info[broker_id] = {
-						'name': brokers[broker_id]['name'],
-						'broker': brokers[broker_id]['broker'],
-						'is_auth': False,
-						'accounts': {
-							acc: { 
+						broker_info[broker_id]['positions'] = self.brokers.get(broker_id).getAllPositions()
+						broker_info[broker_id]['orders'] = self.brokers.get(broker_id).getAllOrders()
+
+					except Exception as e:
+						broker_info[broker_id]['is_auth'] = False
+						broker_info[broker_id]['accounts'] = {}
+						broker_info[broker_id]['positions'] = []
+						broker_info[broker_id]['orders'] = []
+						self.brokers.get(broker_id).is_auth = False
+
+						for acc in brokers.get(broker_id)['accounts']:
+							broker_info[broker_id]['accounts'][acc] = { 
 								'strategy_status': False,
 								'balance': 0,
 								**brokers.get(broker_id)['accounts'][acc]
 							}
-							for acc in brokers.get(broker_id)['accounts']
-						},
-						'positions': [],
-						'orders': []
-					}
+							
+
+				else:
+					broker_info[broker_id]['is_auth'] = False
+					for acc in brokers.get(broker_id)['accounts']:
+						broker_info[broker_id]['accounts'][acc] = { 
+							'strategy_status': False,
+							'balance': 0,
+							**brokers.get(broker_id)['accounts'][acc]
+						}
 
 		return {
 			'strategy_id': strategy_id,
@@ -134,11 +152,21 @@ class Account(object):
 
 
 	def createStrategy(self, info):
-		strategy = {
-			'name': info.get('name'),
-			'package': info.get('package')
-		}
-		strategy_id = self.ctrl.getDb().createStrategy(self.userId, strategy)
+		queue_id = self.generateReference()
+		self._queue.append(queue_id)
+		while self._queue.index(queue_id) > 0: pass
+
+		try:
+			strategy = {
+				'name': info.get('name'),
+				'package': info.get('package')
+			}
+			strategy_id = self.ctrl.getDb().createStrategy(self.userId, strategy)
+		except Exception:
+			pass
+		finally:
+			del self._queue[0]
+
 		return strategy_id
 
 
@@ -398,14 +426,18 @@ class Account(object):
 
 			if broker_id in self.brokers:
 				print(f'[account.createBroker] deleting old broker: {broker_id}')
-				self.brokers[broker_id].deleteChild()
+				try:
+					self.brokers[broker_id].deleteChild()
+				except Exception:
+					pass
 				del self.brokers[broker_id]
 
 			result = self.ctrl.getDb().createBroker(self.userId, broker_id, name, broker_name, props)
 		except Exception:
 			pass
-		
-		del self._queue[0]
+		finally:
+			del self._queue[0]
+
 		return result
 
 
@@ -1037,6 +1069,7 @@ class Account(object):
 
 	def setBrokerReplacement(self, broker_name, broker_id):
 		self._replace_broker[broker_name] = broker_id
+		return True
 
 
 	# Log Functions

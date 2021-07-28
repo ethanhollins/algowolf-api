@@ -470,11 +470,16 @@ class Oanda(Broker):
 			account_id
 		)
 
-		for account_id in result:
-			for i in range(len(result[account_id])):
-				result[account_id][i] = tl.Position.fromDict(self, result[account_id][i])
+		if result is not None and not 'error' in result:
+			for account_id in result:
+				for i in range(len(result[account_id])):
+					result[account_id][i] = tl.Position.fromDict(self, result[account_id][i])
 
-		return result
+			return result
+
+		else:
+			self.is_auth = False
+			return { account_id: [] }
 
 
 	def _handle_tp_sl(self, order, sl_range, tp_range, sl_price, tp_price):
@@ -551,6 +556,22 @@ class Oanda(Broker):
 					))
 
 		return result
+
+
+	def authCheck(self):
+		account_id = list(self.getAccounts().keys())[0]
+
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'authCheck',
+			account_id
+		)
+		print(result)
+
+		if result is not None and result.get('result'):
+			self.is_auth = True
+		else:
+			self.is_auth = False
+
 
 
 	def convertToLotsize(self, size):
@@ -787,11 +808,15 @@ class Oanda(Broker):
 			account_id
 		)
 
-		for account_id in result:
-			for i in range(len(result[account_id])):
-				result[account_id][i] = tl.Order.fromDict(self, result[account_id][i])
+		if result is not None and not 'error' in result:
+			for account_id in result:
+				for i in range(len(result[account_id])):
+					result[account_id][i] = tl.Order.fromDict(self, result[account_id][i])
 
-		return result
+			return result
+		else:
+			self.is_auth = False
+			return { account_id: [] }
 
 
 	def getAllAccounts(self):
