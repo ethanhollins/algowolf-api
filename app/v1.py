@@ -1887,9 +1887,8 @@ def delete_holygrail_user_ept():
 def authorize_holygrail_user_ept(user_id):
 	
 	if user_id in [
-		'L8qaPZNsLnyHugrqMaPPDY', '8M5LU6uEZY9DDiH8nftqEH',
-		'WbcHtB9iqBkehm3YvAGMzd', 'bgAATeNkqpn4LP6mt85Fsy',
-		'8vRJ4PsyoShJsHbgwbJbNt'
+		'8M5LU6uEZY9DDiH8nftqEH',
+		'WbcHtB9iqBkehm3YvAGMzd', 'bgAATeNkqpn4LP6mt85Fsy'
 	]:
 		res = { 'authorized': True }
 		return Response(
