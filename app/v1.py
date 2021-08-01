@@ -2309,3 +2309,35 @@ def deleteStrategiesEpt():
 		json.dumps(res, indent=2), status=401,
 		content_type='application/json'
 	)
+
+
+@bp.route('/tos', methods=('GET',))
+@auth.login_required
+def check_tos_ept():
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	if user.get('registration_date'):
+		res = { 'read': True }
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+	else:
+		res = { 'read': False }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+	
+@bp.route('/tos', methods=('PUT',))
+@auth.login_required
+def update_tos_ept():
+	update = { 'registration_date': datetime.utcnow().isoformat() }
+	ctrl.getDb().updateUser(g.user.userId, update)
+
+	res = { 'read': True }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)

@@ -42,6 +42,7 @@ class Database(object):
 			self.strategyBucketName = 'algowolf-strategies'
 			self.scriptBucketName = 'algowolf-scripts-dev'
 
+		self.prodStrategyBucketName = 'algowolf-strategies'
 		self.prodUserTable = self._generate_table('algowolf-users')
 
 		self.analyticsTable = self._generate_table('algowolf-analytics')
@@ -673,10 +674,14 @@ class Database(object):
 		if not (isinstance(gui, dict) and len(gui)):
 			gui = {
 				'name': name,
+				"backgroundColor": "#FFFFFF",
 				'pages': ["main"],
 				'windows': [],
-				'drawings': {}
+				"settings": {"chart-settings": {"current": "Layout 1", "layouts": {"Layout 1": {"general": {"timezone": {"value": "America/New_York"}, "date-format": {"value": "DD MMM `YY  HH:mm"}, "font-size": {"value": 10}, "precision": {"value": "1/100000"}}, "appearance": {"body": {"enabled": True, "long": "#ffffff", "short": "#000000"}, "outline": {"enabled": True, "long": "#000000", "short": "#000000"}, "wick": {"enabled": True, "long": "#000000", "short": "#000000"}, "bid-ask-line": {"enabled": True, "ask": "#3498db", "bid": "#f39c12"}, "price-line": {"enabled": True, "value": "#3498db"}, "vert-grid-lines": {"enabled": True, "value": "#f0f0f0"}, "horz-grid-lines": {"enabled": True, "value": "#f0f0f0"}, "crosshair": {"enabled": True, "value": "#505050"}}, "trading": {"show-positions": {"enabled": True}, "show-orders": {"enabled": True}}}}}},
+				"account": strategy_id + ".papertrader"
 			}
+		else:
+			gui["account"] = strategy_id + ".papertrader"
 
 		self.updateStrategyGui(user_id, strategy_id, gui)
 	
@@ -1653,13 +1658,13 @@ class Database(object):
 				del users[users.index(i)]
 
 		print(users)
-		update = {'strategies': {}}
+		update = {'strategies': {}, 'metadata': { 'current_strategy': '', 'open_strategies': [] }}
+		bucket = self._s3_res.Bucket(self.prodStrategyBucketName)
 		for user_id in users:
 			# Delete Strategies in DB
-			self.updateUser(user_id, update)
+			self.updateProdUser(user_id, update)
 
-			bucket = self._s3_res.Bucket(self.strategyBucketName)
-			bucket.objects.filter(Prefix=user_id+'/').delete()
+			# bucket.objects.filter(Prefix=user_id+'/').delete()
 
 			# # Delete user storage
 			# objects_to_delete = self._s3_res.meta.client.list_objects(
@@ -1684,7 +1689,7 @@ class Database(object):
 	def get_all_primary_keys(self):
 	    primary_keys = []
 	    count = 0
-	    r = self.userTable.scan(
+	    r = self.prodUserTable.scan(
 	        AttributesToGet=[
 	            'user_id',
 	        ]
@@ -1696,7 +1701,7 @@ class Database(object):
 	    '''discards data after 1MB, hence the following code'''
 	    while True:
 	        try:
-	            r = self.userTable.scan(
+	            r = self.prodUserTable.scan(
 	                AttributesToGet=[
 	                    'user_id',
 	                ],
@@ -1713,3 +1718,24 @@ class Database(object):
 	            print(e)
 	            break
 	    return primary_keys
+
+
+	def updateProdUser(self, user_id, update):
+		update_values = self._convert_to_decimal(
+			dict([tuple([':{}'.format(i[0]), i[1]])
+					for i in update.items()])
+		)
+
+		update_exp = ('set ' + ' '.join(
+			['{} = :{},'.format(k, k) for k in update.keys()]
+		))[:-1]
+
+		res = self.prodUserTable.update_item(
+			Key={
+				'user_id': user_id
+			},
+			UpdateExpression=update_exp,
+			ExpressionAttributeValues=update_values,
+			ReturnValues="UPDATED_NEW"
+		)
+		return True
