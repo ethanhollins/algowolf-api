@@ -672,6 +672,8 @@ class Account(object):
 		default_vars = self.ctrl.getDb().getScriptInputVariables(script_id)
 		account_vars = self.ctrl.getDb().getAccountInputVariables(self.userId, strategy_id, account_code, script_id)
 
+		print(f"[account.getAccountInputVariables] ({strategy_id})\nDefault: {default_vars}\nAccount: {account_vars}")
+
 		if len(account_vars) == 0:
 			account_vars['Preset 1'] = {}
 
@@ -693,6 +695,8 @@ class Account(object):
 
 		if update:
 			self.updateAccountInputVariables(strategy_id, account_code, script_id, result)
+		
+		print(f"[account.getAccountInputVariables] Result: {result}")
 		return result
 
 
