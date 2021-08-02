@@ -152,8 +152,8 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		**kwargs
 	):
-		# if tl.isWeekend(datetime.utcnow()):
-		if True:
+		if tl.isWeekend(datetime.utcnow()):
+		# if True:
 			return self._download_historical_data(
 				product, period, tz=tz, 
 				start=start, end=end, count=count,
