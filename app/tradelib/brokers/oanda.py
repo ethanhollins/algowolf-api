@@ -841,6 +841,9 @@ class Oanda(Broker):
 			account_id
 		)
 
+		for account_id in result:
+			result[account_id]['balance'] = self.ctrl.spots[result[account_id]['currency']].convertFrom(result[account_id]['balance'])
+
 		print(f'ACCOUNT INFO: {result}')
 
 		return result
