@@ -600,6 +600,35 @@ class Database(object):
 			props['accounts'] = {}
 			props['broker'] = tl.broker.DUKASCOPY_NAME
 			props['complete'] = False
+		
+		elif broker_name == tl.broker.FXOPEN_NAME:
+			print(props)
+			if props.get('key') is None:
+				raise BrokerException('Invalid data submitted.')
+			if props.get('web_api_id') is None:
+				raise BrokerException('Invalid data submitted.')
+			if props.get('web_api_secret') is None:
+				raise BrokerException('Invalid data submitted.')
+			if props.get('is_demo') is None:
+				raise BrokerException('Invalid data submitted.')
+			print(f"[db.createBroker] FXOPEN 3")
+
+			# Run broker API call check
+			dummy_broker = tl.broker.FXOpen(
+				self.ctrl, props.get('key'), props.get('web_api_id'), props.get('web_api_secret'), 
+				props.get('is_demo'), broker_id=broker_id, is_dummy=True
+			)
+			accounts = dummy_broker.getAllAccounts()
+			print(f"[db.createBroker] FXOPEN: {accounts}")
+
+			if accounts is None:
+				raise BrokerException('Unable to connect to broker.')
+
+			# Set Accounts Information
+			props['accounts'] = {
+				account_id: { 'active': True, 'nickname': '' }
+				for account_id in accounts
+			}
 
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')

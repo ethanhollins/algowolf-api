@@ -255,6 +255,10 @@ class Brokers(dict):
 			username = options.get('username')
 			password = options.get('password')
 			return tl.broker.Dukascopy(self.ctrl, username=username, password=password, is_demo=is_demo, broker_id='PARENT', is_parent=True)
+		elif name == tl.broker.FXOPEN_NAME:
+			web_api_id = options.get('web_api_id')
+			web_api_secret = options.get('web_api_secret')
+			return tl.broker.FXOpen(self.ctrl, key, web_api_id, web_api_secret, is_demo, broker_id='PARENT', is_parent=True)
 
 	def getBroker(self, name):
 		return self.get(name)

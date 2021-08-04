@@ -22,6 +22,7 @@ FXCM_NAME = 'fxcm'
 SPOTWARE_NAME = 'spotware'
 IB_NAME = 'ib'
 DUKASCOPY_NAME = 'dukascopy'
+FXOPEN_NAME = 'fxopen'
 PAPERTRADER_NAME = 'papertrader'
 
 '''
@@ -668,5 +669,5 @@ class Broker(object):
 
 
 from .brokers import (
-	Oanda, FXCM, IG, Spotware, IB, Dukascopy
+	Oanda, FXCM, IG, Spotware, IB, Dukascopy, FXOpen
 )

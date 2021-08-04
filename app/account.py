@@ -864,6 +864,8 @@ class Account(object):
 				else:
 					self.ctrl.getDb().deleteBroker(self.userId, broker_args['broker_id'])
 					return None
+			elif broker_name == tl.broker.FXOPEN_NAME:
+				self.brokers[broker_args['broker_id']] = tl.broker.FXOpen(**broker_args)
 
 		return self.brokers[broker_args['broker_id']]
 
