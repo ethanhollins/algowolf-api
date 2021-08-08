@@ -2347,7 +2347,23 @@ def update_tos_ept():
 def nab_result_ept():
 	
 	print("NAB RESULT:")
-	print(request.form)
+	print(f"DATA: {request.data}")
+	print(f"FORM: {request.form}")
+	print(f"ARGS: {request.args}")
+
+	res = { "message": "done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+@bp.route('/nab/callback', methods=('POST',))
+def nab_callback_ept():
+	
+	print("NAB CALLBACK:")
+	print(f"DATA: {request.data}")
+	print(f"FORM: {request.form}")
+	print(f"ARGS: {request.args}")
 
 	res = { "message": "done" }
 	return Response(
