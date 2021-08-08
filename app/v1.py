@@ -2341,3 +2341,16 @@ def update_tos_ept():
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
 	)
+
+
+@bp.route('/nab/result', methods=('POST',))
+def nab_result_ept():
+	
+	print("NAB RESULT:")
+	print(request.form)
+
+	res = { "message": "done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
