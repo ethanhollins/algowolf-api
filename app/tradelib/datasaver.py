@@ -510,28 +510,29 @@ class DataSaver(object):
 
 	def _save_data(self, product, period, data):
 		''' Save data to storage '''
-		start_ts = data.index.values[0]
-		start_dt = tl.convertTimestampToTime(start_ts)
-		end_ts = data.index.values[-1]
-		end_dt = tl.convertTimestampToTime(end_ts)
+		if data.size > 0:
+			start_ts = data.index.values[0]
+			start_dt = tl.convertTimestampToTime(start_ts)
+			end_ts = data.index.values[-1]
+			end_dt = tl.convertTimestampToTime(end_ts)
 
-		if period in (tl.period.TICK, tl.period.ONE_MINUTE):
-			c_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-			while c_dt < end_dt + timedelta(days=1):
-				path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{period}/{c_dt.strftime("%Y%m%d")}.csv.gz')
+			if period in (tl.period.TICK, tl.period.ONE_MINUTE):
+				c_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+				while c_dt < end_dt + timedelta(days=1):
+					path = os.path.join(ROOT_DIR, f'data/{self.broker.name}/{product}/{period}/{c_dt.strftime("%Y%m%d")}.csv.gz')
 
-				# Append data to existing file
-				c_data = data.loc[
-					(data.index >= tl.convertTimeToTimestamp(c_dt)) & 
-					(data.index < tl.convertTimeToTimestamp(c_dt + timedelta(days=1)))
-				]
-				if c_data.shape[0] > 0:
-					c_data.to_csv(path, sep=',', mode='a', header=False, compression='gzip')
+					# Append data to existing file
+					c_data = data.loc[
+						(data.index >= tl.convertTimeToTimestamp(c_dt)) & 
+						(data.index < tl.convertTimeToTimestamp(c_dt + timedelta(days=1)))
+					]
+					if c_data.shape[0] > 0:
+						c_data.to_csv(path, sep=',', mode='a', header=False, compression='gzip')
 
-				c_dt += timedelta(days=1)
+					c_dt += timedelta(days=1)
 
 
-		elif period in (tl.period.ONE_HOUR, tl.period.DAILY):
-			pass
+			elif period in (tl.period.ONE_HOUR, tl.period.DAILY):
+				pass
 
 
