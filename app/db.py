@@ -244,6 +244,21 @@ class Database(object):
 		)
 		return True
 
+	def getUserFile(self, user_id, file_name):
+		try:
+			res = self._s3_client.get_object(
+				Bucket=self.strategyBucketName,
+				Key=f'{user_id}/{file_name}.gz'
+			)
+			if res.get('Body'):
+				return gzip.decompress(res['Body'].read())
+			else:
+				return None
+		
+		except Exception:
+			return None
+
+
 	'''
 	Analytics
 	'''

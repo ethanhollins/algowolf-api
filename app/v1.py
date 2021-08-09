@@ -532,6 +532,50 @@ def get_strategy_account_info_ept(strategy_id, broker_id, account_id):
 	# )
 
 
+@bp.route('/users/<user_id>/file', methods=('POST',))
+def get_user_file_ept(user_id):
+	body = getJson()
+
+	result = None
+	file_name = body.get("file_name")
+	if (
+		file_name is not None and
+		user_id == "hgpro" or user_id == "demo"
+	):
+		file_name = file_name.replace('.gz', '')
+
+		file_type = None
+		if file_name.endswith('.csv'):
+			file_type = 'csv'
+		elif file_name.endswith('.json'):
+			file_type = 'json'
+		else:
+			return None
+
+		result = ctrl.getDb().getUserFile(user_id, file_name)
+
+		if result is not None:
+			if file_type == 'csv':
+				result = pd.read_csv(io.BytesIO(result), sep=',', dtype=str).to_dict()
+			elif file_type == 'json':
+				result = json.loads(result)
+			else:
+				result = None
+
+	if result is None:
+		res = { 'message': 'Bad Request.' }
+		return Response(
+			json.dumps(result, indent=2), 
+			status=400, content_type='application/json'
+		)
+	else:
+		res = { 'item': result }
+		return Response(
+			json.dumps(res, indent=2), 
+			status=200, content_type='application/json'
+		)
+
+
 @bp.route('/scripts/<script_id>', methods=('POST',))
 def update_script_ept(script_id):
 	body = getJson()
