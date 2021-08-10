@@ -2386,31 +2386,48 @@ def update_tos_ept():
 		status=200, content_type='application/json'
 	)
 
-
-@bp.route('/nab/result', methods=('POST',))
-def nab_result_ept():
-	
-	print("NAB RESULT:")
-	print(f"DATA: {request.data}")
-	print(f"FORM: {request.form}")
-	print(f"ARGS: {request.args}")
-
-	res = { "message": "done" }
-	return Response(
-		json.dumps(res, indent=2),
-		status=200, content_type='application/json'
-	)
-
 @bp.route('/nab/callback', methods=('POST',))
 def nab_callback_ept():
 	
 	print("NAB CALLBACK:")
-	print(f"DATA: {request.data}")
 	print(f"FORM: {request.form}")
-	print(f"ARGS: {request.args}")
 
-	res = { "message": "done" }
+	rescode = str(request.form.get("rescode"))
+
+	# On Success Code
+	if rescode == "00":
+		refid = str(request.form.get("refid"))
+		user_id = refid.split('|')[0]
+		product = refid.split('|')[1]
+		plan = refid.split('|')[2]
+
+		user = ctrl.getDb().getUser(user_id)
+
+		if user is not None:
+			# Add Purchase Verification
+			if "products" in user:
+				update = { "products": user["products"] }
+				update["products"][product] = plan
+			else:
+				update = { "products": { product: plan } }
+				
+			update = ctrl.getDb().updateUser(user_id, update)
+
+			# Create Strategy
+			account = ctrl.accounts.getAccount(user_id)
+			strategy_id = account.createStrategy({
+				"name": "",
+				"package": product + ".v1_0_0"
+			})
+
+			res = { "message": "Success" }
+			return Response(
+				json.dumps(res, indent=2),
+				status=200, content_type='application/json'
+			)
+
+	res = { "message": "Fail" }
 	return Response(
 		json.dumps(res, indent=2),
-		status=200, content_type='application/json'
+		status=400, content_type='application/json'
 	)

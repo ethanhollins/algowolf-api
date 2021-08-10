@@ -371,6 +371,13 @@ class Database(object):
 		strategy_id = self.generateId()
 		while strategy_id in user['strategies']:
 			strategy_id = self.generateId()
+
+		# Add strategy to storage
+		name = self.initStrategyStorage(user_id, strategy_id, strategy.get('name'), script_id)
+
+		if name is not None:
+			strategy['name'] = name
+
 		# Add strategy to db
 		user['strategies'][strategy_id] = strategy
 		user['metadata']['current_strategy'] = strategy_id
@@ -380,9 +387,6 @@ class Database(object):
 		# Update changes
 		update = { 'strategies': user.get('strategies'), 'metadata': user.get('metadata') }
 		result = self.updateUser(user_id, update)
-		
-		# Add strategy to storage
-		self.initStrategyStorage(user_id, strategy_id, strategy['name'], script_id)
 		
 		return strategy_id
 
@@ -741,7 +745,7 @@ class Database(object):
 		df = pd.DataFrame(columns=columns).set_index('timestamp')
 		self.updateStrategyTransactions(user_id, strategy_id, df)
 
-		return True
+		return gui.get("name")
 
 
 	def getStrategyGui(self, user_id, strategy_id):

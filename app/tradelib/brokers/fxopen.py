@@ -565,39 +565,14 @@ class FXOpen(Broker):
 		status_code = broker_result.get('status')
 		res = broker_result.get('result')
 
+		print(f"[FXOpen.createPosition] ({status_code}) {res}")
+
 		result = {}
 		# status_code = res.status_code
 		# res = res.json()
 		if 200 <= status_code < 300:
-			if res.get('orderFillTransaction'):
-				# Process entry
-				result.update(self._wait(
-					res['orderFillTransaction'].get('id'),
-					self._handle_order_fill, 
-					res['orderFillTransaction']
-				))
+			pass
 
-				# Handle stoploss and takeprofit
-				for i in copy(result).values():
-					result.update(
-						self._handle_tp_sl(i.get('item'), sl_range, tp_range, sl_price, tp_price)
-					)
-
-			else:
-				if res.get('orderCancelTransaction') is not None:
-					msg = res['orderCancelTransaction'].get('reason')
-				else:
-					msg = 'No message available.'
-
-				# Response error
-				result.update({
-					self.generateReference(): {
-						'timestamp': math.floor(time.time()),
-						'type': tl.MARKET_ORDER,
-						'accepted': False,
-						'message': msg
-					}
-				})
 		elif 400 <= status_code < 500:
 			# Response error
 			msg = 'No message available.'
@@ -612,6 +587,7 @@ class FXOpen(Broker):
 					'message': msg
 				}
 			})
+
 		else:
 			result.update({
 				self.generateReference(): {
@@ -643,19 +619,7 @@ class FXOpen(Broker):
 		# status_code = res.status_code
 		# res = res.json()
 		if 200 <= status_code < 300:
-			if res.get('stopLossOrderTransaction'):
-				result.update(self._wait(
-					res['stopLossOrderTransaction'].get('id'),
-					self._handle_stop_loss_order,
-					res['stopLossOrderTransaction']
-				))
-
-			if res.get('takeProfitOrderTransaction'):
-				result.update(self._wait(
-					res['takeProfitOrderTransaction'].get('id'),
-					self._handle_take_profit_order,
-					res['takeProfitOrderTransaction']
-				))
+			pass
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -706,30 +670,7 @@ class FXOpen(Broker):
 
 		result = {}
 		if status_code == 200:
-			if res.get('orderFillTransaction'):
-				result.update(self._wait(
-					res['orderFillTransaction'].get('id'),
-					self._handle_order_fill,
-					res['orderFillTransaction']
-				))
-
-			else:
-				msg = 'No message available.'
-				if res.get('orderCancelTransaction') is not None:
-					msg = res['orderCancelTransaction'].get('reason')
-
-				# Response error
-				result.update({
-					self.generateReference(): {
-						'timestamp': math.floor(time.time()),
-						'type': tl.POSITION_CLOSE,
-						'accepted': False,
-						'message': msg,
-						'item': {
-							'order_id': pos.order_id
-						}
-					}
-				})
+			pass
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -833,26 +774,7 @@ class FXOpen(Broker):
 
 		result = {}
 		if 200 <= status_code < 300:
-			print(json.dumps(res, indent=2))
-
-			if res.get('orderCancelTransaction'):
-				msg = res['orderCancelTransaction'].get('reason')
-
-				# Response error
-				result.update({
-					self.generateReference(): {
-						'timestamp': math.floor(time.time()),
-						'type': order_type,
-						'accepted': False,
-						'message': msg
-					}
-				})
-			elif res.get('orderCreateTransaction'):
-				result.update(self._wait(
-					res['orderCreateTransaction'].get('id'),
-					self._handle_order_create,
-					res['orderCreateTransaction']
-				))
+			pass
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -896,33 +818,7 @@ class FXOpen(Broker):
 
 		result = {}
 		if 200 <= status_code < 300:
-			if res.get('orderCancelTransaction'):
-				result.update(self._wait(
-					res['orderCancelTransaction'].get('id'),
-					self._handle_order_cancel,
-					res['orderCancelTransaction']
-				))
-
-			if res.get('replacingOrderCancelTransaction'):
-				result.update({
-					self.generateReference(): {
-						'timestamp': math.floor(time.time()),
-						'type': tl.MODIFY,
-						'accepted': False,
-						'message': res['replacingOrderCancelTransaction'].get('reason'),
-						'item': {
-							'order_id': order.order_id
-						}
-					}
-				})
-
-			else:
-				if res.get('orderCreateTransaction'):
-					result.update(self._wait(
-						res['orderCreateTransaction'].get('id'),
-						self._handle_order_create,
-						res['orderCreateTransaction']
-					))
+			pass
 				
 		elif 400 <= status_code < 500:
 			# Response error
@@ -971,14 +867,7 @@ class FXOpen(Broker):
 
 		result = {}
 		if 200 <= status_code < 300:
-			print(json.dumps(res, indent=2))
-
-			if res.get('orderCancelTransaction'):
-				result.update(self._wait(
-					res['orderCancelTransaction'].get('id'),
-					self._handle_order_cancel,
-					res['orderCancelTransaction']
-				))
+			pass
 
 		elif 400 <= status_code < 500:
 			# Response error
