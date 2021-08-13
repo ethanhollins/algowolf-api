@@ -9,6 +9,7 @@ import requests
 import shortuuid
 import traceback
 import pandas as pd
+from dateutil import parser
 from datetime import datetime
 from enum import Enum
 from flask import (
@@ -2046,7 +2047,7 @@ def send_reset_password_email_ept():
 			token = jwt.encode(jwt_payload, current_app.config['SECRET_KEY'], algorithm='HS256').decode('utf-8')
 			ctrl.getDb().addPasswordResetToken(token)
 
-			BASE_CLIENT_URL = current_app.config['BASE_CLIENT_URL']
+			BASE_CLIENT_URL = current_app.config['BASE_CLIENT_URL_FRONT']
 			payload = {
 				'email': email,
 				'entry_id': shortuuid.uuid(),
@@ -2430,4 +2431,43 @@ def nab_callback_ept():
 	return Response(
 		json.dumps(res, indent=2),
 		status=400, content_type='application/json'
+	)
+
+
+@bp.route('/analytics/page', methods=('POST',))
+@auth.login_required
+def update_analytics_page_count_ept():
+	body = getJson()
+
+	user = ctrl.getDb().getUser(g.user.userId)
+	page = body.get("page")
+	update = { "analytics": {} }
+	if user is not None and page is not None:
+		if user.get("analytics") is not None:
+			update["analytics"] = user["analytics"]
+			if update["analytics"].get("pages") is None:
+				update["analytics"]["pages"] = {}
+
+		else:
+			update["analytics"] = { "pages": {} }
+		
+		if page in update["analytics"]["pages"]:
+			lastVisit = parser.parse(update["analytics"]["pages"][page]["lastVisit"])
+			timeSinceLastVisit = (datetime.utcnow() - lastVisit).total_seconds()
+			ONE_DAY = 86400
+			if timeSinceLastVisit >= ONE_DAY:
+				update["analytics"]["pages"][page]["visits"] += 1
+				update["analytics"]["pages"][page]["lastVisit"] = datetime.utcnow().isoformat()
+		else:
+			update["analytics"]["pages"][page] = { 
+				"visits": 1,
+				"lastVisit": datetime.utcnow().isoformat()
+			}
+
+		ctrl.getDb().updateUser(g.user.userId, update)
+
+	res = { "message": "Done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
 	)
