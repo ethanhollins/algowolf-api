@@ -2404,7 +2404,7 @@ def nab_callback_ept():
 
 		user = ctrl.getDb().getUser(user_id)
 
-		if user is not None:
+		if user is not None and (plan == "hgpro_standard" or plan == "hgpro_professional"):
 			# Add Purchase Verification
 			if "products" in user:
 				update = { "products": user["products"] }
@@ -2427,10 +2427,10 @@ def nab_callback_ept():
 				status=200, content_type='application/json'
 			)
 
-	res = { "message": "Fail" }
+	res = { "message": "Done" }
 	return Response(
 		json.dumps(res, indent=2),
-		status=400, content_type='application/json'
+		status=200, content_type='application/json'
 	)
 
 

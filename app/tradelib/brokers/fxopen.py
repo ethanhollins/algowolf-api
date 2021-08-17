@@ -48,10 +48,11 @@ class FXOpen(Broker):
 
 		# Thread(target=self._handle_account_updates).start()
 
-		# if not is_dummy:
-		# 	for account_id in self.getAccounts():
-		# 		if account_id != tl.broker.PAPERTRADER_NAME:
-		# 			self._subscribe_account_updates(account_id)
+		if not is_dummy:
+			self.subscribeUpdates()
+			# for account_id in self.getAccounts():
+			# 	if account_id != tl.broker.PAPERTRADER_NAME:
+			# 		self._subscribe_account_updates(account_id)
 
 		# 	# Handle strategy
 		# 	if self.userAccount and self.brokerId:
@@ -1091,148 +1092,26 @@ class FXOpen(Broker):
 				chart.handleTick(result)
 
 
-	def _subscribe_account_updates(self, account_id):
+	def subscribeUpdates(self):
 		# sub = Subscription(Subscription.ACCOUNT, self._on_account_update, account_id)
 		# self._subscriptions.append(sub)
 		# self._perform_account_connection(sub)
 
-		print(f'SUBSCRIBE: {account_id}')
+		print(f'SUBSCRIBE')
 		stream_id = self.generateReference()
 		res = self.ctrl.brokerRequest(
-			'oanda', self.brokerId, '_subscribe_account_updates', stream_id, account_id
+			'fxopen', self.brokerId, 'subscribeUpdates', stream_id
 		)
-		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
+		self.ctrl.addBrokerListener(stream_id, self._on_update)
 
 
-	def _perform_account_connection(self, sub):
-		endpoint = f'/v3/accounts/{sub.args[0]}/transactions/stream'
-		req = Request(f'{self._stream_url}{endpoint}', headers=self._headers)
-		
-		try:
-			stream = urlopen(req, timeout=20)
-
-			sub.setStream(stream)
-			Thread(target=self._stream_account_update, args=(sub,)).start()
-		except Exception as e:
-			time.sleep(1)
-			print('[Oanda] Attempting account reconnect.')
-			Thread(target=self._perform_account_connection, args=(sub,)).start()
-			return
+	def _on_update(self, *args):
+		# self._account_update_queue.append((account_id, update))
+		print(f"[FXOpen] {args}")
 
 
-	def _stream_account_update(self, sub):
-		print(f'accounts connected. {self._is_connected}')
-		if not self._is_connected:
-			print('Send connected.')
-			self._is_connected = True
-			self._last_update = time.time()
-			# Run connected callback
-			# self.handleOnSessionStatus({
-			# 	'timestamp': math.floor(time.time()),
-			# 	'type': 'connected',
-			# 	'message': 'The session connected successfully.'
-			# })
-
-		while sub.receive:
-			try:
-				message = sub.stream.readline().decode('utf-8').rstrip()
-				if not message.strip():
-					sub.receive = False
-				else:
-					sub.listener(sub.args[0], json.loads(message))
-
-			except Exception as e:
-				print(traceback.format_exc())
-				sub.receive = False
-
-		# Reconnect
-		print('[Oanda] Account Updates Disconnected.')
-
-		if self._is_connected:
-			self._is_connected = False
-			# Run disconnected callback
-			# self.handleOnSessionStatus({
-			# 	'timestamp': math.floor(time.time()),
-			# 	'type': 'disconnected',
-			# 	'message': 'The session has been disconnected.'
-			# })
-
-		self._perform_account_connection(sub)
-
-
-	def _on_account_update(self, account_id, update):
-		self._account_update_queue.append((account_id, update))
-
-
-	def _handle_account_updates(self):
-
-		while True:
-			if len(self._account_update_queue):
-				account_id, update = self._account_update_queue[0]
-				del self._account_update_queue[0]
-
-				print(f'UPDATE: {account_id}, {update}')
-
-				res = {}
-				if update.get('type') == 'HEARTBEAT':
-					self._last_update = time.time()
-
-				elif update.get('type') == 'connected':
-					if not self.is_dummy and self.userAccount and self.brokerId:
-						print(f'[_on_account_update] CONNECTED, Retrieving positions/orders')
-						self._handle_live_strategy_setup()
-
-						res.update({
-							self.generateReference(): {
-								'timestamp': time.time(),
-								'type': 'update',
-								'accepted': True,
-								'item': {
-									'positions': self.positions,
-									'orders': self.orders
-								}
-							}
-						})
-
-				elif update.get('type') == 'ORDER_FILL':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_order_fill(account_id, update))
-
-				elif update.get('type') == 'STOP_LOSS_ORDER':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_stop_loss_order(update))
-
-				elif update.get('type') == 'TAKE_PROFIT_ORDER':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_take_profit_order(update))
-
-				elif update.get('type') == 'LIMIT_ORDER' or update.get('type') == 'STOP_ORDER':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_order_create(update))
-
-				elif update.get('type') == 'ORDER_CANCEL':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_order_cancel(update))
-
-				if len(res):
-					self.handleOnTrade(account_id, res)
-
-			time.sleep(0.1)
+	def _handle_updates(self):
+		return
 
 
 	def isPeriodCompatible(self, period):
