@@ -43,7 +43,7 @@ class FXCM(Broker):
 		self.time_off = 0
 		self._set_time_off()
 
-		if self.ctrl.app.config['IS_MAIN_STREAM']:
+		if not self.ctrl.app.config['IS_MAIN_STREAM']:
 			self.brokerRequest = self.ctrl.mainBrokerRequest
 		else:
 			self.brokerRequest = self.ctrl.brokerRequest
