@@ -464,6 +464,7 @@ class FXCM(Broker):
 
 
 	def onChartUpdate(self, *args):
+		print(f"[FXCM.onChartUpdate] {args}", flush=True)
 		self._price_queue.append(args)
 
 
