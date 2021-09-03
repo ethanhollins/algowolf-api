@@ -43,6 +43,11 @@ class FXCM(Broker):
 		self.time_off = 0
 		self._set_time_off()
 
+		if self.ctrl.app.config['IS_MAIN_STREAM']:
+			self.brokerRequest = self.ctrl.mainBrokerRequest
+		else:
+			self.brokerRequest = self.ctrl.brokerRequest
+
 		if is_parent:
 
 			# Create Connection to FXCM Container
@@ -84,8 +89,9 @@ class FXCM(Broker):
 
 	def _add_user(self):
 		print('Add User')
+		
 
-		res = self.ctrl.brokerRequest(
+		res = self.brokerRequest(
 			self.name, self.brokerId, 'add_user',
 			self.username, self.password, self.is_demo,
 			is_parent=self.is_parent
@@ -165,7 +171,7 @@ class FXCM(Broker):
 			end = tl.convertTimeToTimestamp(end)
 
 		# Count
-		res = self.ctrl.brokerRequest(
+		res = self.brokerRequest(
 			self.name, self.brokerId, '_download_historical_data_broker',
 			product, period, tz=tz, start=start, end=end,
 			count=count, **kwargs
@@ -173,27 +179,6 @@ class FXCM(Broker):
 
 		result = pd.DataFrame.from_dict(res, dtype=float)
 		result.index = result.index.astype(int)
-
-		# # Convert to result DF
-		# res = np.array(list(map(lambda x: list(x), res)))
-
-		# ask_prices = res[:, 5:9].astype(float)
-		# bid_prices = res[:, 1:5].astype(float)
-		# mid_prices = (ask_prices + bid_prices)/2
-		# timestamps = res[:, 0]
-		# prices = np.around(np.concatenate((ask_prices, mid_prices, bid_prices), axis=1), decimals=5)
-
-		# result = pd.DataFrame(
-		# 	index=pd.Index(timestamps).map(
-		# 		lambda x: int((x - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's'))
-		# 	).rename('timestamp'),
-		# 	columns=[
-		# 		'ask_open', 'ask_high', 'ask_low', 'ask_close',
-		# 		'mid_open', 'mid_high', 'mid_low', 'mid_close',
-		# 		'bid_open', 'bid_high', 'bid_low', 'bid_close'
-		# 	],
-		# 	data=prices
-		# )
 
 		return result
 
@@ -317,12 +302,8 @@ class FXCM(Broker):
 
 
 	def _subscribe_chart_updates(self, instrument, listener):
-		# if not tl.isWeekend(datetime.utcnow()) and self._login():
-		# if not tl.isWeekend(datetime.utcnow()):
-		# 	self.offers_listener.addInstrument(self._convert_product(instrument), listener)
-
 		stream_id = self.generateReference()
-		res = self.ctrl.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', stream_id, instrument)
+		res = self.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', stream_id, instrument)
 		self.ctrl.addBrokerListener(stream_id, listener)
 
 
@@ -337,7 +318,6 @@ class FXCM(Broker):
 
 				if update_time is not None:
 					# Convert time to datetime
-					# c_ts = tl.convertTimeToTimestamp(update_time)
 					c_ts = update_time
 
 					# Iterate periods
@@ -438,8 +418,6 @@ class FXCM(Broker):
 				if len(result):
 					chart.handleTick(result)
 
-				# print(result)
-
 			else:
 				for chart in self.charts:
 					c_ts = time.time()+self.time_off-1
@@ -481,9 +459,6 @@ class FXCM(Broker):
 			if time.time() - time_off_timer > ONE_HOUR:
 				time_off_timer = time.time()
 				self._set_time_off()
-
-			# if not self._is_logged_in():
-			# 	self._login()
 
 			time.sleep(0.01)
 
@@ -557,13 +532,6 @@ class FXCM(Broker):
 						np.amin(data.values[idx-passed_count:idx, 10]), data.values[idx-1, 11]
 					]
 
-				# print(data.values[idx-passed_count, 0])
-				# print(data.values[idx-passed_count:idx, 1])
-				# print(data.values[idx-passed_count:idx, 2])
-				# print(data.values[idx, 3])
-				# print(result[i])
-				# print('---------')
-
 			return pd.DataFrame(
 				index=data[bar_ends].index, data=result, 
 				columns=[ 
@@ -572,70 +540,6 @@ class FXCM(Broker):
 					'bid_open', 'bid_high', 'bid_low', 'bid_close'
 				]
 			)
-
-
-	# def _construct_bars(self, period, data, smooth=True):
-
-	# 	if not self._convert_period(period) is None:
-	# 		for i in range(1, data.shape[0]):
-	# 			data.values[i, 0] = data.values[i-1, 3]
-	# 			data.values[i, 4] = data.values[i-1, 7]
-	# 			data.values[i, 8] = data.values[i-1, 11]
-
-	# 		return data
-
-	# 	else:
-	# 		result = self._create_empty_df()
-
-	# 		first_data_ts = datetime.utcfromtimestamp(data.index.values[0]).replace(
-	# 			hour=0, minute=0, second=0, microsecond=0
-	# 		).timestamp()
-	# 		first_ts = data.index.values[0] - ((data.index.values[0] - first_data_ts) % tl.period.getPeriodOffsetSeconds(period))
-
-	# 		if first_ts != data.index.values[0]:
-	# 			first_ts = tl.utils.getNextTimestamp(period, first_ts, now=data.index.values[0])
-
-	# 		data = data.loc[data.index >= first_ts]
-	# 		c_ts = first_ts
-	# 		next_ts = tl.utils.getNextTimestamp(period, c_ts, now=c_ts)
-	# 		ohlc = data.values[0]
-	# 		for i in range(1, data.shape[0]):
-	# 			c_ohlc = data.values[i]
-	# 			ts = data.index.values[i]
-
-	# 			if ts >= next_ts:
-	# 				result.loc[c_ts] = ohlc
-	# 				new_ohlc = c_ohlc
-
-	# 				if smooth:
-	# 					new_ohlc[0] = ohlc[3]
-	# 					new_ohlc[4] = ohlc[7]
-	# 					new_ohlc[8] = ohlc[11]
-
-	# 				ohlc = new_ohlc
-	# 				c_ts = next_ts
-	# 				next_ts = tl.utils.getNextTimestamp(period, next_ts, now=ts)
-
-	# 			else:
-	# 				if c_ohlc[1] > ohlc[1]:
-	# 					ohlc[1] = c_ohlc[1]
-	# 				if c_ohlc[5] > ohlc[5]:
-	# 					ohlc[5] = c_ohlc[5]
-	# 				if c_ohlc[9] > ohlc[9]:
-	# 					ohlc[9] = c_ohlc[9]
-	# 				if c_ohlc[2] < ohlc[2]:
-	# 					ohlc[2] = c_ohlc[2]
-	# 				if c_ohlc[6] < ohlc[6]:
-	# 					ohlc[6] = c_ohlc[6]
-	# 				if c_ohlc[10] < ohlc[10]:
-	# 					ohlc[10] = c_ohlc[10]
-
-	# 				ohlc[3] = c_ohlc[3]
-	# 				ohlc[7] = c_ohlc[7]
-	# 				ohlc[11] = c_ohlc[11]
-
-
-	# 		return result
 
 
 	def _convert_product(self, product):
@@ -671,12 +575,3 @@ class FXCM(Broker):
 			return 'W1'
 		elif period == tl.period.MONTHLY:
 			return 'M1'
-
-# tl.period.ONE_MINUTE,
-# 			tl.period.TWO_MINUTES, tl.period.THREE_MINUTES,
-# 			tl.period.FIVE_MINUTES, tl.period.TEN_MINUTES,
-# 			tl.period.FIFTEEN_MINUTES, tl.period.THIRTY_MINUTES,
-# 			tl.period.ONE_HOUR, tl.period.TWO_HOURS, 
-# 			tl.period.THREE_HOURS, tl.period.FOUR_HOURS, 
-# 			tl.period.DAILY, tl.period.WEEKLY, 
-# 			tl.period.MONTHLY

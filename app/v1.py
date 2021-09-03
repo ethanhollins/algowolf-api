@@ -9,8 +9,10 @@ import requests
 import shortuuid
 import traceback
 import pandas as pd
+import stripe
+from stripe.error import CardError
 from dateutil import parser
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from flask import (
 	Blueprint, Response, flash, abort, current_app, 
@@ -25,6 +27,21 @@ from werkzeug.security import generate_password_hash
 from threading import Thread
 
 bp = Blueprint('v1', __name__, url_prefix='/v1')
+
+hg_pro_subscriptions = {
+	"hgpro_standard": {
+		"level": 0,
+		"product": "HolyGrail_Pro"
+	},
+	"hgpro_professional": {
+		"level": 1,
+		"product": "HolyGrail_Pro_professional"
+	},
+	"hgpro_hedge_fund": {
+		"level": 2,
+		"product": "HolyGrail_Pro_professional"
+	}
+}
 
 # `/strategy` ept
 
@@ -2467,6 +2484,176 @@ def update_analytics_page_count_ept():
 		ctrl.getDb().updateUser(g.user.userId, update)
 
 	res = { "message": "Done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/payments/pay/<plan>', methods=('POST',))
+@auth.login_required
+def create_payment_intent(plan):
+	body = getJson()
+	
+	email = body.get("email")
+	if not email:
+		res = { "message": "Bad request." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+	if plan == "hgpro_standard":
+		intent = stripe.PaymentIntent.create(
+			api_key=ctrl.app.config['STRIPE_API_KEY'],
+			amount=100,
+			currency="usd",
+			receipt_email=email
+		)
+	elif plan == "hgpro_professional":
+		intent = stripe.PaymentIntent.create(
+			api_key=ctrl.app.config['STRIPE_API_KEY'],
+			amount=100,
+			currency="usd",
+			receipt_email=email
+		)
+	else:
+		res = { "message": "Plan not found." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+	res = { "client_secret": intent["client_secret"] }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/payments/subscribe/<plan>', methods=('POST',))
+@auth.login_required
+def create_subscription(plan):
+	body = getJson()
+
+	user_id = body.get("user_id")
+	name = body.get("name")
+	address = body.get("address")
+	email = body.get("email")
+	payment_method = body.get("payment_method")
+
+	user = ctrl.getDb().getUser(user_id)
+
+	if not user or not user_id or not email or not payment_method or not address or not name or not plan:
+		res = { "message": "Bad request." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+	# Create a subscription and attach the customer to it
+	if not (
+		"products" in user and 
+		plan in user["products"] and 
+		user["products"][plan] <= hg_pro_subscriptions[plan]["level"]
+	):
+		# Create a new Customer and attach the default PaymentMethod
+		customer = stripe.Customer.create(
+			api_key=ctrl.app.config['STRIPE_API_KEY'],
+			payment_method=payment_method,
+			email=email,
+			name=name,
+			address=address,
+			invoice_settings={
+				"default_payment_method": payment_method
+			},
+			metadata={
+				"user_id": user_id
+			}
+		)
+
+		try:
+			if plan == "hgpro_standard":
+				subscription = stripe.Subscription.create(
+					api_key=ctrl.app.config['STRIPE_API_KEY'],
+					customer=customer["id"],
+					items=[{
+						"price": "price_1JRnMIBtSFeX56k3stqYyEj6",
+						"tax_rates": ["txr_1JQWGxBtSFeX56k3CHkZudRl"] 
+					}],
+					expand=["latest_invoice.payment_intent"]
+				)
+
+			elif plan == "hgpro_professional":
+				subscription = stripe.Subscription.create(
+					api_key=ctrl.app.config['STRIPE_API_KEY'],
+					customer=customer["id"],
+					items=[{
+						"price": "price_1JRnNHBtSFeX56k3jzh0rp9h",
+						"tax_rates": ["txr_1JQWGxBtSFeX56k3CHkZudRl"] 
+					}],
+					expand=["latest_invoice.payment_intent"]
+				)
+			
+			else:
+				res = { "message": "Plan not found." }
+				return Response(
+					json.dumps(res, indent=2),
+					status=400, content_type='application/json'
+				)
+
+		except CardError as e:
+			print(traceback.format_exc())
+			res = { "message": f"Card Error: {str(e)}" }
+			return Response(
+				json.dumps(res, indent=2),
+				status=400, content_type='application/json'
+			)
+
+		if plan == "hgpro_standard" or plan == "hgpro_professional" or  plan == "hgpro_hedge_fund":
+			# Add Purchase Verification
+			if "products" in user:
+				update = { "products": user["products"] }
+				update["products"][plan] = hg_pro_subscriptions[plan]["level"]
+			else:
+				update = { "products": { plan: hg_pro_subscriptions[plan]["level"] } }
+			
+			update = ctrl.getDb().updateUser(user_id, update)
+
+			# Create Strategy
+			account = ctrl.accounts.getAccount(user_id)
+			strategy_id = account.createStrategy({
+				"name": "",
+				"package": hg_pro_subscriptions[plan]["product"] + ".v1_0_0"
+			})
+	
+	else:
+		res = { "message": "Product already purchased." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+	status = subscription['latest_invoice']['payment_intent']['status'] 
+	client_secret = subscription['latest_invoice']['payment_intent']['client_secret']
+
+	res = {'status': status, 'client_secret': client_secret}
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/tests/broker/disconnect/<strategy_id>/<broker_id>', methods=('POST',))
+def disconnect_broker(strategy_id, broker_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+	account.startStrategy(strategy_id)
+	broker = account.brokers.get(broker_id)
+
+	broker.disconnectBroker()
+
+	res = { "message": "done" }
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'

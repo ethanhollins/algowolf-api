@@ -231,7 +231,8 @@ def check_auth():
 	res = {
 		'user_id': g.user.userId,
 		'first_name': user_info.get('first_name'),
-		'last_name': user_info.get('last_name')
+		'last_name': user_info.get('last_name'),
+		'email': user_info.get('email')
 	}
 	return Response(
 		json.dumps(res, indent=2),

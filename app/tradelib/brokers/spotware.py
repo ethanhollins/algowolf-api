@@ -24,6 +24,8 @@ class Spotware(Broker):
 		user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False, assets=None, symbols=None
 	):
+		print(f"SPOTWARE INIT: {strategy_id}")
+
 		self.strategyId = strategy_id
 		self.brokerId = strategy_id
 		self.accounts = accounts
@@ -2130,37 +2132,6 @@ class Spotware(Broker):
 		elif period == tl.period.MONTHLY:
 			return 14
 
-
-	# def _convert_sw_period(self, period):
-	# 	if period == 1:
-	# 		return tl.period.ONE_MINUTE
-	# 	elif period == 2:
-	# 		return tl.period.TWO_MINUTES
-	# 	elif period == 3:
-	# 		return tl.period.THREE_MINUTES
-	# 	elif period == 4:
-	# 		return tl.period.FOUR_MINUTES
-	# 	elif period == 5:
-	# 		return tl.period.FIVE_MINUTES
-	# 	elif period == 6:
-	# 		return tl.period.TEN_MINUTES
-	# 	elif period == 7:
-	# 		return tl.period.FIFTEEN_MINUTES
-	# 	elif period == 8:
-	# 		return tl.period.THIRTY_MINUTES
-	# 	elif period == 9:
-	# 		return tl.period.ONE_HOUR
-	# 	elif period == 10:
-	# 		return tl.period.FOUR_HOURS
-	# 	elif period == 11:
-	# 		return tl.period.TWELVE_HOURS
-	# 	elif period == 12:
-	# 		return tl.period.DAILY
-	# 	elif period == 13:
-	# 		return tl.period.WEEKLY
-	# 	elif period == 14:
-	# 		return tl.period.MONTHLY
-
 	def _convert_sw_period(self, period):
 		if period == 'M1':
 			return tl.period.ONE_MINUTE
@@ -2273,3 +2244,11 @@ class Spotware(Broker):
 		res = self.ctrl.brokerRequest(
 			'spotware', self.brokerId, 'deleteChild', self.brokerId
 		)
+
+	# TESTING
+	def disconnectBroker(self):
+		res = self.ctrl.brokerRequest(
+			'spotware', self.brokerId, 'disconnectBroker'
+		)
+
+		print(f"[disconnectBroker] {res}")

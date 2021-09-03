@@ -843,6 +843,19 @@ class Account(object):
 			print('ALREADY DONE')
 
 
+	def setTestBroker(self, broker_id, broker_name):
+		brokers = self.getAllBrokers()
+		if broker_id not in self.brokers:
+			if broker_name == tl.broker.PAPERTRADER_NAME:
+				pass
+			elif broker_name == tl.broker.OANDA_NAME:
+				pass
+			elif broker_name == tl.broker.SPOTWARE_NAME:
+				self.brokers[broker_id] = tl.broker.TestSpotware(self.ctrl, self, brokers[broker_name])
+			elif broker_name == tl.broker.FXOPEN_NAME:
+				pass
+
+
 	def _init_broker(self, broker_name, broker_args):
 		# Check if broker isn't already initialized
 		if broker_args['broker_id'] not in self.brokers:

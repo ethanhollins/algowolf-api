@@ -1,22 +1,16 @@
-import requests
-import asyncio
 import pandas as pd
 import numpy as np
-import json
 import time
 import math
 import traceback
-import dateutil.parser
-from urllib.request import urlopen, Request
-from urllib.parse import urlencode
-from copy import copy
+import ntplib
 from threading import Thread
-from datetime import datetime, timedelta
 from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
-from app.error import OrderException, BrokerException
 
+
+ONE_HOUR = 60*60
 
 class FXOpen(Broker):
 
@@ -42,51 +36,49 @@ class FXOpen(Broker):
 		self._last_update = time.time()
 		self._subscriptions = []
 		self._account_update_queue = []
-		self._is_connected = False
+		self.is_connected = False
+
+		self._price_queue = []
+		self.time_off = 0
+		self._set_time_off()
 
 		self.is_auth = self._add_user()
 
-		# Thread(target=self._handle_account_updates).start()
 
-		if not is_dummy:
-			self.subscribeUpdates()
+		if not is_dummy and not is_parent:
+			Thread(target=self._handle_account_updates).start()
+			self.subscribeAccountUpdates()
 			# for account_id in self.getAccounts():
 			# 	if account_id != tl.broker.PAPERTRADER_NAME:
 			# 		self._subscribe_account_updates(account_id)
 
-		# 	# Handle strategy
-		# 	if self.userAccount and self.brokerId:
-		# 		self._handle_live_strategy_setup()
+			# Handle strategy
+			if self.userAccount and self.brokerId:
+				self._handle_live_strategy_setup()
 
-		# print('FXOPEN INIT 1')
-		# if is_parent:
-		# 	# Load Charts
-		# 	CHARTS = ['EUR_USD']
-		# 	PERIODS = [tl.period.FIVE_SECONDS, tl.period.ONE_MINUTE]
-		# 	for instrument in CHARTS:
-		# 		chart = self.createChart(instrument, await_completion=True)
-		# 		# self.data_saver.subscribe(chart, PERIODS)
+		print('FXOPEN INIT 1')
+		if is_parent:
+			Thread(target=self._handle_price_updates).start()
+			# Load Charts
+			CHARTS = ['EUR_USD']
+			for instrument in CHARTS:
+				chart = self.createChart(instrument, await_completion=True)
+				# self.data_saver.subscribe(chart, PERIODS)
 
 
 	def _periodic_check(self):
 		TWENTY_SECONDS = 20
 		self._last_update = time.time()
-		# Check most recent Oanda `HEARTBEAT` was received or reconnect
+		# Send ping to server to check connection status
 		while self.is_running:
 			if time.time() - self._last_update > TWENTY_SECONDS:
 				print('RECONNECT')
-				if self._is_connected:
-					self._is_connected = False
-					# Run disconnected callback
-					self.handleOnSessionStatus({
-						'broker': self.name,
-						'timestamp': math.floor(time.time()),
-						'type': 'disconnected',
-						'message': 'The session has been disconnected.'
-					})
+				if self.is_connected:
+					self.is_connected = False
 
-					# Perform periodic refresh
-					self._reconnect()
+
+					self.client.send({})
+
 			time.sleep(5)
 
 		for sub in self._subscriptions:
@@ -120,6 +112,15 @@ class FXOpen(Broker):
 			return True
 
 
+	def _set_time_off(self):
+		try:
+			client = ntplib.NTPClient()
+			response = client.request('pool.ntp.org')
+			self.time_off = response.tx_time - time.time()
+		except Exception:
+			pass
+
+
 	def _download_historical_data(self, 
 		product, period, tz='Europe/London', 
 		start=None, end=None, count=None,
@@ -142,84 +143,118 @@ class FXOpen(Broker):
 		if 'error' in res:
 			result = self._create_empty_df(period)
 		else:
-			for i in res:
-				res[i] = { float(k):v for k,v in res[i].items() }
 			result = pd.DataFrame.from_dict(res, dtype=float)
 			result.index = result.index.astype(int)
 
 		return result
 
 
-	# Order Requests
+	def _convert_fxo_position(self, account_id, pos):
+		order_id = str(pos.get('Id'))
+		instrument = self.convertFromFXOInstrument(pos.get('Symbol'))
+		direction = tl.LONG if pos.get("Side") == "Buy" else tl.SHORT
 
+		if pos.get('RemainingAmount'):
+			lotsize = self.convertToLotsize(pos.get('RemainingAmount'))
+		else:
+			lotsize = self.convertToLotsize(pos.get('FilledAmount'))
 
-	def _handle_order_create(self, res):
-		oanda_id = res.get('id')
-		result = {}
+		if pos.get('StopPrice'):
+			entry_price = float(pos.get('StopPrice'))
+		else:
+			entry_price = float(pos.get('Price'))
+			
+		sl = None
+		if pos.get('StopLoss'):
+			sl = pos['StopLoss']
+		tp = None
+		if pos.get('TakeProfit'):
+			tp = pos['TakeProfit']
+		open_time = pos.get('Filled')/1000
 
-		if res.get('type') == 'LIMIT_ORDER':
+		if pos["InitialType"] == "Stop":
+			order_type = tl.STOP_ENTRY
+		elif pos["InitialType"] == "Limit":
+			order_type = tl.LIMIT_ENTRY
+		else:
+			order_type = tl.MARKET_ENTRY
+
+		return tl.Position(
+			self,
+			order_id, account_id, instrument,
+			order_type, direction, lotsize,
+			entry_price, sl, tp, open_time
+		)
+
+	
+	def _convert_fxo_order(self, account_id, order):
+		if order.get("Type") == "Limit":
 			order_type = tl.LIMIT_ORDER
-		elif res.get('type') == 'STOP_ORDER':
+		elif order.get("Type") == "Stop":
 			order_type = tl.STOP_ORDER
 		else:
-			return result
+			order_type = tl.MARKET_ORDER
 
-		order_id = res.get('id')
-		account_id = res.get('accountID')
-		product = res.get('instrument')
-		direction = tl.LONG if float(res.get('units')) > 0 else tl.SHORT
-		lotsize = self.convertToLotsize(abs(float(res.get('units'))))
-		entry_price = float(res.get('price'))
+		order_id = str(order.get('Id'))
+		instrument = self.convertFromFXOInstrument(order.get('Symbol'))
+		direction = tl.LONG if order.get("Side") == "Buy" else tl.SHORT
+		lotsize = self.convertToLotsize(order.get('RemainingAmount'))
+
+		if order.get('Price') is not None:
+			entry_price = float(order.get('Price'))
+		else:
+			entry_price = float(order.get('StopPrice'))
 
 		sl = None
-		if res.get('stopLossOnFill'):
-			if res['stopLossOnFill'].get('price'):
-				sl = float(res['stopLossOnFill'].get('price'))
-			elif res['stopLossOnFill'].get('distance'):
-				if direction == tl.LONG:
-					sl = entry_price + float(res['stopLossOnFill'].get('distance'))
-				else:
-					sl = entry_price - float(res['stopLossOnFill'].get('distance'))
-			
+		if order.get('StopLoss'):
+			sl = order['StopLoss']
 		tp = None
-		if res.get('takeProfitOnFill'):
-			tp = float(res['takeProfitOnFill'].get('price'))
+		if order.get('TakeProfit'):
+			tp = order['TakeProfit']
+		open_time = order.get('Modified')/1000
 
-		ts = tl.convertTimeToTimestamp(datetime.strptime(
-			res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-		))
-
-		order = tl.Order(
+		return tl.Order(
 			self,
-			order_id, account_id, product,
+			order_id, account_id, instrument,
 			order_type, direction, lotsize,
-			entry_price, sl, tp, ts
+			entry_price, sl, tp, open_time
 		)
-		self.orders.append(order)
 
-		result[self.generateReference()] = {
-			'timestamp': ts,
-			'type': order_type,
-			'accepted': True,
-			'item': order
-		}
 
-		# Add update to handled
-		self._handled[oanda_id] = result
+	def _handle_order_create(self, trade):
+
+		account_id = str(trade["AccountId"])
+
+		result = {}
+		client_id = trade.get("ClientId")
+		check_order = self.getOrderByID(str(trade["Id"]))
+		print(f"[_handle_order_create] 1: {check_order}")
+		if check_order is None:
+			order = self._convert_fxo_order(account_id, trade)
+			print(f"[_handle_order_create] 2: {order}")
+			self.orders.append(order)
+			print(f"[_handle_order_create] 3: {self.orders}")
+
+			result[self.generateReference()] = {
+				'timestamp': order.open_time,
+				'type': order.order_type,
+				'accepted': True,
+				'item': order
+			}
+			print(f"[_handle_order_create] 4: {result}")
+
+			if client_id is not None:
+				self._handled["ordercreate_" + client_id] = result
 
 		return result
 
 
-	def _handle_order_fill(self, account_id, res):
-		# Retrieve position information
-		oanda_id = res.get('id')
-		result = {}
+	def _handle_order_fill_close(self, trade):
 
-		ts = tl.convertTimeToTimestamp(datetime.strptime(
-			res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-		))
+		account_id = str(trade["AccountId"])
 
-		from_order = self.getOrderByID(res.get('orderID'))
+		# Delete any existing order reference
+		from_order = self.getOrderByID(str(trade["Id"]))
 		if from_order is not None:
 			del self.orders[self.orders.index(from_order)]
 
@@ -232,199 +267,173 @@ class FXOpen(Broker):
 				}
 			})
 
-		if res.get('tradeOpened'):
-			order_id = res['tradeOpened'].get('tradeID')
+		result = {}
+		client_id = trade.get("ClientId")
+		# Closed Position
+		pos = self.getPositionByID(str(trade["Id"]))
+		if pos is not None:
+			size = pos.lotsize - self.convertToLotsize(trade["RemainingAmount"])
 
-			account_id = res['accountID']
-			product = res.get('instrument')
-			direction = tl.LONG if float(res['tradeOpened'].get('units')) > 0 else tl.SHORT
-			lotsize = self.convertToLotsize(abs(float(res['tradeOpened'].get('units'))))
-			entry_price = float(res.get('price'))
-			
-			if res.get('reason') == 'LIMIT_ORDER':
-				order_type = tl.LIMIT_ENTRY
-			elif res.get('reason') == 'STOP_ORDER':
-				order_type = tl.STOP_ENTRY
-			else:
-				order_type = tl.MARKET_ENTRY
+			if size >= pos.lotsize:
+				if trade.get("Price"):
+					pos.close_price = trade["Price"]
+				else:
+					pos.close_price = trade["StopPrice"]
 
+				pos.close_time = trade["Modified"] / 1000
 
-			pos = tl.Position(
-				self,
-				order_id, account_id, product,
-				order_type, direction, lotsize,
-				entry_price, None, None, ts
-			)
-			self.positions.append(pos)
-
-			result[self.generateReference()] = {
-				'timestamp': ts,
-				'type': order_type,
-				'accepted': True,
-				'item': pos
-			}
-
-		if res.get('tradeReduced'):
-			order_id = res['tradeReduced'].get('tradeID')
-			pos = self.getPositionByID(order_id)
-
-			if pos is not None:
-				cpy = tl.Position.fromDict(self, pos)
-				cpy.lotsize = self.convertToLotsize(abs(float(res['tradeReduced'].get('units'))))
-				cpy.close_price = float(res['tradeReduced'].get('price'))
-				cpy.close_time = tl.convertTimeToTimestamp(datetime.strptime(
-					res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-				))
-
-				# Modify open position
-				pos.lotsize -= self.convertToLotsize(abs(float(res['tradeReduced'].get('units'))))
+				comment = trade.get("Comment")
+				if comment is not None and "TP" in comment:
+					order_type = tl.TAKE_PROFIT
+				elif comment is not None and "SL" in comment:
+					order_type = tl.STOP_LOSS
+				else:
+					order_type = tl.POSITION_CLOSE
 
 				result[self.generateReference()] = {
-					'timestamp': ts,
+					'timestamp': pos.close_price,
+					'type': order_type,
+					'accepted': True,
+					'item': pos
+				}
+				del self.positions[self.positions.index(pos)]
+			
+			else:
+				cpy = tl.Position.fromDict(self, pos)
+				cpy.lotsize = size
+
+				if trade.get("Price"):
+					cpy.close_price = trade["Price"]
+				else:
+					cpy.close_price = trade["StopPrice"]
+
+				cpy.close_time = trade["Modified"] / 1000
+
+				# Modify open position
+				pos.lotsize = self.convertToLotsize(trade["RemainingAmount"])
+
+				result[self.generateReference()] = {
+					'timestamp': cpy.close_price,
 					'type': tl.POSITION_CLOSE,
 					'accepted': True,
 					'item': cpy
 				}
-
-		if res.get('tradesClosed'):
-			if res.get('reason') == 'STOP_LOSS_ORDER':
-				order_type = tl.STOP_LOSS
-			elif res.get('reason') == 'TAKE_PROFIT_ORDER':
-				order_type = tl.TAKE_PROFIT
-			else:
-				order_type = tl.POSITION_CLOSE
-
-			for i in range(len(res['tradesClosed'])):
-				trade = res['tradesClosed'][i]
-				order_id = trade.get('tradeID')
-				pos = self.getPositionByID(order_id)
-				if pos is not None:
-					pos.close_price = float(trade.get('price'))
-					pos.close_time = tl.convertTimeToTimestamp(datetime.strptime(
-						res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-					))
-
-					result[self.generateReference()] = {
-						'timestamp': ts,
-						'type': order_type,
-						'accepted': True,
-						'item': pos
-					}
-					del self.positions[self.positions.index(pos)]
-
-
-
-		# Add update to handled
-		self._handled[oanda_id] = result
-
+			
+			if client_id is not None:
+				self._handled["fillclose_" + client_id] = result
+		
 		return result
 
 
-	def _handle_order_cancel(self, res):
-		oanda_id = res.get('id')
+	def _handle_order_fill_open(self, trade):
+		
+		print(f"[_handle_order_fill_open] {trade}")
+
+		account_id = str(trade["AccountId"])
+
+		# Delete any existing order reference
+		from_order = self.getOrderByID(str(trade["Id"]))
+		if from_order is not None:
+			del self.orders[self.orders.index(from_order)]
+
+			self.handleOnTrade(account_id, {
+				self.generateReference(): {
+					'timestamp': from_order.close_time,
+					'type': tl.ORDER_CANCEL,
+					'accepted': True,
+					'item': from_order
+				}
+			})
+
 		result = {}
+		client_id = trade.get("ClientId")
+		# Closed Position
+		
+		check_pos = self.getPositionByID(str(trade["Id"]))
+		if check_pos is None:
+			pos = self._convert_fxo_position(account_id, trade)
+			self.positions.append(pos)
 
-		order_id = res.get('orderID') 
-		order = self.getOrderByID(order_id)
-
-		ts = tl.convertTimeToTimestamp(datetime.strptime(
-			res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-		))
-		if order is not None:
-			order.close_time = ts
-			del self.orders[self.orders.index(order)]
 			result[self.generateReference()] = {
-				'timestamp': ts,
+				'timestamp': pos.open_time,
+				'type': pos.order_type,
+				'accepted': True,
+				'item': pos
+			}
+
+			if client_id is not None:
+				self._handled["fillopen_" + client_id] = result
+	
+		print(f"[_handle_order_fill_open] {result}")
+		print(f"[_handle_order_fill_open] {self._handled}")
+	
+		return result
+
+
+	def _handle_order_cancel(self, trade):
+
+		result = {}
+		client_id = trade.get("ClientId")
+		order = self.getOrderByID(str(trade["Id"]))
+		if order is not None:
+			order.close_time = trade["Modified"] / 1000
+			del self.orders[self.orders.index(order)]
+
+			result[self.generateReference()] = {
+				'timestamp': order.close_time,
 				'type': tl.ORDER_CANCEL,
 				'accepted': True,
 				'item': order
 			}
 
-			# Add update to handled
-			self._handled[oanda_id] = result
+			if client_id is not None:
+				self._handled["ordercancel_" + client_id] = result
+
+		return result
+
+
+	def _handle_modify(self, trade):
+		
+		result = {}
+		client_id = trade.get("ClientId")
+		
+		if trade["Type"] == "Position":
+			pos = self.getPositionByID(str(trade["Id"]))
+			if pos is not None:
+				pos.sl = trade.get("StopLoss")
+				pos.tp = trade.get("TakeProfit")
+
+				result[self.generateReference()] = {
+					'timestamp': trade["Modified"] / 1000,
+					'type': tl.MODIFY,
+					'accepted': True,
+					'item': pos
+				}
+
+				if client_id is not None:
+					self._handled["modify_" + client_id] = result
 
 		else:
-			for trade in self.positions:
-				if trade.sl_id == order_id:
-					trade.sl = None
-					trade.sl_id = None
+			order = self.getOrderByID(str(trade["Id"]))
+			if order is not None:
+				order.sl = trade.get("StopLoss")
+				order.tp = trade.get("TakeProfit")
+				order.lotsize = self.convertToLotsize(trade["RemainingAmount"])
 
-					result[self.generateReference()] = {
-						'timestamp': ts,
-						'type': tl.MODIFY,
-						'accepted': True,
-						'item': trade
-					}
+				if "StopPrice" in trade:
+					order.entry_price = trade["StopPrice"]
+				else:
+					order.entry_price = trade["Price"]
 
-				elif trade.tp_id == order_id:
-					trade.tp = None
-					trade.tp_id = None
+				result[self.generateReference()] = {
+					'timestamp': trade["Modified"] / 1000,
+					'type': tl.MODIFY,
+					'accepted': True,
+					'item': order
+				}
 
-					result[self.generateReference()] = {
-						'timestamp': ts,
-						'type': tl.MODIFY,
-						'accepted': True,
-						'item': trade
-					}
-
-			if result:
-				# Add update to handled
-				self._handled[oanda_id] = result
-
-		return result
-
-
-
-	def _handle_stop_loss_order(self, res):
-		oanda_id = res.get('id')
-		order_id = res.get('tradeID')
-		pos = self.getPositionByID(order_id)
-
-		result = {}
-		if pos is not None:
-			ts = tl.convertTimeToTimestamp(datetime.strptime(
-				res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-			))
-
-			pos.sl = float(res.get('price'))
-			pos.sl_id = oanda_id
-
-			result[self.generateReference()] = {
-				'timestamp': ts,
-				'type': tl.MODIFY,
-				'accepted': True,
-				'item': pos
-			}
-
-			# Add update to handled
-			self._handled[oanda_id] = result
-
-		return result
-
-
-	def _handle_take_profit_order(self, res):
-		oanda_id = res.get('id')
-		order_id = res.get('tradeID')
-		pos = self.getPositionByID(order_id)
-
-		result = {}
-		if pos is not None:
-			ts = tl.convertTimeToTimestamp(datetime.strptime(
-				res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
-			))
-
-			pos.tp = float(res.get('price'))
-			pos.tp_id = oanda_id
-
-			result[self.generateReference()] = {
-				'timestamp': ts,
-				'type': tl.MODIFY,
-				'accepted': True,
-				'item': pos
-			}
-
-			# Add update to handled
-			self._handled[oanda_id] = result
+				if client_id is not None:
+					self._handled["modify_" + client_id] = result
 
 		return result
 
@@ -446,82 +455,6 @@ class FXOpen(Broker):
 		else:
 			self.is_auth = False
 			return { account_id: [] }
-
-
-	def _handle_tp_sl(self, order, sl_range, tp_range, sl_price, tp_price):
-		payload = {}
-
-		# Handle Stop Loss
-		req_sl = None
-		if sl_price:
-			req_sl = round(sl_price, 5)
-		elif sl_range:
-			sl_range = tl.convertToPrice(sl_range)
-			if order['direction'] == tl.LONG:
-				req_sl = round(order['entry_price'] - sl_range, 5)
-
-			else:
-				req_sl = round(order['entry_price'] + sl_range, 5)
-
-		if req_sl is not None:
-			payload['stopLoss'] = {
-				'timeInForce': 'GTC',
-				'price': str(req_sl)
-			}
-
-		# Handle Take Profit
-		req_tp = None
-		if tp_price:
-			req_tp = round(tp_price, 5)
-		elif tp_range:
-			tp_range = tl.convertToPrice(tp_range)
-			if order['direction'] == tl.LONG:
-				req_tp = round(order['entry_price'] + tp_range, 5)
-
-			else:
-				req_tp = round(order['entry_price'] - tp_range, 5)
-
-		if req_tp is not None:
-			payload['takeProfit'] = {
-				'timeInForce': 'GTC',
-				'price': str(req_tp)
-			}
-
-		result = {}
-		if len(payload):
-			# endpoint = f'/v3/accounts/{order["account_id"]}/trades/{order["order_id"]}/orders'
-			# res = self._session.put(
-			# 	self._url + endpoint,
-			# 	headers=self._headers,
-			# 	data=json.dumps(payload)
-			# )
-
-			broker_result = self.ctrl.brokerRequest(
-				self.name, self.brokerId, 'modifyPosition',
-				order, req_sl, req_tp
-			)
-
-			print(f'HANDLE TP SL: {broker_result}')
-
-			status_code = broker_result.get('status')
-			res = broker_result.get('result')
-
-			if 200 <= status_code < 300:
-				if res.get('stopLossOrderTransaction'):
-					result.update(self._wait(
-						res['stopLossOrderTransaction'].get('id'),
-						self._handle_stop_loss_order,
-						res['stopLossOrderTransaction']
-					))
-
-				if res.get('takeProfitOrderTransaction'):
-					result.update(self._wait(
-						res['takeProfitOrderTransaction'].get('id'),
-						self._handle_take_profit_order,
-						res['takeProfitOrderTransaction']
-					))
-
-		return result
 
 
 	def authCheck(self):
@@ -572,7 +505,12 @@ class FXOpen(Broker):
 		# status_code = res.status_code
 		# res = res.json()
 		if 200 <= status_code < 300:
-			pass
+			result.update(self._wait(
+				"fillopen_" + str(res.get("ClientId")),
+				self._handle_order_fill_open, 
+				res
+			))
+			print(f"[FXOpen.createPosition] -> {result}")
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -595,7 +533,7 @@ class FXOpen(Broker):
 					'timestamp': math.floor(time.time()),
 					'type': tl.MARKET_ORDER,
 					'accepted': False,
-					'message': 'Oanda internal server error.'
+					'message': 'FXOpen internal server error.'
 				}
 			})
 		
@@ -620,7 +558,11 @@ class FXOpen(Broker):
 		# status_code = res.status_code
 		# res = res.json()
 		if 200 <= status_code < 300:
-			pass
+			result.update(self._wait(
+				"modify_" + str(res.get("ClientId")),
+				self._handle_modify, 
+				res
+			))
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -645,7 +587,7 @@ class FXOpen(Broker):
 					'timestamp': math.floor(time.time()),
 					'type': tl.MODIFY,
 					'accepted': False,
-					'message': 'Oanda internal server error.',
+					'message': 'FXOpen internal server error.',
 					'item': {
 						'order_id': pos.order_id
 					}
@@ -671,7 +613,11 @@ class FXOpen(Broker):
 
 		result = {}
 		if status_code == 200:
-			pass
+			result.update(self._wait(
+				"fillclose_" + str(res["Trade"].get("ClientId")),
+				self._handle_order_fill_close, 
+				res["Trade"]
+			))
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -696,7 +642,7 @@ class FXOpen(Broker):
 					'timestamp': math.floor(time.time()),
 					'type': tl.POSITION_CLOSE,
 					'accepted': False,
-					'message': 'Oanda internal server error.',
+					'message': 'FXOpen internal server error.',
 					'item': {
 						'order_id': pos.order_id
 					}
@@ -775,7 +721,11 @@ class FXOpen(Broker):
 
 		result = {}
 		if 200 <= status_code < 300:
-			pass
+			result.update(self._wait(
+				"ordercreate_" + str(res.get("ClientId")),
+				self._handle_order_create, 
+				res
+			))
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -797,7 +747,7 @@ class FXOpen(Broker):
 					'timestamp': math.floor(time.time()),
 					'type': order_type,
 					'accepted': False,
-					'message': 'Oanda internal server error.'
+					'message': 'FXOpen internal server error.'
 				}
 			})
 
@@ -819,7 +769,11 @@ class FXOpen(Broker):
 
 		result = {}
 		if 200 <= status_code < 300:
-			pass
+			result.update(self._wait(
+				"modify_" + str(res.get("ClientId")),
+				self._handle_modify, 
+				res
+			))
 				
 		elif 400 <= status_code < 500:
 			# Response error
@@ -844,7 +798,7 @@ class FXOpen(Broker):
 					'timestamp': math.floor(time.time()),
 					'type': tl.MODIFY,
 					'accepted': False,
-					'message': 'Oanda internal server error.',
+					'message': 'FXOpen internal server error.',
 					'item': {
 						'order_id': order.order_id
 					}
@@ -868,7 +822,11 @@ class FXOpen(Broker):
 
 		result = {}
 		if 200 <= status_code < 300:
-			pass
+			result.update(self._wait(
+				"ordercancel_" + str(res["Trade"].get("ClientId")),
+				self._handle_modify, 
+				res["Trade"]
+			))
 
 		elif 400 <= status_code < 500:
 			# Response error
@@ -893,7 +851,7 @@ class FXOpen(Broker):
 					'timestamp': math.floor(time.time()),
 					'type': tl.ORDER_CANCEL,
 					'accepted': False,
-					'message': 'Oanda internal server error.',
+					'message': 'FXOpen internal server error.',
 					'item': {
 						'order_id': order.order_id
 					}
@@ -903,111 +861,137 @@ class FXOpen(Broker):
 		return result
 
 
-	# Live utilities
-	def _reconnect(self):
-		for sub in copy(self._subscriptions):
-			sub.receive = False
-
-			# for i in copy(sub.res):
-			# 	i.close()
-			# 	del sub.res[sub.res.index(i)]
-
-			# try:
-			# 	if sub.sub_type == Subscription.ACCOUNT:
-			# 		self._perform_account_connection(sub)
-			# 	elif sub.sub_type == Subscription.CHART:
-			# 		self._perform_chart_connection(sub)
-
-			# except requests.exceptions.ConnectionError:
-			# 	return
-
-
-	def _encode_params(self, params):
-		return urlencode(dict([(k, v) for (k, v) in iter(params.items()) if v]))
-
-
 	def _subscribe_chart_updates(self, instrument, listener):
-		print(f'SUBSCRIBE CHART: {instrument}')
+		print(f'SUBSCRIBE')
 		stream_id = self.generateReference()
 		res = self.ctrl.brokerRequest(
-			'oanda', self.brokerId, '_subscribe_chart_updates', stream_id, instrument
+			'fxopen', self.brokerId, 'subscribe_price_updates', 
+			stream_id, instrument
 		)
 		self.ctrl.addBrokerListener(stream_id, listener)
 
 
-	def _perform_chart_connection(self, sub):
-		endpoint = f'/v3/accounts/{self.getAccounts()[0]}/pricing/stream'
-		params = self._encode_params({
-			'instruments': '%2C'.join(sub.args[0])
-		})
-		req = Request(f'{self._stream_url}{endpoint}?{params}', headers=self._headers)
+	def _handle_price_updates(self):
+		time_off_timer = time.time()
 
-		try:
-			stream = urlopen(req, timeout=20)
+		while True:
+			result = []
+			if len(self._price_queue):
+				chart, timestamp, ask, bid, volume = self._price_queue[0]
+				del self._price_queue[0]
 
-			sub.setStream(stream)
-			Thread(target=self._stream_price_updates, args=(sub,)).start()
-		except Exception as e:
-			time.sleep(1)
-			print('[Oanda] Attempting price reconnect.')
-			Thread(target=self._perform_chart_connection, args=(sub,)).start()
-			return
+				if timestamp is not None:
+					# Convert time to datetime
+					c_ts = timestamp
 
+					# Iterate periods
+					for period in chart.getActivePeriods():
+						if (isinstance(chart.bid.get(period), np.ndarray) and 
+							isinstance(chart.ask.get(period), np.ndarray)):
 
-	def _stream_price_updates(self, sub):
+							# Handle period bar end
+							if period != tl.period.TICK:
+								is_new_bar = chart.isNewBar(period, c_ts)
+								if is_new_bar:
+									print(f'NEW BAR: {chart.volume[period]}', flush=True)
+									if chart.volume[period] > 0:
+										print(f'ADD NEW BAR 1: {period}', flush=True)
+										chart.volume[period] = 0
+										result.append({
+											'broker': self.name,
+											'product': chart.product,
+											'period': period,
+											'bar_end': True,
+											'timestamp': chart.lastTs[period],
+											'item': {
+												'ask': chart.ask[period].tolist(),
+												'mid': chart.mid[period].tolist(),
+												'bid': chart.bid[period].tolist()
+											}
+										})
 
-		while sub.receive:
-			try:
-				message = sub.stream.readline().decode('utf-8').rstrip()
-				if not message.strip():
-					sub.receive = False
-				else:
-					sub.listener(json.loads(message))
+									chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
+									print(f'[FXOpen] ({period}) Prev: {chart.lastTs[period]}, Next: {chart.lastTs[period]}')
+									chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
+									chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
+									chart.mid[period] = np.array(
+										[np.around(
+											(chart.ask[period][3] + chart.bid[period][3])/2,
+											decimals=5
+										)]*4, 
+									dtype=np.float64)
 
-			except Exception as e:
-				print(traceback.format_exc())
-				sub.receive = False
+							chart.volume[period] += 1
 
-		# Reconnect
-		print('[Oanda] Price Updates Disconnected.')
-		self._perform_chart_connection(sub)
+							# Ask
+							if ask is not None:
+								chart.ask[period][1] = ask if ask > chart.ask[period][1] else chart.ask[period][1]
+								chart.ask[period][2] = ask if ask < chart.ask[period][2] else chart.ask[period][2]
+								chart.ask[period][3] = ask
 
+							# Bid
+							if bid is not None:
+								chart.bid[period][1] = bid if bid > chart.bid[period][1] else chart.bid[period][1]
+								chart.bid[period][2] = bid if bid < chart.bid[period][2] else chart.bid[period][2]
+								chart.bid[period][3] = bid
 
-	def onChartUpdate(self, chart, *args, **kwargs):
-		# print(f'CHART UPDATE: {args}')
+							# Mid
+							new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
+							new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
+							new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
 
-		update = args[0]
-		if update.get('type') == 'HEARTBEAT':
-			self._last_update = time.time()
+							chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
+							chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
+							chart.mid[period][3] = new_close
 
-		elif update.get('type') == 'PRICE':
-			update_time = update.get('time')
-			if len(update.get('asks')) == 0 or len(update.get('bids')) == 0:
-				return
-			ask = float(update.get('asks')[:3][-1].get('price'))
-			if len(update.get('bids')) >= 4:
-				bid = np.around(
-					(float(update.get('bids')[:4][-1].get('price')) +
-						float(update.get('bids')[:4][-2].get('price'))) / 2,
-					decimals=5
-				)
+							# Handle period bar info
+							result.append({
+								'broker': self.name,
+								'product': chart.product,
+								'period': period,
+								'bar_end': False,
+								'timestamp': max(c_ts, chart.lastTs[period]),
+								'item': {
+									'ask': chart.ask[period].tolist(),
+									'mid': chart.mid[period].tolist(),
+									'bid': chart.bid[period].tolist()
+								}
+							})
+
+						elif period == tl.period.TICK:
+							if ask is not None:
+								chart.ask[period] = ask
+							if bid is not None:
+								chart.bid[period] = bid
+							if bid is not None and ask is not None:
+								chart.mid[period] = np.around((ask + bid)/2, decimals=5)
+
+							result.append({
+								'broker': self.name,
+								'product': chart.product,
+								'period': period,
+								'bar_end': False,
+								'timestamp': c_ts,
+								'item': {
+									'ask': chart.ask[period],
+									'mid': chart.mid[period],
+									'bid': chart.bid[period]
+								}
+							})
+
+				if len(result):
+					chart.handleTick(result)
+
 			else:
-				bid = float(update.get('bids')[:3][-1].get('price'))
-
-			if update_time is not None:
-				# Convert time to datetime
-				c_ts = tl.convertTimeToTimestamp(dateutil.parser.isoparse(update_time))
-				result = []
-				# Iterate periods
-				for period in chart.getActivePeriods():
-					if (isinstance(chart.bid.get(period), np.ndarray) and 
-						isinstance(chart.ask.get(period), np.ndarray)):
-
-						# Handle period bar end
-						if period != tl.period.TICK:
+				for chart in self.charts:
+					c_ts = time.time()+self.time_off-1
+					for period in chart.getActivePeriods():
+						if period != tl.period.TICK and chart.volume[period] > 0:
+							# Handle period bar end
 							is_new_bar = chart.isNewBar(period, c_ts)
 							if is_new_bar:
-								bar_ts = chart.lastTs[period]
+								print(f'ADD NEW BAR 2: {period}', flush=True)
+								chart.volume[period] = 0
 								result.append({
 									'broker': self.name,
 									'product': chart.product,
@@ -1021,7 +1005,7 @@ class FXOpen(Broker):
 									}
 								})
 								chart.lastTs[period] = tl.getNextTimestamp(period, chart.lastTs[period], now=c_ts - tl.period.getPeriodOffsetSeconds(period))
-								print(f'[{period}] Prev: {bar_ts}, Next: {chart.lastTs[period]}')
+								print(f'[FXOpen] ({period}) Prev: {chart.lastTs[period]}, Next: {chart.lastTs[period]}')
 								chart.ask[period] = np.array([chart.ask[period][3]]*4, dtype=np.float64)
 								chart.bid[period] = np.array([chart.bid[period][3]]*4, dtype=np.float64)
 								chart.mid[period] = np.array(
@@ -1031,87 +1015,101 @@ class FXOpen(Broker):
 									)]*4, 
 								dtype=np.float64)
 
-						# Ask
-						if ask is not None:
-							chart.ask[period][1] = ask if ask > chart.ask[period][1] else chart.ask[period][1]
-							chart.ask[period][2] = ask if ask < chart.ask[period][2] else chart.ask[period][2]
-							chart.ask[period][3] = ask
-
-						# Bid
-						if bid is not None:
-							chart.bid[period][1] = bid if bid > chart.bid[period][1] else chart.bid[period][1]
-							chart.bid[period][2] = bid if bid < chart.bid[period][2] else chart.bid[period][2]
-							chart.bid[period][3] = bid
-
-						# Mid
-						if ask is not None and bid is not None:
-							new_high = np.around((chart.ask[period][1] + chart.bid[period][1])/2, decimals=5)
-							new_low = np.around((chart.ask[period][2] + chart.bid[period][2])/2, decimals=5)
-							new_close = np.around((chart.ask[period][3] + chart.bid[period][3])/2, decimals=5)
-
-							chart.mid[period][1] = new_high if new_high > chart.mid[period][1] else chart.mid[period][1]
-							chart.mid[period][2] = new_low if new_low < chart.mid[period][2] else chart.mid[period][2]
-							chart.mid[period][3] = new_close
-
-						# Handle period bar info
-						result.append({
-							'broker': self.name,
-							'product': chart.product,
-							'period': period,
-							'bar_end': False,
-							'timestamp': c_ts,
-							'item': {
-								'ask': chart.ask[period].tolist(),
-								'mid': chart.mid[period].tolist(),
-								'bid': chart.bid[period].tolist()
-							}
-						})
-
-					elif period == tl.period.TICK:
-						if ask is not None:
-							chart.ask[period] = ask
-						if bid is not None:
-							chart.bid[period] = bid
-						if bid is not None and ask is not None:
-							chart.mid[period] = np.around((ask + bid)/2, decimals=5)
-
-						result.append({
-							'broker': self.name,
-							'product': chart.product,
-							'period': period,
-							'bar_end': False,
-							'timestamp': c_ts,
-							'item': {
-								'ask': chart.ask[period],
-								'mid': chart.mid[period],
-								'bid': chart.bid[period]
-							}
-						})
-
-			if len(result):
-				chart.handleTick(result)
+					if len(result):
+						chart.handleTick(result)
 
 
-	def subscribeUpdates(self):
-		# sub = Subscription(Subscription.ACCOUNT, self._on_account_update, account_id)
-		# self._subscriptions.append(sub)
-		# self._perform_account_connection(sub)
+			if time.time() - time_off_timer > ONE_HOUR:
+				time_off_timer = time.time()
+				self._set_time_off()
 
+			time.sleep(0.01)
+
+
+	def onChartUpdate(self, *args):
+		self._price_queue.append(args)
+
+
+	def subscribeAccountUpdates(self):
 		print(f'SUBSCRIBE')
 		stream_id = self.generateReference()
 		res = self.ctrl.brokerRequest(
-			'fxopen', self.brokerId, 'subscribeUpdates', stream_id
+			'fxopen', self.brokerId, 'subscribe_account_updates', stream_id
 		)
-		self.ctrl.addBrokerListener(stream_id, self._on_update)
+		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 
-	def _on_update(self, *args):
-		# self._account_update_queue.append((account_id, update))
-		print(f"[FXOpen] {args}")
+	def _on_account_update(self, update):
+		self._account_update_queue.append(update)
 
 
-	def _handle_updates(self):
-		return
+	def _handle_account_updates(self):
+		
+		while True:
+			if len(self._account_update_queue):
+				update = self._account_update_queue[0]
+				del self._account_update_queue[0]
+
+				print(f"[FXOpen._handle_account_updates] {update}")
+
+				item = update.get("Result")
+				result = {}
+				account_id = None
+
+				if item is not None:
+					event = item.get("Event")
+					# On Filled Event
+					if event == "Filled":
+						# Position Updates
+						account_id = str(item["Trade"]["AccountId"])
+						if "Profit" in item:
+							item["Trade"]["Price"] = item["Fill"]["Price"]
+							result = self._handle_order_fill_close(item["Trade"])
+						else:
+							result = self._handle_order_fill_open(item["Trade"])
+				
+					# On Allocated Event
+					elif event == "Allocated":
+						if item["Trade"]["Type"] in ("Stop","Limit"):
+							account_id = str(item["Trade"]["AccountId"])
+							result = self._handle_order_create(item["Trade"])
+
+					# On Canceled Event
+					elif event == "Canceled":
+						account_id = str(item["Trade"]["AccountId"])
+						result = self._handle_order_cancel(item["Trade"])
+
+					# On Modified Event
+					elif event == "Modified":
+						account_id = str(item["Trade"]["AccountId"])
+						result = self._handle_modify(item["Trade"])
+
+				if len(result):
+					self.handleOnTrade(account_id, result)
+
+				
+
+
+	def convertFromFXOInstrument(self, instrument):
+		if instrument == "EURUSD":
+			return "EUR_USD"
+		else:
+			return instrument
+
+
+	def convertToFXOInstrument(self, instrument):
+		if instrument == "EUR_USD":
+			return "EURUSD"
+		else:
+			return instrument
+
+
+	def convertToLotsize(self, size):
+		return size / 100000
+
+
+	def convertToUnitSize(self, size):
+		return int(size * 100000)
 
 
 	def isPeriodCompatible(self, period):

@@ -46,8 +46,12 @@ class Controller(object):
 		self._msg_queue = {}
 		self._listeners = {}
 
-		self.sio = self.setupSio()
+		self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+
+		if not self.app.config['IS_MAIN_STREAM']:
+			self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
+			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
 		self.accounts = Accounts(self)
 		self.db = Database(self, app.config['ENV'])
@@ -79,11 +83,11 @@ class Controller(object):
 
 		return
 
-	def setupSio(self):
+	def setupSio(self, url):
 		while True:
 			try:
 				sio = socketio.Client()
-				sio.connect(self.app.config['STREAM_URL'], namespaces=['/admin'])
+				sio.connect(url, namespaces=['/admin'])
 				break
 			except socketio.exceptions.ConnectionError as e:
 				print(e)
@@ -136,6 +140,27 @@ class Controller(object):
 		}
 		try:
 			self.sio.emit('broker_cmd', data=data, namespace='/admin')
+			return self._wait_broker_response(msg_id)
+		except Exception:
+			print(traceback.format_exc())
+			return {
+				'error': 'No response.'
+			}
+
+
+	def mainBrokerRequest(self, broker, broker_id, func, *args, **kwargs):
+		msg_id = shortuuid.uuid()
+
+		data = {
+			'msg_id': msg_id,
+			'broker': broker,
+			'broker_id': broker_id,
+			'cmd': func,
+			'args': list(args),
+			'kwargs': kwargs
+		}
+		try:
+			self.main_sio.emit('broker_cmd', data=data, namespace='/admin')
 			return self._wait_broker_response(msg_id)
 		except Exception:
 			print(traceback.format_exc())

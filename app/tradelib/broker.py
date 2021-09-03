@@ -184,6 +184,7 @@ class Broker(object):
 				self.backtester.handleTakeProfit(product, ts_data[i], ohlc_data[i], is_backtest=True)
 
 	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=30):
+		print(f"[_wait] {ref}")
 		start = time.time()
 		while not ref in self._handled:
 			if time.time() - start >= timeout:
@@ -198,6 +199,7 @@ class Broker(object):
 						if trans_match is not None:
 							item is trans_match
 					return item
+			print(self._handled)
 			time.sleep(polling)
 		item = self._handled[ref]
 		del self._handled[ref]
@@ -669,5 +671,6 @@ class Broker(object):
 
 
 from .brokers import (
-	Oanda, FXCM, IG, Spotware, IB, Dukascopy, FXOpen
+	Oanda, FXCM, IG, Spotware, IB, Dukascopy, FXOpen, 
+	TestSpotware
 )

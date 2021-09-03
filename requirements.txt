@@ -41,6 +41,7 @@ service-identity==18.1.0
 shortuuid==1.0.1
 six==1.15.0
 socketIO-client==0.7.2
+stripe==2.60.0
 Twisted==20.3.0
 urllib3==1.26.2
 uWSGI==2.0.19.1
