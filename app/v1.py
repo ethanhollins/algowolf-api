@@ -106,6 +106,7 @@ def upload():
 @bp.route('/account', methods=('GET',))
 @auth.login_required
 def get_account_ept():
+	print("HELLO???")
 	res = g.user.getAccountDetails()
 	return Response(
 		json.dumps(res, indent=2),
