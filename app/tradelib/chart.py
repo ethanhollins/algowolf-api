@@ -83,18 +83,28 @@ class Chart(object):
 		# Use _load_data to load current bar
 		for period in periods:
 			df = self._load_data(period, count=2, force_download=True)
-			if not self.lastTs.get(period):
-				self.lastTs[period] = int(df.index.values[-1])
-				self.barReset[period] = False
-				self.ask[period] = df.values[-1][:4]
-				self.mid[period] = df.values[-1][4:8]
-				self.bid[period] = df.values[-1][8:]
+			if df.size > 0:
+				if not self.lastTs.get(period):
+					self.lastTs[period] = int(df.index.values[-1])
+					self.barReset[period] = False
+					self.ask[period] = df.values[-1][:4]
+					self.mid[period] = df.values[-1][4:8]
+					self.bid[period] = df.values[-1][8:]
 
-				self._subscriptions[period] = {}
+					self._subscriptions[period] = {}
 
-			if period == tl.period.ONE_MINUTE:
-				self.broker.save_data(df.iloc[:1], self.product, period)
+				if period == tl.period.ONE_MINUTE:
+					self.broker.save_data(df.iloc[:1], self.product, period)
+			else:
+				if not self.lastTs.get(period):
+					self.lastTs[period] = np.nan
+					self.barReset[period] = False
+					self.ask[period] = [np.nan]*4
+					self.mid[period] = [np.nan]*4
+					self.bid[period] = [np.nan]*4
 
+					self._subscriptions[period] = {}
+					
 
 	def _load_data(self, period, start=None, end=None, count=None, force_download=False):
 		print(f'[_load_data] {period}, {start}, {end}, {count}')

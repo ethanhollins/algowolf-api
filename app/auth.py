@@ -191,7 +191,6 @@ def check_login():
 def login_required(view):
 	@functools.wraps(view)
 	def wrapped_view(*args, **kwargs):
-		print("HELLO AUTH???")
 		res, status = check_login()
 		if status != 200:
 			return Response(

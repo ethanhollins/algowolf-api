@@ -61,9 +61,11 @@ class FXOpen(Broker):
 			Thread(target=self._handle_price_updates).start()
 			# Load Charts
 			CHARTS = ['EUR_USD']
+			print("CREATE CHARTS")
 			for instrument in CHARTS:
 				chart = self.createChart(instrument, await_completion=True)
 				# self.data_saver.subscribe(chart, PERIODS)
+			print("CREATE CHARTS DONE")
 
 
 	def _periodic_check(self):
