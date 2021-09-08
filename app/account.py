@@ -290,6 +290,10 @@ class Account(object):
 
 		session_key = self.generateSessionToken()
 
+		if self.ctrl.app.config.get("FORCE_SCRIPT"):
+			script_id = self.ctrl.app.config["FORCE_SCRIPT"].split('.')[0]
+			version = self.ctrl.app.config["FORCE_SCRIPT"].split('.')[1]
+
 		payload = {
 			'user_id': self.userId,
 			'strategy_id': strategy_id,

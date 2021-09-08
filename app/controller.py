@@ -65,6 +65,7 @@ class Controller(object):
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
 		])
 
+		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
 		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
 			Thread(target=self.restartScripts).start()
 		
@@ -174,11 +175,22 @@ class Controller(object):
 
 
 	def restartScripts(self):
+		print("RESTARTING SCRIPTS...")
 		all_users = self.getDb().getAllUsers()
 
+		server_number = self.app.config["SERVER"]
+		print(f"SERVER NUMBER: {server_number}")
 		for user in all_users:
 			user_id = user.get('user_id')
-			if 'strategies' in user:
+			user_server = user.get("server")
+			if user_server is None:
+				user_server = 0
+			else:
+				user_server = int(user_server)
+				
+			print(f"USER SERVER NUMBER: {user_server}, {server_number == user_server}")
+
+			if server_number == user_server and 'strategies' in user:
 				for strategy_id in user['strategies']:
 					if 'running' in user['strategies'][strategy_id]:
 						for broker_id in user['strategies'][strategy_id]['running']:

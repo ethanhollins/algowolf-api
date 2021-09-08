@@ -183,7 +183,7 @@ class FXOpen(Broker):
 
 		return tl.Position(
 			self,
-			order_id, account_id, instrument,
+			order_id, str(account_id), instrument,
 			order_type, direction, lotsize,
 			entry_price, sl, tp, open_time
 		)
@@ -217,7 +217,7 @@ class FXOpen(Broker):
 
 		return tl.Order(
 			self,
-			order_id, account_id, instrument,
+			order_id, str(account_id), instrument,
 			order_type, direction, lotsize,
 			entry_price, sl, tp, open_time
 		)
@@ -438,6 +438,35 @@ class FXOpen(Broker):
 					self._handled["modify_" + client_id] = result
 
 		return result
+
+	
+	def _handle_trades(self, trades):
+		new_positions = []
+		new_orders = []
+
+		for i in trades:
+			account_id = i["AccountId"]
+			if i.get("Type") == "Position":
+				new_pos = self._convert_fxo_position(account_id, i)
+				new_positions.append(new_pos)
+			elif i.get("Type") == "Limit" or i.get("Type") == "Stop":
+				new_order = self._convert_fxo_order(account_id, i)
+				new_orders.append(new_order)
+
+		self.positions = new_positions
+		self.orders = new_orders
+
+		return {
+			self.generateReference(): {
+				'timestamp': time.time(),
+				'type': tl.UPDATE,
+				'accepted': True,
+				'item': {
+					"positions": self.positions,
+					"orders": self.orders
+				}
+			}
+		}
 
 
 	def _get_all_positions(self, account_id):
@@ -1052,8 +1081,6 @@ class FXOpen(Broker):
 				update = self._account_update_queue[0]
 				del self._account_update_queue[0]
 
-				print(f"[FXOpen._handle_account_updates] {update}")
-
 				item = update.get("Result")
 				result = {}
 				account_id = None
@@ -1085,6 +1112,12 @@ class FXOpen(Broker):
 					elif event == "Modified":
 						account_id = str(item["Trade"]["AccountId"])
 						result = self._handle_modify(item["Trade"])
+
+					elif "Trades" in item:
+						result = self._handle_trades(item["Trades"])
+
+					if event is not None:
+						print(f"[FXOpen._handle_account_updates] {update}")
 
 				if len(result):
 					self.handleOnTrade(account_id, result)
@@ -1125,3 +1158,11 @@ class FXOpen(Broker):
 			tl.period.TWELVE_HOURS, tl.period.DAILY, 
 			tl.period.WEEKLY, tl.period.MONTHLY
 		]
+
+	# TESTING
+	def disconnectBroker(self):
+		res = self.ctrl.brokerRequest(
+			'fxopen', self.brokerId, 'disconnectBroker'
+		)
+
+		print(f"[disconnectBroker] {res}")

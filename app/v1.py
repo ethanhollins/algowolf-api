@@ -125,6 +125,11 @@ def update_account_ept():
 		account = g.user.getAccountDetails()
 		if account.get('email') != body['email']:
 			body['email_confirmed'] = False
+
+	if 'notify_me' in body:
+		body['email_opt_out'] = not body['notify_me']
+		del body['notify_me']
+		
 	print(body)
 
 	if len(body):
@@ -134,6 +139,38 @@ def update_account_ept():
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
 	)
+
+
+@bp.route('/unsubscribe', methods=('POST',))
+def unsubscribe_email_ept():
+	body = getJson()
+
+	if not "email" in body:
+		res = { "message": "No email provided." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+	email = body["email"]
+
+	user = ctrl.getDb().getUserByEmail(email)
+
+	if user is not None:
+		update = { "notify_me": False }
+		ctrl.getDb().updateUser(user["user_id"], update)
+		res = { "message": "Success." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+	else:
+		res = { "message": "User not found." }
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+	
 
 
 @bp.route('/account', methods=('DELETE',))
@@ -2365,6 +2402,17 @@ def dukascopy_complete_login_ept(broker_id):
 @bp.route("/delete-strategies", methods=("POST",))
 def deleteStrategiesEpt():
 	ctrl.getDb().deleteAllStrategies()
+
+	res = {'message': 'done'}
+	return Response(
+		json.dumps(res, indent=2), status=401,
+		content_type='application/json'
+	)
+
+
+@bp.route("/flip-notify-me", methods=("POST",))
+def flipNotifyMeEpt():
+	ctrl.getDb().flipNotifyMe()
 
 	res = {'message': 'done'}
 	return Response(

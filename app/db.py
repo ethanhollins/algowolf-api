@@ -159,7 +159,7 @@ class Database(object):
 				'last_name': last_name,
 				'email': email,
 				'password': password,
-				'notify_me': notify_me,
+				'email_opt_out': not notify_me,
 				'email_confirmed': False,
 				'beta_access': False,
 				'brokers': {},
@@ -235,6 +235,21 @@ class Database(object):
 			ReturnValues="UPDATED_NEW"
 		)
 		return True
+
+	
+	def removeUserField(self, user_id, update):
+		update_exp = ('REMOVE ' + ' '.join(
+			['{},'.format(k) for k in update]
+		))[:-1]
+
+		res = self.userTable.update_item(
+			Key={
+				'user_id': user_id
+			},
+			UpdateExpression=update_exp
+		)
+		return True
+
 
 	def deleteUser(self, user_id):
 		res = self.userTable.delete_item(
@@ -1707,7 +1722,7 @@ class Database(object):
 
 		print(users)
 		update = {'strategies': {}, 'metadata': { 'current_strategy': '', 'open_strategies': [] }}
-		bucket = self._s3_res.Bucket(self.prodStrategyBucketName)
+		bucket = self._s3_res.Bucket(self.strategyBucketName)
 		for user_id in users:
 			# Delete Strategies in DB
 			self.updateProdUser(user_id, update)
@@ -1732,6 +1747,25 @@ class Database(object):
 			# 	Bucket=self.strategyBucketName,
 			# 	Delete=delete_keys
 			# )
+
+	
+	def flipNotifyMe(self):
+		# users = self.userTable.scan(AttributesToGet=['user_id'])['Items']
+		users = self.get_all_primary_keys()
+
+		rm = ['demo', 'spotware']
+		for i in rm:
+			if i in users:
+				del users[users.index(i)]
+
+		print(users)
+		remove = ["notify_me"]
+		for user_id in users:
+			# Update 
+			user = self.getProdUser(user_id)
+			update = { "email_opt_out": not user["notify_me"] }
+			# self.removeUserField(user_id, remove)
+			self.updateProdUser(user_id, update)
 
 
 	def get_all_primary_keys(self):
