@@ -28,18 +28,20 @@ from threading import Thread
 
 bp = Blueprint('v1', __name__, url_prefix='/v1')
 
-hg_pro_subscriptions = {
-	"hgpro_standard": {
-		"level": 0,
-		"product": "HolyGrail_Pro"
-	},
-	"hgpro_professional": {
-		"level": 1,
-		"product": "HolyGrail_Pro_professional"
-	},
-	"hgpro_hedge_fund": {
-		"level": 2,
-		"product": "HolyGrail_Pro_professional"
+subscriptions = {
+	"hgpro": {
+		0: {
+			"name": "HG Pro Standard",
+			"product": "HolyGrail_Pro"
+		},
+		1: {
+			"name": "HG Pro Professional",
+			"product": "HolyGrail_Pro_professional"
+		},
+		2: {
+			"name": "HG Pro Hedge Fund",
+			"product": "HolyGrail_Pro_professional"
+		}
 	}
 }
 
@@ -2589,6 +2591,7 @@ def create_subscription(plan):
 	address = body.get("address")
 	email = body.get("email")
 	payment_method = body.get("payment_method")
+	level = body.get("level")
 
 	user = ctrl.getDb().getUser(user_id)
 
@@ -2603,8 +2606,13 @@ def create_subscription(plan):
 	if not (
 		"products" in user and 
 		plan in user["products"] and 
-		user["products"][plan] <= hg_pro_subscriptions[plan]["level"]
+		user["products"][plan]["level"] >= level
 	):
+		# Delete old subscription
+		if "products" in user and plan in user["products"]:
+			sub_id = user["products"][plan]["sub_id"]
+			stripe.Subscription.delete(sub_id)
+
 		# Create a new Customer and attach the default PaymentMethod
 		customer = stripe.Customer.create(
 			api_key=ctrl.app.config['STRIPE_API_KEY'],
@@ -2620,29 +2628,35 @@ def create_subscription(plan):
 			}
 		)
 
+		subscription = None
 		try:
-			if plan == "hgpro_standard":
-				subscription = stripe.Subscription.create(
-					api_key=ctrl.app.config['STRIPE_API_KEY'],
-					customer=customer["id"],
-					items=[{
-						"price": "price_1JRnMIBtSFeX56k3stqYyEj6",
-						"tax_rates": ["txr_1JQWGxBtSFeX56k3CHkZudRl"] 
-					}],
-					expand=["latest_invoice.payment_intent"]
-				)
+			if plan == "hgpro":
+				price = None
+				if level == 0:
+					price = "price_1JRnMIBtSFeX56k3stqYyEj6"
+				elif level == 1:
+					price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
+				elif level == 2:
+					price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
 
-			elif plan == "hgpro_professional":
-				subscription = stripe.Subscription.create(
-					api_key=ctrl.app.config['STRIPE_API_KEY'],
-					customer=customer["id"],
-					items=[{
-						"price": "price_1JRnNHBtSFeX56k3jzh0rp9h",
-						"tax_rates": ["txr_1JQWGxBtSFeX56k3CHkZudRl"] 
-					}],
-					expand=["latest_invoice.payment_intent"]
-				)
+				if price is not None:
+					subscription = stripe.Subscription.create(
+						api_key=ctrl.app.config['STRIPE_API_KEY'],
+						customer=customer["id"],
+						items=[{
+							"price": price,
+							"tax_rates": ["txr_1JQWGxBtSFeX56k3CHkZudRl"] 
+						}],
+						expand=["latest_invoice.payment_intent"]
+					)
 			
+				else:
+					res = { "message": "Plan not found." }
+					return Response(
+						json.dumps(res, indent=2),
+						status=400, content_type='application/json'
+					)
+
 			else:
 				res = { "message": "Plan not found." }
 				return Response(
@@ -2658,22 +2672,33 @@ def create_subscription(plan):
 				status=400, content_type='application/json'
 			)
 
-		if plan == "hgpro_standard" or plan == "hgpro_professional" or  plan == "hgpro_hedge_fund":
-			# Add Purchase Verification
-			if "products" in user:
-				update = { "products": user["products"] }
-				update["products"][plan] = hg_pro_subscriptions[plan]["level"]
-			else:
-				update = { "products": { plan: hg_pro_subscriptions[plan]["level"] } }
-			
-			update = ctrl.getDb().updateUser(user_id, update)
+		# Add Purchase Verification
+		if "products" in user:
+			update = { "products": user["products"] }
 
-			# Create Strategy
-			account = ctrl.accounts.getAccount(user_id)
-			strategy_id = account.createStrategy({
-				"name": "",
-				"package": hg_pro_subscriptions[plan]["product"] + ".v1_0_0"
-			})
+			if not plan in update:
+				update["products"][plan] = {}
+
+			update["products"][plan]["level"] = level
+			update["products"][plan]["sub_id"] = subscription["id"]
+		else:
+			update = { 
+				"products": { 
+					plan: {
+						"level": level,
+						"sub_id": subscription["id"]
+					}  
+				} 
+			}
+		
+		update = ctrl.getDb().updateUser(user_id, update)
+
+		# Create Strategy
+		account = ctrl.accounts.getAccount(user_id)
+		strategy_id = account.createStrategy({
+			"name": "",
+			"package": subscription[plan][level]["product"] + ".v1_0_0"
+		})
 	
 	else:
 		res = { "message": "Product already purchased." }
@@ -2690,6 +2715,55 @@ def create_subscription(plan):
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
 	)
+
+
+@bp.route('/payments/subscribe/<plan>', methods=('DELETE',))
+@auth.login_required
+def cancel_subscription(plan):
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	if "products" in user:
+		if plan in user["products"]:
+			sub_id = user["products"][plan]["sub_id"]
+			stripe.Subscription.delete(
+				sub_id,
+				api_key=ctrl.app.config['STRIPE_API_KEY']
+			)
+
+			update = { "products": user["products"] }
+			del update["products"][plan]
+			ctrl.getDb().updateUser(g.user.userId, update)
+
+			res = { "message": "Success" }
+			return Response(
+				json.dumps(res, indent=2),
+				status=200, content_type='application/json'
+			)
+
+	res = { "message": "Product not found." }
+	return Response(
+		json.dumps(res, indent=2),
+		status=400, content_type='application/json'
+	)
+
+
+@bp.route('/payments/subscribe', methods=('GET',))
+@auth.login_required
+def get_subscriptions():
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	result = []
+	if "products" in user:
+		for plan in user["products"]:
+			level = user["products"][plan]["level"]
+			result.append({ "name": subscriptions[plan][level]["name"], "plan": plan })
+		
+	res = { "subscriptions": result }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
 
 
 @bp.route('/tests/broker/disconnect/<strategy_id>/<broker_id>', methods=('POST',))
