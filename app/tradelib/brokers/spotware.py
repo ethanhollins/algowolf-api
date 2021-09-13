@@ -37,20 +37,11 @@ class Spotware(Broker):
 		self.is_demo = is_demo
 		self.is_parent = is_parent
 		self.is_dummy = is_dummy
-		# self._spotware_connected = False
-		# self._last_update = time.time()
-		# self._subscriptions = {}
+
 		self._handled_position_events = {
 			tl.MARKET_ENTRY: {},
 			tl.POSITION_CLOSE: {}
 		}
-		# self.assets = assets
-		# self.symbols = symbols
-
-		# self.assets = {}
-		# self.assets_by_name = {}
-		# self.symbols = {}
-		# self.symbols_by_name = {}
 
 		self._price_queue = []
 		self._account_update_queue = []
@@ -66,7 +57,12 @@ class Spotware(Broker):
 			self.parent = self
 			self.children = []
 
-			user = self.ctrl.getDb().getUser(self.name)
+			user = {}
+			if self.ctrl.app.config['SERVER'] == 0:
+				user = self.ctrl.getDb().getUser("spotware")
+			elif self.ctrl.app.config['SERVER'] == 1:
+				user = self.ctrl.getDb().getUser("spotware_1")
+
 			self.access_token = user.get('access_token')
 			self.refresh_token = user.get('refresh_token')
 

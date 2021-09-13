@@ -43,7 +43,7 @@ class Account(object):
 			'first_name': user.get('first_name'),
 			'last_name': user.get('last_name'),
 			'beta_access': user.get('beta_access'),
-			'notify_me': user.get('notify_me'),
+			'notify_me': not user.get('email_opt_out'),
 			'email_confirmed': user.get('email_confirmed'),
 			'brokers': list(user.get('brokers').keys()),
 			'strategies': user.get('strategies'),

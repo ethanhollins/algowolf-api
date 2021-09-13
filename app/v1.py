@@ -28,7 +28,7 @@ from threading import Thread
 
 bp = Blueprint('v1', __name__, url_prefix='/v1')
 
-subscriptions = {
+subscription_info = {
 	"hgpro": {
 		0: {
 			"name": "HG Pro Standard",
@@ -159,7 +159,7 @@ def unsubscribe_email_ept():
 	user = ctrl.getDb().getUserByEmail(email)
 
 	if user is not None:
-		update = { "notify_me": False }
+		update = { "email_opt_out": True }
 		ctrl.getDb().updateUser(user["user_id"], update)
 		res = { "message": "Success." }
 		return Response(
@@ -2611,7 +2611,10 @@ def create_subscription(plan):
 		# Delete old subscription
 		if "products" in user and plan in user["products"]:
 			sub_id = user["products"][plan]["sub_id"]
-			stripe.Subscription.delete(sub_id)
+			stripe.Subscription.delete(
+				sub_id,
+				api_key=ctrl.app.config['STRIPE_API_KEY']
+			)
 
 		# Create a new Customer and attach the default PaymentMethod
 		customer = stripe.Customer.create(
@@ -2697,7 +2700,7 @@ def create_subscription(plan):
 		account = ctrl.accounts.getAccount(user_id)
 		strategy_id = account.createStrategy({
 			"name": "",
-			"package": subscription[plan][level]["product"] + ".v1_0_0"
+			"package": subscription_info[plan][level]["product"] + ".v1_0_0"
 		})
 	
 	else:
@@ -2756,7 +2759,7 @@ def get_subscriptions():
 	if "products" in user:
 		for plan in user["products"]:
 			level = user["products"][plan]["level"]
-			result.append({ "name": subscriptions[plan][level]["name"], "plan": plan })
+			result.append({ "name": subscription_info[plan][level]["name"], "plan": plan })
 		
 	res = { "subscriptions": result }
 	return Response(
