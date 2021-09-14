@@ -279,50 +279,60 @@ class Account(object):
 
 
 	def _runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
-		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+		user = self.ctrl.getDb().getUser(self.userId)
 
-		package = strategy_info['package']
-		script_id = package.split('.')[0]
-		version = package.split('.')[1]
+		server = 0
+		if user.get("server") is not None:
+			server = user.get("server")
 
-		if input_variables is None:
-			input_variables = {}
+		if server == self.ctrl.app.config["SERVER"]:
+			strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 
-		session_key = self.generateSessionToken()
+			package = strategy_info['package']
+			script_id = package.split('.')[0]
+			version = package.split('.')[1]
 
-		if self.ctrl.app.config.get("FORCE_SCRIPT"):
-			script_id = self.ctrl.app.config["FORCE_SCRIPT"].split('.')[0]
-			version = self.ctrl.app.config["FORCE_SCRIPT"].split('.')[1]
+			if input_variables is None:
+				input_variables = {}
 
-		payload = {
-			'user_id': self.userId,
-			'strategy_id': strategy_id,
-			'broker_id': broker_id,
-			'accounts': accounts,
-			'auth_key': session_key,
-			'input_variables': input_variables,
-			'script_id': script_id,
-			'version': version
-		}
+			session_key = self.generateSessionToken()
 
-		# self.ctrl.emit(
-		# 	'start', 
-		# 	payload,
-		# 	namespace='/admin'
-		# )
+			if self.ctrl.app.config.get("FORCE_SCRIPT"):
+				script_id = self.ctrl.app.config["FORCE_SCRIPT"].split('.')[0]
+				version = self.ctrl.app.config["FORCE_SCRIPT"].split('.')[1]
+
+			payload = {
+				'user_id': self.userId,
+				'strategy_id': strategy_id,
+				'broker_id': broker_id,
+				'accounts': accounts,
+				'auth_key': session_key,
+				'input_variables': input_variables,
+				'script_id': script_id,
+				'version': version
+			}
+
+			# self.ctrl.emit(
+			# 	'start', 
+			# 	payload,
+			# 	namespace='/admin'
+			# )
 
 
-		url = self.ctrl.app.config.get('LOADER_URL')
-		endpoint = '/start'
-		res = requests.post(
-			url + endpoint,
-			data=json.dumps(payload)
-		)
+			url = self.ctrl.app.config.get('LOADER_URL')
+			endpoint = '/start'
+			res = requests.post(
+				url + endpoint,
+				data=json.dumps(payload)
+			)
 
-		if res.status_code == 200:
-			for account_id in accounts:
-				self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
-			return True
+			if res.status_code == 200:
+				for account_id in accounts:
+					self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
+				return True
+			else:
+				return False
+				
 		else:
 			return False
 

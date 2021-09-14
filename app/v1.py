@@ -2636,11 +2636,14 @@ def create_subscription(plan):
 			if plan == "hgpro":
 				price = None
 				if level == 0:
-					price = "price_1JRnMIBtSFeX56k3stqYyEj6"
+					# price = "price_1JRnMIBtSFeX56k3stqYyEj6"
+					price = "price_1JZUipBtSFeX56k35d2p43oV"
 				elif level == 1:
-					price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
+					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
+					price = "price_1JZUipBtSFeX56k35d2p43oV"
 				elif level == 2:
-					price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
+					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
+					price = "price_1JZUipBtSFeX56k35d2p43oV"
 
 				if price is not None:
 					subscription = stripe.Subscription.create(
@@ -2648,7 +2651,7 @@ def create_subscription(plan):
 						customer=customer["id"],
 						items=[{
 							"price": price,
-							"tax_rates": ["txr_1JQWGxBtSFeX56k3CHkZudRl"] 
+							"tax_rates": ["txr_1JQVr9BtSFeX56k3i6L9BoBZ"] 
 						}],
 						expand=["latest_invoice.payment_intent"]
 					)
