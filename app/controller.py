@@ -140,6 +140,7 @@ class Controller(object):
 			'kwargs': kwargs
 		}
 		try:
+			print(f"Emit: {data}")
 			self.sio.emit('broker_cmd', data=data, namespace='/admin')
 			return self._wait_broker_response(msg_id)
 		except Exception:

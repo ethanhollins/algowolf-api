@@ -7,15 +7,14 @@ import ntplib
 from datetime import datetime
 from copy import copy
 from threading import Thread
-from .spotware_connect.client import Client
 from .spotware_connect.messages import OpenApiCommonMessages_pb2 as o1
 from .spotware_connect.messages import OpenApiMessages_pb2 as o2
 from app import tradelib as tl
 from app.tradelib.broker import Broker
 from app.v1 import AccessLevel, key_or_login_required
-from app.error import OrderException, BrokerException
 
 ONE_HOUR = 60*60
+CHARTS = ['EUR_USD']
 
 class Spotware(Broker):
 
@@ -69,35 +68,15 @@ class Spotware(Broker):
 			self.is_auth = self._add_user()
 			self._subscribe_account_updates()
 
-			# self.demo_client = Client(True)
-			# self.live_client = Client(False)
-
-			# self.demo_client.event('connect', self.connect)
-			# self.demo_client.event('disconnect', self.disconnect)
-			# self.demo_client.event('message', self.message)
-
-			# self.live_client.event('connect', self.connect)
-			# self.live_client.event('disconnect', self.disconnect)
-			# self.live_client.event('message', self.message)
-
-			# self.demo_client.connect()
-			# self.live_client.connect()
-
-			# while not self._spotware_connected:
-			# 	pass
-
-
-			# self._authorize_accounts(self.accounts, is_parent=True)
-
 			if self.is_auth:
-				CHARTS = ['EUR_USD']
-				# self._subscribe_multiple_chart_updates(CHARTS)
 				for instrument in CHARTS:
 					print(f'LOADING {instrument}')
-					# instrument = self._get_symbol(i)['symbolName']
 					chart = self.createChart(instrument, await_completion=True)
 
 			# Start refresh thread
+			self.is_running = True
+			self._last_update = time.time()
+			Thread(target=self._periodic_refresh).start()
 			
 
 		else:
@@ -174,13 +153,21 @@ class Spotware(Broker):
 	'''
 
 	def _periodic_refresh(self):
+		print("PERIODIC REFRESH")
 		TEN_SECONDS = 10
 		while self.is_running:
 			if time.time() - self._last_update > TEN_SECONDS:
+				print("PERIODIC REFRESH")
 				try:
-					heartbeat = o1.ProtoHeartbeatEvent()
-					self.demo_client.send(heartbeat)
-					self.live_client.send(heartbeat)
+					res = self.ctrl.brokerRequest(
+						'spotware', self.brokerId, 'heartbeat'
+					)
+
+					print(res)
+					if "initialized" in res:
+						if not res["initialized"]:
+							self.reauthorize_accounts()
+
 					self._last_update = time.time()
 				except Exception as e:
 					print(f'[SC] {str(e)}')
@@ -197,23 +184,46 @@ class Spotware(Broker):
 		else:
 			user_id = None
 
-		res = self.ctrl.brokerRequest(
-			'spotware', self.brokerId, 'add_user',
-			user_id, self.brokerId, 
-			self.access_token, self.refresh_token, self.accounts,
-			is_parent=self.is_parent, is_dummy=self.is_dummy
-		)
+		attempts = 0
+		while True:
+			res = self.ctrl.brokerRequest(
+				'spotware', self.brokerId, 'add_user',
+				user_id, self.brokerId, 
+				self.access_token, self.refresh_token, self.accounts,
+				is_parent=self.is_parent, is_dummy=self.is_dummy
+			)
 
-		if 'error' in res:
-			if res['error'] == 'No response.':
-				return self._add_user()
-			elif res['error'] == 'Not Authorised':
-				return False
+			if 'error' in res:
+				if res['error'] == 'No response.':
+					attempts += 1
+					if attempts >= 5:
+						return False
+					continue
+				elif res['error'] == 'Not Authorised':
+					return False
+				else:
+					return False
+
 			else:
-				return False
+				self.access_token = res.get("access_token")
+				self.refresh_token = res.get("refresh_token")
+				return True
 
-		else:
-			return True
+	
+	def reauthorize_accounts(self):
+		print("Reauthorizing Accounts...")
+		self.is_auth = self._add_user()
+		self._subscribe_account_updates()
+
+		CHARTS = ['EUR_USD']
+		for instrument in CHARTS:
+			print(f'LOADING {instrument}')
+			chart = self.getChart(instrument)
+			chart.start(True)
+
+		for child in self.children:
+			child.is_auth = child._add_user()
+			child._subscribe_account_updates()
 
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
