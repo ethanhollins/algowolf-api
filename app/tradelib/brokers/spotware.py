@@ -73,12 +73,6 @@ class Spotware(Broker):
 					print(f'LOADING {instrument}')
 					chart = self.createChart(instrument, await_completion=True)
 
-			# Start refresh thread
-			self.is_running = True
-			self._last_update = time.time()
-			Thread(target=self._periodic_refresh).start()
-			
-
 		else:
 			self.access_token = access_token
 			self.refresh_token = refresh_token
@@ -94,15 +88,21 @@ class Spotware(Broker):
 		t = Thread(target=self._handle_updates)
 		t.start()
 
-		if not is_dummy and self.is_auth:
-			self._subscribe_account_updates()
-			# for account_id in self.getAccounts():
-			# 	if account_id != tl.broker.PAPERTRADER_NAME:
-					# self._subscribe_account_updates(account_id)
+		self.is_running = True
+		self._last_update = time.time()
+		if not is_dummy:
+			if self.is_auth:
+				self._subscribe_account_updates()
+				# for account_id in self.getAccounts():
+				# 	if account_id != tl.broker.PAPERTRADER_NAME:
+						# self._subscribe_account_updates(account_id)
 
-			# Handle strategy
-			if self.userAccount and self.brokerId:
-				self._handle_live_strategy_setup()
+				# Handle strategy
+				if self.userAccount and self.brokerId:
+					self._handle_live_strategy_setup()
+
+			
+			Thread(target=self._periodic_refresh).start()
 
 
 	def _set_time_off(self):
@@ -154,11 +154,12 @@ class Spotware(Broker):
 
 	def _periodic_refresh(self):
 		print("PERIODIC REFRESH")
-		TEN_SECONDS = 10
+		WAIT_PERIOD = 60
 		while self.is_running:
-			if time.time() - self._last_update > TEN_SECONDS:
-				print("PERIODIC REFRESH")
-				try:
+			# if time.time() - self._last_update > WAIT_PERIOD:
+			print("PERIODIC REFRESH")
+			try:
+				if self.is_parent:
 					res = self.ctrl.brokerRequest(
 						'spotware', self.brokerId, 'heartbeat'
 					)
@@ -169,11 +170,16 @@ class Spotware(Broker):
 							self.reauthorize_accounts()
 
 					self._last_update = time.time()
-				except Exception as e:
-					print(f'[SC] {str(e)}')
-					pass
 
-			time.sleep(1)
+				else:
+					self.update_positions()
+					self._last_update = time.time()
+
+			except Exception as e:
+				print(f'[SC] {str(e)}')
+				pass
+
+			time.sleep(WAIT_PERIOD)
 
 
 	def _add_user(self):
@@ -1420,39 +1426,39 @@ class Spotware(Broker):
 
 		return res
 
-		# ref_id = self.generateReference()
+	def update_positions(self):
+		self._handle_live_strategy_setup()
 
-		# start_time = time.time()
-		# print(f'DELETE ORDER START: {self.brokerId}')
-		# cancel_req = o2.ProtoOACancelOrderReq(
-		# 	ctidTraderAccountId=int(order.account_id), orderId=int(order.order_id)
-		# )
-		# self._get_client(order.account_id).send(cancel_req, msgid=ref_id)
+		new_positions = {}
+		new_orders = {}
+		for pos in self.positions:
+			if not pos.account_id in new_positions:
+				new_positions[pos.account_id] = []
+			new_positions[pos.account_id].append(pos)
 
-		# res = self.parent._wait(ref_id)
-		# print(f'DELETE ORDER END: {self.brokerId} {round(time.time() - start_time, 2)}s')
+		for order in self.orders:
+			if not order.account_id in new_orders:
+				new_orders[order.account_id] = []
+			new_orders[order.account_id].append(order)
 
-		# if not isinstance(res, dict):
-		# 	if not res is None and res.payloadType in (50, 2132):
-		# 		res = {
-		# 			ref_id: {
-		# 				'timestamp': time.time(),
-		# 				'type': tl.ORDER_CANCEL,
-		# 				'accepted': False,
-		# 				'message': res.errorCode
-		# 			}
-		# 		}
-		# 	else:
-		# 		res = {
-		# 			ref_id: {
-		# 				'timestamp': time.time(),
-		# 				'type': tl.ORDER_CANCEL,
-		# 				'accepted': False
-		# 			}
-		# 		}
+		accounts = list(self.accounts.keys())
 
-		# return result
+		for account_id in accounts:
+			positions = new_positions.get(account_id, [])
+			orders = new_orders.get(account_id, [])
+			result = {
+				self.generateReference(): {
+					'timestamp': time.time(),
+					'type': tl.UPDATE,
+					'accepted': True,
+					'item': {
+						"positions": positions,
+						"orders": orders
+					}
+				}
+			}
 
+			self.handleOnTrade(account_id, result)
 
 	def _subscribe_account_updates(self):
 		stream_id = self.generateReference()
