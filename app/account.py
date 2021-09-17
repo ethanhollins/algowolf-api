@@ -245,12 +245,12 @@ class Account(object):
 		is_process_running = res.json().get('running')
 		input_variables = res.json().get('input_variables')
 
-		if is_user_running != is_process_running:
-			self._set_running(
-				strategy_id, broker_id, account_id, is_process_running, input_variables
-			)
+		# if is_user_running != is_process_running:
+		# 	self._set_running(
+		# 		strategy_id, broker_id, account_id, is_process_running, input_variables
+		# 	)
 
-		return is_process_running
+		return is_user_running
 
 
 	def isAnyScriptRunning(self):
