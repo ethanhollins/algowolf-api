@@ -129,8 +129,6 @@ class Account(object):
 						else:
 							broker_info[broker_id]['is_auth'] = False
 						
-						strategy_status = self.isScriptRunning(strategy_id, broker_id, acc)
-
 						broker_info[broker_id]['accounts'] = {}
 						broker_info[broker_id]['positions'] = []
 						broker_info[broker_id]['orders'] = []
@@ -138,7 +136,7 @@ class Account(object):
 
 						for acc in brokers.get(broker_id)['accounts']:
 							broker_info[broker_id]['accounts'][acc] = { 
-								'strategy_status': strategy_status,
+								'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
 								'balance': 0,
 								**brokers.get(broker_id)['accounts'][acc]
 							}
@@ -150,11 +148,9 @@ class Account(object):
 					else:
 						broker_info[broker_id]['is_auth'] = False
 					
-					strategy_status = self.isScriptRunning(strategy_id, broker_id, acc)
-
 					for acc in brokers.get(broker_id)['accounts']:
 						broker_info[broker_id]['accounts'][acc] = { 
-							'strategy_status': strategy_status,
+							'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
 							'balance': 0,
 							**brokers.get(broker_id)['accounts'][acc]
 						}
