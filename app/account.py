@@ -5,6 +5,7 @@ import string, random
 import requests
 import shortuuid
 import traceback
+from datetime import datetime
 from app.controller import DictQueue
 from app import tradelib as tl
 from threading import Thread
@@ -122,7 +123,14 @@ class Account(object):
 						broker_info[broker_id]['orders'] = self.brokers.get(broker_id).getAllOrders()
 
 					except Exception as e:
-						broker_info[broker_id]['is_auth'] = False
+
+						if tl.isWeekend(datetime.utcnow()):
+							broker_info[broker_id]['is_auth'] = True
+						else:
+							broker_info[broker_id]['is_auth'] = False
+						
+						strategy_status = self.isScriptRunning(strategy_id, broker_id, acc)
+
 						broker_info[broker_id]['accounts'] = {}
 						broker_info[broker_id]['positions'] = []
 						broker_info[broker_id]['orders'] = []
@@ -130,17 +138,23 @@ class Account(object):
 
 						for acc in brokers.get(broker_id)['accounts']:
 							broker_info[broker_id]['accounts'][acc] = { 
-								'strategy_status': False,
+								'strategy_status': strategy_status,
 								'balance': 0,
 								**brokers.get(broker_id)['accounts'][acc]
 							}
 							
 
 				else:
-					broker_info[broker_id]['is_auth'] = False
+					if tl.isWeekend(datetime.utcnow()):
+						broker_info[broker_id]['is_auth'] = True
+					else:
+						broker_info[broker_id]['is_auth'] = False
+					
+					strategy_status = self.isScriptRunning(strategy_id, broker_id, acc)
+
 					for acc in brokers.get(broker_id)['accounts']:
 						broker_info[broker_id]['accounts'][acc] = { 
-							'strategy_status': False,
+							'strategy_status': strategy_status,
 							'balance': 0,
 							**brokers.get(broker_id)['accounts'][acc]
 						}
