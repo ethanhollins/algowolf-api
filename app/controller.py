@@ -214,7 +214,8 @@ class Controller(object):
 									# Run Script
 									print(f'STARTING {strategy_id}, {broker_id}, {account_id}')
 
-									Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
+									account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
+									# Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
 
 
 

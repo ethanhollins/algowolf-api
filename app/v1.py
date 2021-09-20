@@ -31,14 +31,18 @@ bp = Blueprint('v1', __name__, url_prefix='/v1')
 subscription_info = {
 	"hgpro": {
 		0: {
+			"name": "HG Pro Kick Starter",
+			"product": "HolyGrail_Pro_kickstarter"
+		},
+		1: {
 			"name": "HG Pro Standard",
 			"product": "HolyGrail_Pro"
 		},
-		1: {
+		2: {
 			"name": "HG Pro Professional",
 			"product": "HolyGrail_Pro_professional"
 		},
-		2: {
+		3: {
 			"name": "HG Pro Hedge Fund",
 			"product": "HolyGrail_Pro_professional"
 		}
@@ -124,9 +128,20 @@ def update_account_ept():
 		body['password'] = generate_password_hash(body['password'])
 
 	if 'email' in body:
-		account = g.user.getAccountDetails()
-		if account.get('email') != body['email']:
-			body['email_confirmed'] = False
+		email = body['email']
+		if ctrl.getDb().getUserByEmail(email) is not None:
+			error = {
+				'error': 'ValueError',
+				'message': 'Email {} is already registered.'.format(email)
+			}
+			return Response(
+				json.dumps(error, indent=2), 
+				status=400, content_type='applcation/json'
+			)
+		else:
+			account = g.user.getAccountDetails()
+			if account.get('email') != body['email']:
+				body['email_confirmed'] = False
 
 	if 'notify_me' in body:
 		body['email_opt_out'] = not body['notify_me']
@@ -2637,13 +2652,16 @@ def create_subscription(plan):
 				price = None
 				if level == 0:
 					# price = "price_1JRnMIBtSFeX56k3stqYyEj6"
-					price = "price_1JZUipBtSFeX56k35d2p43oV"
+					# price = "price_1JZUipBtSFeX56k35d2p43oV"
+					price = "price_1JbKJWBtSFeX56k3783LhUbi"
 				elif level == 1:
 					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
-					price = "price_1JZUipBtSFeX56k35d2p43oV"
+					# price = "price_1JZUipBtSFeX56k35d2p43oV"
+					price = "price_1JQUbsBtSFeX56k3aw6fw9Nr"
 				elif level == 2:
 					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
-					price = "price_1JZUipBtSFeX56k35d2p43oV"
+					# price = "price_1JZUipBtSFeX56k35d2p43oV"
+					price = "price_1JbKKaBtSFeX56k3MuRj7ecT"
 
 				if price is not None:
 					subscription = stripe.Subscription.create(
