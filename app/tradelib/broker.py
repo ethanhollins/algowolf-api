@@ -100,7 +100,7 @@ class Broker(object):
 			# Get transaction history
 			transactions = self.ctrl.getDb().getStrategyTransactions(self.userAccount.userId, self.brokerId)
 			from_ts = None
-			if transactions.size > 0:
+			if transactions is not None and transactions.size > 0:
 				from_ts = transactions[['timestamp']].values[-1][0]
 			# Handle saved strategy positions
 			earliest_trade_ts = self._retrieve_strategy_trades()
