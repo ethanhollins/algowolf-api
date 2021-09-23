@@ -582,6 +582,20 @@ class Database(object):
 			accounts = dummy_broker.getAllAccounts()
 			dummy_broker.deleteChild()
 
+			for _id in user['brokers']:
+				v = user['brokers'][_id]
+				v = jwt.decode(
+					v, self.ctrl.app.config['SECRET_KEY'], 
+					algorithms=['HS256']
+				)
+				if (
+					broker_id != _id and
+					v.get('broker') == broker_name and 
+					(v.get('accounts') is not None and
+						any([i for i in accounts if i in v["accounts"]]) )
+				):
+					return None
+
 			if accounts is None:
 				raise BrokerException('Unable to connect to broker.')
 
