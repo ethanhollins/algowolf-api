@@ -328,7 +328,11 @@ class Account(object):
 			# 	namespace='/admin'
 			# )
 
+			print(f"SET RUNNING... ({strategy_id}) {accounts}")
+			for account_id in accounts:
+				self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
 
+			print("START SCRIPT...")
 			url = self.ctrl.app.config.get('LOADER_URL')
 			endpoint = '/start'
 			res = requests.post(
@@ -337,10 +341,12 @@ class Account(object):
 			)
 
 			if res.status_code == 200:
-				for account_id in accounts:
-					self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
+				# for account_id in accounts:
+				# 	self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
 				return True
 			else:
+				for account_id in accounts:
+					self._set_running(strategy_id, broker_id, account_id, None, None)
 				return False
 				
 		else:
