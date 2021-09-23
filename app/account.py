@@ -232,35 +232,42 @@ class Account(object):
 		user = self.ctrl.getDb().getUser(self.userId)
 		user_running_dict = user['strategies'][strategy_id].get('running')
 
+		server = 0
+		if user.get("server") is not None:
+			server = user.get("server")
+		
 		is_user_running = None
 		if user_running_dict is not None and broker_id in user_running_dict:
 			if account_id in user_running_dict[broker_id]:
 				if isinstance(user_running_dict[broker_id][account_id], dict) and 'script_id' in user_running_dict[broker_id][account_id]:
 					is_user_running = user_running_dict[broker_id][account_id]['script_id']
 
+		if server == self.ctrl.app.config["SERVER"]:
+			payload = {
+				'user_id': self.userId,
+				'broker_id': broker_id,
+				'account_id': account_id
+			}
 
-		payload = {
-			'user_id': self.userId,
-			'broker_id': broker_id,
-			'account_id': account_id
-		}
+			url = self.ctrl.app.config.get('LOADER_URL')
+			endpoint = '/running'
+			res = requests.get(
+				url + endpoint,
+				data=json.dumps(payload)
+			)
 
-		url = self.ctrl.app.config.get('LOADER_URL')
-		endpoint = '/running'
-		res = requests.get(
-			url + endpoint,
-			data=json.dumps(payload)
-		)
+			is_process_running = res.json().get('running')
+			input_variables = res.json().get('input_variables')
 
-		is_process_running = res.json().get('running')
-		input_variables = res.json().get('input_variables')
+			if is_user_running != is_process_running:
+				self._set_running(
+					strategy_id, broker_id, account_id, is_process_running, input_variables
+				)
 
-		# if is_user_running != is_process_running:
-		# 	self._set_running(
-		# 		strategy_id, broker_id, account_id, is_process_running, input_variables
-		# 	)
+			return is_process_running
 
-		return is_user_running
+		else:
+			return is_user_running
 
 
 	def isAnyScriptRunning(self):
