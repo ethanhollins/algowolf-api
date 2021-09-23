@@ -582,6 +582,7 @@ class Database(object):
 			accounts = dummy_broker.getAllAccounts()
 			dummy_broker.deleteChild()
 
+			print(f'------------------------ [CHECK BROKERS] ---------------------------')
 			for _id in user['brokers']:
 				v = user['brokers'][_id]
 				v = jwt.decode(
