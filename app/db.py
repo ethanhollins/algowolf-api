@@ -582,21 +582,17 @@ class Database(object):
 			accounts = dummy_broker.getAllAccounts()
 			dummy_broker.deleteChild()
 
-			print(f'------------------------ [CHECK BROKERS] ---------------------------> {user["brokers"]}')
 			for _id in user['brokers']:
-				print(f"[?????] 1: {_id}")
 				v = user['brokers'][_id]
-				print(f"[?????] 2")
 				v = jwt.decode(
 					v, self.ctrl.app.config['SECRET_KEY'], 
 					algorithms=['HS256']
 				)
-				print(f"[?????] 3 {broker_id != _id}, {v.get('broker') == broker_name}, {v.get('accounts') is not None}\n{any([i for i in accounts if i in v['accounts']])}: {[i for i in accounts if i in v['accounts']]}, {accounts}, {v['accounts']}")
 				if (
 					broker_id != _id and
 					v.get('broker') == broker_name and 
 					(v.get('accounts') is not None and
-						any([i for i in accounts if i in v["accounts"]]) )
+						any([i for i in accounts if str(i['id']) in v["accounts"]]) )
 				):
 					return None
 
