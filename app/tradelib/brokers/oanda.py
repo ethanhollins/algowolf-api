@@ -91,6 +91,7 @@ class Oanda(Broker):
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
 
+
 		print('OANDA INIT 1')
 		if is_parent:
 			# Load Charts
@@ -100,32 +101,30 @@ class Oanda(Broker):
 				chart = self.createChart(instrument, await_completion=True)
 				# self.data_saver.subscribe(chart, PERIODS)
 
+		if not is_dummy:
+			Thread(target=self._periodic_check).start()
+
 		print('OANDA INIT 2')
 
 	def _periodic_check(self):
-		TWENTY_SECONDS = 20
-		self._last_update = time.time()
-		# Check most recent Oanda `HEARTBEAT` was received or reconnect
+		WAIT_PERIOD = 30
+		# Send ping to server to check connection status
 		while self.is_running:
-			if time.time() - self._last_update > TWENTY_SECONDS:
-				print('RECONNECT')
-				if self._is_connected:
-					self._is_connected = False
-					# Run disconnected callback
-					self.handleOnSessionStatus({
-						'broker': self.name,
-						'timestamp': math.floor(time.time()),
-						'type': 'disconnected',
-						'message': 'The session has been disconnected.'
-					})
+			try:
+				res = self.ctrl.brokerRequest(
+					'oanda', self.brokerId, 'heartbeat'
+				)
 
-					# Perform periodic refresh
-					self._reconnect()
-			time.sleep(5)
+				print(f"[Oanda] {res}")
+				if "result" in res and not res["result"]:
+					self.reauthorize_accounts()
+				elif not self.is_parent:
+					self.update_positions()
 
-		for sub in self._subscriptions:
-			for i in sub.res:
-				i.close()
+			except Exception as e:
+				print(traceback.format_exc())
+
+			time.sleep(WAIT_PERIOD)
 
 
 	def _add_user(self):
@@ -152,6 +151,26 @@ class Oanda(Broker):
 
 		else:
 			return True
+
+
+	def reauthorize_accounts(self):
+		print("[Oanda] Reauthorizing Accounts...")
+		self.is_auth = self._add_user()
+		
+		if self.is_auth:
+			for account_id in self.getAccounts():
+				if account_id != tl.broker.PAPERTRADER_NAME:
+					self._subscribe_account_updates(account_id)
+					
+			if self.userAccount and self.brokerId:
+				self._handle_live_strategy_setup()
+
+			if self.is_parent:
+				CHARTS = ['EUR_USD']
+				for instrument in CHARTS:
+					print(f'LOADING {instrument}')
+					chart = self.getChart(instrument)
+					chart.start(True)
 
 
 	def _download_historical_data(self, 
@@ -1239,6 +1258,39 @@ class Oanda(Broker):
 
 			if len(result):
 				chart.handleTick(result)
+
+
+	def update_positions(self):
+		self._handle_live_strategy_setup()
+
+		new_positions = {}
+		new_orders = {}
+		for pos in self.positions:
+			if not pos.account_id in new_positions:
+				new_positions[pos.account_id] = []
+			new_positions[pos.account_id].append(pos)
+
+		for order in self.orders:
+			if not order.account_id in new_orders:
+				new_orders[order.account_id] = []
+			new_orders[order.account_id].append(order)
+
+		for account_id in self.accounts:
+			positions = new_positions.get(account_id, [])
+			orders = new_orders.get(account_id, [])
+			result = {
+				self.generateReference(): {
+					'timestamp': time.time(),
+					'type': tl.UPDATE,
+					'accepted': True,
+					'item': {
+						"positions": positions,
+						"orders": orders
+					}
+				}
+			}
+
+			self.handleOnTrade(account_id, result)
 
 
 	def _subscribe_account_updates(self, account_id):

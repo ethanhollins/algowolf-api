@@ -67,21 +67,29 @@ class FXOpen(Broker):
 				# self.data_saver.subscribe(chart, PERIODS)
 			print("CREATE CHARTS DONE")
 
+		if not is_dummy:
+			Thread(target=self._periodic_check).start()
+
 
 	def _periodic_check(self):
-		TWENTY_SECONDS = 20
-		self._last_update = time.time()
+		WAIT_PERIOD = 30
 		# Send ping to server to check connection status
 		while self.is_running:
-			if time.time() - self._last_update > TWENTY_SECONDS:
-				print('RECONNECT')
-				if self.is_connected:
-					self.is_connected = False
+			try:
+				self._last_update = time.time()
 
+				res = self.ctrl.brokerRequest(
+					'fxopen', self.brokerId, 'heartbeat'
+				)
 
-					self.client.send({})
+				print(f"[FXOpen] {res}")
+				if "result" in res and not res["result"]:
+					self.reauthorize_accounts()
 
-			time.sleep(5)
+			except Exception as e:
+				print(traceback.format_exc())
+
+			time.sleep(WAIT_PERIOD)
 
 		for sub in self._subscriptions:
 			for i in sub.res:
@@ -121,6 +129,22 @@ class FXOpen(Broker):
 			self.time_off = response.tx_time - time.time()
 		except Exception:
 			pass
+
+
+	def reauthorize_accounts(self):
+		print("[FXOpen] Reauthorizing Accounts...")
+		self.is_auth = self._add_user()
+		self.subscribeAccountUpdates()
+		if self.is_auth:
+			if self.userAccount and self.brokerId:
+				self._handle_live_strategy_setup()
+
+			if self.is_parent:
+				CHARTS = ['EUR_USD']
+				for instrument in CHARTS:
+					print(f'LOADING {instrument}')
+					chart = self.getChart(instrument)
+					chart.start(True)
 
 
 	def _download_historical_data(self, 

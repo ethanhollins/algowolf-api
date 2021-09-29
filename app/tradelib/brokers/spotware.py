@@ -154,7 +154,7 @@ class Spotware(Broker):
 
 	def _periodic_refresh(self):
 		print("PERIODIC REFRESH")
-		WAIT_PERIOD = 60
+		WAIT_PERIOD = 30
 		while self.is_running:
 			# if time.time() - self._last_update > WAIT_PERIOD:
 			print("PERIODIC REFRESH")
@@ -217,7 +217,7 @@ class Spotware(Broker):
 
 	
 	def reauthorize_accounts(self):
-		print("Reauthorizing Accounts...")
+		print("[SW] Reauthorizing Accounts...")
 		self.is_auth = self._add_user()
 		self._subscribe_account_updates()
 

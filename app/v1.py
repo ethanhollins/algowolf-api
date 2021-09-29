@@ -2651,28 +2651,38 @@ def create_subscription(plan):
 			if plan == "hgpro":
 				price = None
 				if level == 0:
-					# price = "price_1JRnMIBtSFeX56k3stqYyEj6"
-					# price = "price_1JZUipBtSFeX56k35d2p43oV"
-					price = "price_1JbKJWBtSFeX56k3783LhUbi"
+					# price = "price_1JRnMIBtSFeX56k3stqYyEj6" # TEST MODE PRICE
+					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					price = "price_1JbKJWBtSFeX56k3783LhUbi" # REAL PRICE
 				elif level == 1:
-					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
-					# price = "price_1JZUipBtSFeX56k35d2p43oV"
-					price = "price_1JQUbsBtSFeX56k3aw6fw9Nr"
+					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
+					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					price = "price_1JQUbsBtSFeX56k3aw6fw9Nr" # REAL PRICE
 				elif level == 2:
-					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h"
-					# price = "price_1JZUipBtSFeX56k35d2p43oV"
-					price = "price_1JbKKaBtSFeX56k3MuRj7ecT"
+					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
+					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					price = "price_1JbKKaBtSFeX56k3MuRj7ecT" # REAL PRICE
 
 				if price is not None:
-					subscription = stripe.Subscription.create(
-						api_key=ctrl.app.config['STRIPE_API_KEY'],
-						customer=customer["id"],
-						items=[{
-							"price": price,
-							"tax_rates": ["txr_1JQVr9BtSFeX56k3i6L9BoBZ"] 
-						}],
-						expand=["latest_invoice.payment_intent"]
-					)
+					if address["country"] == "AU":
+						subscription = stripe.Subscription.create(
+							api_key=ctrl.app.config['STRIPE_API_KEY'],
+							customer=customer["id"],
+							items=[{
+								"price": price,
+								"tax_rates": ["txr_1JQVr9BtSFeX56k3i6L9BoBZ"] 
+							}],
+							expand=["latest_invoice.payment_intent"]
+						)
+					else:
+						subscription = stripe.Subscription.create(
+							api_key=ctrl.app.config['STRIPE_API_KEY'],
+							customer=customer["id"],
+							items=[{
+								"price": price
+							}],
+							expand=["latest_invoice.payment_intent"]
+						)
 			
 				else:
 					res = { "message": "Plan not found." }

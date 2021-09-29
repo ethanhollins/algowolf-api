@@ -38,6 +38,7 @@ class FXCM(Broker):
 		self._subscriptions = {}
 		self.session = None
 		self._initialized = False
+		self.is_running = True
 		
 		self._price_queue = []
 		self.time_off = 0
@@ -70,6 +71,30 @@ class FXCM(Broker):
 		t = Thread(target=self._handle_chart_update)
 		t.start()
 
+		if not is_dummy:
+			Thread(target=self._periodic_check).start()
+		
+
+	def _periodic_check(self):
+		WAIT_PERIOD = 30
+		# Send ping to server to check connection status
+		while self.is_running:
+			try:
+				self._last_update = time.time()
+
+				res = self.ctrl.brokerRequest(
+					'fxcm', self.brokerId, 'heartbeat'
+				)
+
+				print(f"[FXCM] {res}")
+				if "result" in res and not res["result"]:
+					self.reauthorize_accounts()
+
+			except Exception as e:
+				print(traceback.format_exc())
+
+			time.sleep(WAIT_PERIOD)
+
 
 	def _is_logged_in(self):
 		if not self.session is None:
@@ -89,7 +114,6 @@ class FXCM(Broker):
 
 	def _add_user(self):
 		print('Add User')
-		
 
 		res = self.brokerRequest(
 			self.name, self.brokerId, 'add_user',
@@ -101,6 +125,22 @@ class FXCM(Broker):
 			return self._add_user()
 		else:
 			return res
+
+		
+	def reauthorize_accounts(self):
+		print("[FXCM] Reauthorizing Accounts...")
+		self.is_auth = self._add_user()
+		# self._subscribe_account_updates()
+		# if self.is_auth:
+		# 	if self.userAccount and self.brokerId:
+		# 		self._handle_live_strategy_setup()
+
+		if self.is_parent:
+			CHARTS = ['EUR_USD']
+			for instrument in CHARTS:
+				print(f'LOADING {instrument}')
+				chart = self.getChart(instrument)
+				chart.start(True)
 
 
 	def _set_time_off(self):
