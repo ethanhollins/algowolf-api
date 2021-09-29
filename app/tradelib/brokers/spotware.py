@@ -154,7 +154,7 @@ class Spotware(Broker):
 
 	def _periodic_refresh(self):
 		print("PERIODIC REFRESH")
-		WAIT_PERIOD = 30
+		WAIT_PERIOD = 60
 		while self.is_running:
 			# if time.time() - self._last_update > WAIT_PERIOD:
 			print("PERIODIC REFRESH")

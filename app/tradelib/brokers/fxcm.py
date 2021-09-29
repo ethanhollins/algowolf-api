@@ -76,7 +76,7 @@ class FXCM(Broker):
 		
 
 	def _periodic_check(self):
-		WAIT_PERIOD = 30
+		WAIT_PERIOD = 60
 		# Send ping to server to check connection status
 		while self.is_running:
 			try:
