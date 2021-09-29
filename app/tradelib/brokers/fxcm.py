@@ -71,8 +71,8 @@ class FXCM(Broker):
 		t = Thread(target=self._handle_chart_update)
 		t.start()
 
-		if not is_dummy:
-			Thread(target=self._periodic_check).start()
+		# if not is_dummy:
+		# 	Thread(target=self._periodic_check).start()
 		
 
 	def _periodic_check(self):
