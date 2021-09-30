@@ -71,8 +71,8 @@ class FXCM(Broker):
 		t = Thread(target=self._handle_chart_update)
 		t.start()
 
-		# if not is_dummy:
-		# 	Thread(target=self._periodic_check).start()
+		if not is_dummy and self.ctrl.app.config['IS_MAIN_STREAM']:
+			Thread(target=self._periodic_check).start()
 		
 
 	def _periodic_check(self):
@@ -82,7 +82,7 @@ class FXCM(Broker):
 			try:
 				self._last_update = time.time()
 
-				res = self.ctrl.brokerRequest(
+				res = self.brokerRequest(
 					'fxcm', self.brokerId, 'heartbeat'
 				)
 
