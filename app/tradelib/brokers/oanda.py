@@ -1266,31 +1266,32 @@ class Oanda(Broker):
 		new_positions = {}
 		new_orders = {}
 		for pos in self.positions:
-			if not pos.account_id in new_positions:
-				new_positions[pos.account_id] = []
-			new_positions[pos.account_id].append(pos)
+			if not str(pos.account_id) in new_positions:
+				new_positions[str(pos.account_id)] = []
+			new_positions[str(pos.account_id)].append(pos)
 
 		for order in self.orders:
-			if not order.account_id in new_orders:
-				new_orders[order.account_id] = []
-			new_orders[order.account_id].append(order)
+			if not str(order.account_id) in new_orders:
+				new_orders[str(order.account_id)] = []
+			new_orders[str(order.account_id)].append(order)
 
 		for account_id in self.accounts:
-			positions = new_positions.get(account_id, [])
-			orders = new_orders.get(account_id, [])
+			positions = new_positions.get(str(account_id), [])
+			orders = new_orders.get(str(account_id), [])
 			result = {
 				self.generateReference(): {
 					'timestamp': time.time(),
 					'type': tl.UPDATE,
 					'accepted': True,
 					'item': {
+						"account_id": str(account_id),
 						"positions": positions,
 						"orders": orders
 					}
 				}
 			}
 
-			self.handleOnTrade(account_id, result)
+			self.handleOnTrade(str(account_id), result)
 
 
 	def _subscribe_account_updates(self, account_id):
