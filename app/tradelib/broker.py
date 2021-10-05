@@ -145,19 +145,21 @@ class Broker(object):
 
 	def _handle_live_strategy_positions(self):
 		# Get open positions
+		new_positions = []
 		for acc in self.getAccounts():
 			if acc != tl.broker.PAPERTRADER_NAME:
 				# LIVE positions
-				live_positions = self._get_all_positions(acc)[acc]
-				self.positions = live_positions
+				new_positions += self._get_all_positions(acc)[acc]
+		self.positions = new_positions
 
 	def _handle_live_strategy_orders(self):
 		# Get open positions
+		new_orders = []
 		for acc in self.getAccounts():
 			if acc != tl.broker.PAPERTRADER_NAME:
 				# LIVE positions
-				live_orders = self._get_all_orders(acc)[acc]
-				self.orders = live_orders
+				new_orders += self._get_all_orders(acc)[acc]
+		self.orders = new_orders
 
 	def _run_backtest(self, from_ts):
 		products = []
