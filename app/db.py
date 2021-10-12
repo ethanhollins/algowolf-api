@@ -1017,6 +1017,9 @@ class Database(object):
 			if 'info' not in gui or not isinstance(gui['info'], dict):
 				gui['info'] = {}
 
+			if len(obj['info']) < 30:
+				print(f"[{user_id}] {obj['info']}")
+
 			i = None
 			for i in obj['info']:
 				if i['product'] not in gui['info']:
@@ -1036,6 +1039,8 @@ class Database(object):
 					)[-MAX_GUI:]
 				)
 
+			if len(obj['info']) < 30:
+				print(f"[{user_id}] {list(gui['info'][i['product']][i['period']].items())[-1]}")
 
 		# Handle Transactions
 		if 'transactions' in obj:
