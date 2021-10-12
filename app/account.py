@@ -286,6 +286,42 @@ class Account(object):
 
 		return False
 
+	
+	def getNumScriptsRunning(self):
+		user = self.ctrl.getDb().getUser(self.userId)
+
+		count = 0
+		if 'strategies' in user:
+			for strategy_id in user['strategies']:
+				if 'running' in user['strategies'][strategy_id]:
+					for broker_id in user['strategies'][strategy_id]['running']:
+						for account_id in user['strategies'][strategy_id]['running'][broker_id]:
+							if (
+								isinstance(user['strategies'][strategy_id]['running'][broker_id][account_id], dict) and 
+								user['strategies'][strategy_id]['running'][broker_id][account_id].get('script_id')
+							):
+								count += 1
+
+		return count
+
+
+	def getMaximumBanks(self, strategy_id, script_id):
+		strategy = self.getStrategy(strategy_id)
+
+		current_bank = 0
+		for broker_id in strategy.get("brokers", {}):
+			for account_id in strategy["brokers"][broker_id]["accounts"]:
+				if account_id != tl.broker.PAPERTRADER_NAME:
+					account_code = broker_id + '.' + account_id
+					input_variables = self.ctrl.getDb().getAccountInputVariables(self.userId, strategy_id, account_code, script_id)
+
+					if len(input_variables) and "Maximum Bank" in input_variables["Preset 1"]:
+						if input_variables["Preset 1"]["Maximum Bank"].get("value") is not None:
+							current_bank += input_variables["Preset 1"]["Maximum Bank"]["value"]
+						else:
+							current_bank += input_variables["Preset 1"]["Maximum Bank"]["default"]
+
+		return current_bank
 
 
 	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):

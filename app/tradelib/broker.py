@@ -452,10 +452,14 @@ class Broker(object):
 	# Update Handlers
 	def handleOnTrade(self, account_id, res):
 		if not self.is_dummy:
+			is_update = False
 			transactions = []
 			for i in res:
 				res[i]['brokerId'] = self.brokerId
 				transactions.append(res[i])
+
+				if res[i].get('type') == 'update':
+					is_update = True
 
 			# Handle stream subscriptions
 			for func in self.ontrade_subs.values():
@@ -469,12 +473,13 @@ class Broker(object):
 				namespace='/admin'
 			)
 
-			# Save transaction to storage
-			account_code = '.'.join((self.brokerId, str(account_id)))
-			self.userAccount.appendAccountGui(
-				self.strategyId, account_code,
-				{ 'transactions': transactions }
-			)
+			if not is_update:
+				# Save transaction to storage
+				account_code = '.'.join((self.brokerId, str(account_id)))
+				self.userAccount.appendAccountGui(
+					self.strategyId, account_code,
+					{ 'transactions': transactions }
+				)
 
 
 	def handleOnGui(self, account_id, message):

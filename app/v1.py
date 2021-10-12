@@ -529,10 +529,19 @@ def get_strategy_info_ept(strategy_id):
 		content_type='application/json'
 	)
 
-	# return Response(
-	# 	json.dumps(strategy, indent=2), 
-	# 	status=200, content_type='application/json'
-	# )
+
+@bp.route('/strategy/<strategy_id>/info', methods=('GET',))
+def get_basic_strategy_info_ept(strategy_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+	strategy_info = ctrl.getDb().getStrategy(account.userId, strategy_id)
+	script_id = strategy_info["package"].split('.')[0]
+	strategy_info["used_bank"] = account.getMaximumBanks(strategy_id, script_id)
+
+	return Response(
+		json.dumps(strategy_info, indent=2), status=200,
+		content_type='application/json'
+	)
 
 
 @bp.route('/strategy/<strategy_id>/init', methods=('POST',))
@@ -711,8 +720,10 @@ def start_script_ept(strategy_id, broker_id):
 	# Get accounts
 	body = getJson()
 
-
-	if not account.isAnyScriptRunning():
+	strategy_info = ctrl.getDb().getStrategy(account.userId, strategy_id)
+	account_limit = strategy_info.get("account_limit", 1)
+	num_running_scripts = account.getNumScriptsRunning()
+	if num_running_scripts < account_limit:
 		accounts = body.get('accounts')
 		input_variables = body.get('input_variables')
 		if accounts is not None:
@@ -720,7 +731,7 @@ def start_script_ept(strategy_id, broker_id):
 			for account_id in accounts:
 				# Account validation check
 				if broker is None or not account_id in broker.getAccounts():
-					res = { 'error': 'NotFound', 'message': f'Account {account_code} not found.' }
+					res = { 'error': 'NotFound', 'message': f'Account {account_id} not found.' }
 					return Response(
 						json.dumps(res, indent=2), 
 						status=404,
