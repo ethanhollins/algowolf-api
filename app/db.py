@@ -58,6 +58,7 @@ class Database(object):
 
 	def addAsyncJob(self, func, *args, **kwargs):
 		self._job_queue.append((func, args, kwargs))
+		print(f"JOBS: {len(self._job_queue)}")
 
 
 	def _handle_jobs(self):
@@ -1017,8 +1018,8 @@ class Database(object):
 			if 'info' not in gui or not isinstance(gui['info'], dict):
 				gui['info'] = {}
 
-			if len(obj['info']) < 30:
-				print(f"[{user_id}] {obj['info']}")
+			# if len(obj['info']) < 30:
+			# 	print(f"[{user_id}] {obj['info']}")
 
 			i = None
 			for i in obj['info']:
@@ -1039,8 +1040,8 @@ class Database(object):
 					)[-MAX_GUI:]
 				)
 
-			if len(obj['info']) < 30:
-				print(f"[{user_id}] {list(gui['info'][i['product']][i['period']].items())[-1]}")
+			# if len(obj['info']) < 30:
+			# 	print(f"[{user_id}] {list(gui['info'][i['product']][i['period']].items())[-1]}")
 
 		# Handle Transactions
 		if 'transactions' in obj:
