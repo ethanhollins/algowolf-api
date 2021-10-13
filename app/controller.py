@@ -203,10 +203,12 @@ class Controller(object):
 									# Get package name by last run
 									script_id = user['strategies'][strategy_id]['running'][broker_id][account_id]['script_id']
 									input_variables = user['strategies'][strategy_id]['running'][broker_id][account_id]['input_variables']
+									print(f"START 1: {strategy_id}, {script_id}")
 
 									# Restart strategy
 									account = self.accounts.getAccount(user_id)
 									account.startStrategy(strategy_id)
+									print(f"START 2")
 
 									# Get Auth Key
 									# key = account.generateSessionToken()
