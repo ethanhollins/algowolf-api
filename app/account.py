@@ -5,6 +5,7 @@ import string, random
 import requests
 import shortuuid
 import traceback
+from copy import deepcopy
 from datetime import datetime
 from app.controller import DictQueue
 from app import tradelib as tl
@@ -167,11 +168,11 @@ class Account(object):
 		while self._queue.index(queue_id) > 0: pass
 
 		try:
-			strategy = {
-				'name': info.get('name'),
-				'package': info.get('package')
-			}
-			strategy_id = self.ctrl.getDb().createStrategy(self.userId, strategy)
+			# strategy = {
+			# 	'name': info.get('name'),
+			# 	'package': info.get('package')
+			# }
+			strategy_id = self.ctrl.getDb().createStrategy(self.userId, info)
 		except Exception:
 			pass
 		finally:
@@ -286,6 +287,42 @@ class Account(object):
 
 		return False
 
+	
+	def getNumScriptsRunning(self):
+		user = self.ctrl.getDb().getUser(self.userId)
+
+		count = 0
+		if 'strategies' in user:
+			for strategy_id in user['strategies']:
+				if 'running' in user['strategies'][strategy_id]:
+					for broker_id in user['strategies'][strategy_id]['running']:
+						for account_id in user['strategies'][strategy_id]['running'][broker_id]:
+							if (
+								isinstance(user['strategies'][strategy_id]['running'][broker_id][account_id], dict) and 
+								user['strategies'][strategy_id]['running'][broker_id][account_id].get('script_id')
+							):
+								count += 1
+
+		return count
+
+
+	def getMaximumBanks(self, strategy_id, broker_id, account_id, script_id):
+		strategy = self.getStrategy(strategy_id)
+
+		current_bank = 0
+		for _broker_id in strategy.get("brokers", {}):
+			for _account_id in strategy["brokers"][_broker_id]["accounts"]:
+				if account_id != tl.broker.PAPERTRADER_NAME and (_broker_id != broker_id or _account_id != account_id):
+					account_code = _broker_id + '.' + _account_id
+					input_variables = self.ctrl.getDb().getAccountInputVariables(self.userId, strategy_id, account_code, script_id)
+
+					if len(input_variables) and "Allocated Bank" in input_variables["Preset 1"]:
+						if input_variables["Preset 1"]["Allocated Bank"].get("value") is not None:
+							current_bank += input_variables["Preset 1"]["Allocated Bank"]["value"]
+						else:
+							current_bank += input_variables["Preset 1"]["Allocated Bank"]["default"]
+
+		return current_bank
 
 
 	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
@@ -336,8 +373,8 @@ class Account(object):
 			# )
 
 			# print(f"SET RUNNING... ({strategy_id}) {accounts}")
-			# for account_id in accounts:
-			# 	self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
+			for account_id in accounts:
+				self._set_running(strategy_id, broker_id, account_id, script_id, deepcopy(input_variables))
 
 			print("START SCRIPT...")
 			url = self.ctrl.app.config.get('LOADER_URL')
@@ -348,8 +385,8 @@ class Account(object):
 			)
 
 			if res.status_code == 200:
-				for account_id in accounts:
-					self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
+				# for account_id in accounts:
+				# 	self._set_running(strategy_id, broker_id, account_id, script_id, input_variables)
 				return True
 			else:
 				# for account_id in accounts:
