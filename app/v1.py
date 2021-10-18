@@ -2684,12 +2684,12 @@ def create_subscription(plan):
 					price = "price_1JbKKaBtSFeX56k3MuRj7ecT" # REAL PRICE
 				elif level == 4:
 					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
-					price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
-					# price = "price_1JbKJWBtSFeX56k3783LhUbi" # REAL PRICE
+					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					price = "price_1JbKJWBtSFeX56k3783LhUbi" # REAL PRICE
 				elif level == 5:
 					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
-					price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
-					# price = "price_1JQUbsBtSFeX56k3aw6fw9Nr" # REAL PRICE
+					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					price = "price_1JQUbsBtSFeX56k3aw6fw9Nr" # REAL PRICE
 
 				if price is not None:
 					if address["country"] == "AU":
