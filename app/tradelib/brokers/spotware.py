@@ -61,6 +61,8 @@ class Spotware(Broker):
 				user = self.ctrl.getDb().getUser("spotware")
 			elif self.ctrl.app.config['SERVER'] == 1:
 				user = self.ctrl.getDb().getUser("spotware_1")
+			else:
+				user = self.ctrl.getDb().getUser("spotware_" + str(self.ctrl.app.config['SERVER']))
 
 			self.access_token = user.get('access_token')
 			self.refresh_token = user.get('refresh_token')
