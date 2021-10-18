@@ -178,10 +178,10 @@ class Chart(object):
 						except Exception as e:
 							pass
 
-				self.ctrl.emit(
-					'ontick', res, 
-					namespace='/admin'
-				)
+				# self.ctrl.emit(
+				# 	'ontick', res, 
+				# 	namespace='/admin'
+				# )
 
 		except Exception:
 			print(traceback.format_exc(), flush=True)
