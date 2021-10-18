@@ -34,10 +34,14 @@ TEMP_PRICES = {
 
 class Spot(object):
 
-	def __init__(self, ctrl, currency):
+	def __init__(self, ctrl, currency, rate=None):
 		self.ctrl = ctrl
 		self.currency = currency
-		self.rate = self.getRate()
+
+		if rate is None:
+			self.rate = self.getRateBackup()
+		else:
+			self.rate = rate
 		print(f'{self.currency} rate: {self.rate}')
 
 
@@ -78,4 +82,8 @@ class Spot(object):
 
 
 	def getRate(self):
+		return self.rate
+
+
+	def getRateBackup(self):
 		return TEMP_PRICES[self.currency]

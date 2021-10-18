@@ -426,10 +426,31 @@ class Spots(dict):
 
 	def __init__(self, ctrl, spots):
 		self.ctrl = ctrl
-		self._init_spots(spots)
+		self.prices = self._get_prices()
+
+		if self.prices is None:
+			self._init_spots_backup(spots)
+		else:
+			self._init_spots()
 
 
-	def _init_spots(self, spots):
+	def _get_prices(self):
+		uri = "http://data.fixer.io/api/latest"
+		res = requests.get(uri + f"?access_key={self.ctrl.app.config['FIXER_IO_ACCESS_KEY']}&base=USD")
+		if res.status_code == 200:
+			data = res.json()
+			if data.get("success"):
+				return data.get("rates")
+		
+		return None
+
+
+	def _init_spots(self):
+		for i in self.prices:
+			self[i] = tl.Spot(self.ctrl, i, rate=1/self.prices[i])
+
+
+	def _init_spots_backup(self, spots):
 		for i in spots:
 			self[i] = tl.Spot(self.ctrl, i)
 			self[i].getRate()

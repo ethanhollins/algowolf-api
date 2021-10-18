@@ -44,6 +44,8 @@ class Database(object):
 
 		self.prodStrategyBucketName = 'algowolf-strategies'
 		self.prodUserTable = self._generate_table('algowolf-users')
+		self.messagesTable = self._generate_table('algowolf-messages')
+		self.variablesTable = self._generate_table('algowolf-variables')
 
 		self.analyticsTable = self._generate_table('algowolf-analytics')
 		self.emailsTable = self._generate_table('algowolf-emails')
@@ -1841,3 +1843,89 @@ class Database(object):
 			ReturnValues="UPDATED_NEW"
 		)
 		return True
+
+
+	'''
+	Messages
+	'''
+
+	def createMessage(self, title, date, body, users):
+		message_id = shortuuid.uuid()
+
+		res = self.messagesTable.put_item(
+			Item={
+				'message_id': message_id,
+				'message_title': title,
+				'message_date': date,
+				'message_body': body,
+				'message_users': users
+			}
+		)
+
+		return message_id
+
+
+	def getAllMessages(self):
+		res = self.messagesTable.scan()
+		data = res['Items']
+
+		while 'LastEvaluatedKey' in res:
+			res = self.messagesTable.scan(ExclusiveStartKey=res['LastEvaluatedKey'])
+			data.extend(res['Items'])
+
+		return self._convert_to_float(data)
+
+	
+	def getMessage(self, message_id):
+		res = self.messagesTable.get_item(
+			Key={ 'message_id': message_id }
+		)
+		if res.get('Item'):
+			return self._convert_to_float(res['Item'])
+		else:
+			return None
+
+
+	def updateMessage(self, message_id, update):
+		update_values = self._convert_to_decimal(
+			dict([tuple([':{}'.format(i[0]), i[1]])
+					for i in update.items()])
+		)
+
+		update_exp = ('set ' + ' '.join(
+			['{} = :{},'.format(k, k) for k in update.keys()]
+		))[:-1]
+
+		res = self.messagesTable.update_item(
+			Key={
+				'message_id': message_id
+			},
+			UpdateExpression=update_exp,
+			ExpressionAttributeValues=update_values,
+			ReturnValues="UPDATED_NEW"
+		)
+		return True
+
+
+	def deleteMessage(self, message_id):
+		res = self.messagesTable.delete_item(
+			Key={
+				'message_id': message_id,
+			}
+		)
+		return True
+
+
+	'''
+	Master Variables
+	'''
+
+	def getVariable(self, variable_name):
+		res = self.variablesTable.get_item(
+			Key={ 'variable_name': variable_name }
+		)
+		if res.get('Item'):
+			return self._convert_to_float(res['Item'])
+		else:
+			return None
+	

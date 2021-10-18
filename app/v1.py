@@ -45,6 +45,14 @@ subscription_info = {
 		3: {
 			"name": "HG Pro Hedge Fund",
 			"product": "HolyGrail_Pro_professional"
+		},
+		4: {
+			"name": "HG Pro Kick Starter",
+			"product": "HolyGrail_Pro_kickstarter"
+		},
+		5: {
+			"name": "HG Pro Standard",
+			"product": "HolyGrail_Pro"
 		}
 	}
 }
@@ -2665,15 +2673,23 @@ def create_subscription(plan):
 				if level == 0:
 					# price = "price_1JRnMIBtSFeX56k3stqYyEj6" # TEST MODE PRICE
 					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
-					price = "price_1JbKJWBtSFeX56k3783LhUbi" # REAL PRICE
+					price = "price_1Jlj7kBtSFeX56k3EJ7SVYrX" # REAL PRICE
 				elif level == 1:
 					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
 					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
-					price = "price_1JQUbsBtSFeX56k3aw6fw9Nr" # REAL PRICE
+					price = "price_1Jlj6tBtSFeX56k39TreiwAp" # REAL PRICE
 				elif level == 2:
 					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
 					# price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
 					price = "price_1JbKKaBtSFeX56k3MuRj7ecT" # REAL PRICE
+				elif level == 4:
+					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
+					price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					# price = "price_1JbKJWBtSFeX56k3783LhUbi" # REAL PRICE
+				elif level == 5:
+					# price = "price_1JRnNHBtSFeX56k3jzh0rp9h" # TEST MODE PRICE
+					price = "price_1JZUipBtSFeX56k35d2p43oV" # PROD TEST PRICE
+					# price = "price_1JQUbsBtSFeX56k3aw6fw9Nr" # REAL PRICE
 
 				if price is not None:
 					if address["country"] == "AU":
@@ -2828,6 +2844,135 @@ def disconnect_broker(strategy_id, broker_id):
 	broker.disconnectBroker()
 
 	res = { "message": "done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/messages', methods=('GET',))
+@auth.login_required
+def get_all_messages():
+	messages = ctrl.getDb().getAllMessages()
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	result = []
+	for m in messages:
+		if "all" in m["message_users"] or g.user.userId in m["message_users"]:
+			result.append(m)
+			if "messages_read" in user:
+				if m["message_id"] in user["messages_read"]:
+					m["unread"] = False
+					continue
+			m["unread"] = True
+
+	result = sorted(result, key=lambda x: parser.parse(x["message_date"]), reverse=True)
+	res = { "messages": result }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/messages', methods=('POST',))
+def create_message():
+	body = getJson()
+	title = body.get("message_title")
+	date = datetime.utcnow().isoformat()
+	message_body = body.get("message_body")
+	users = body.get("message_users")
+
+	message_id = ctrl.getDb().createMessage(title, date, message_body, users)
+
+	res = { "message_id": message_id }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/messages/<message_id>', methods=('GET',))
+def get_message(message_id):
+	message = ctrl.getDb().getMessage(message_id)
+
+	res = { "message": message }
+	if message is not None:
+		return Response(
+			json.dumps(res, indent=2),
+			status=200, content_type='application/json'
+		)
+	else:
+		return Response(
+			json.dumps(res, indent=2),
+			status=400, content_type='application/json'
+		)
+
+
+@bp.route('/messages/<message_id>', methods=('PUT',))
+def update_message(message_id):
+	body = getJson()
+	title = body.get("message_title")
+	date = datetime.utcnow().isoformat()
+	message_body = body.get("message_body")
+	users = body.get("message_users")
+
+	update = {}
+	if title is not None:
+		update["message_title"] = title
+	if date is not None:
+		update["message_date"] = date
+	if message_body is not None:
+		update["message_body"] = message_body
+	if users is not None:
+		update["message_users"] = users
+
+	ctrl.getDb().updateMessage(message_id, update)
+
+	res = { "message_id": message_id }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/messages/<message_id>', methods=('DELETE',))
+def delete_message(message_id):
+	ctrl.getDb().deleteMessage(message_id)
+
+	res = { "message": "done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/messages/user/<message_id>', methods=('PUT',))
+@auth.login_required
+def mark_message_read(message_id):
+	user = ctrl.getDb().getUser(g.user.userId)
+
+	update = None
+	if "messages_read" in user:
+		if not message_id in user["messages_read"]:
+			update = { "messages_read": user["messages_read"] + [message_id] }	
+	else:
+		update = { "messages_read": [message_id] }
+
+	if update is not None:
+		ctrl.getDb().updateUser(g.user.userId, update)
+
+	res = { "message": "done" }
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
+@bp.route('/variables/<variable_name>', methods=('GET',))
+def get_master_variable(variable_name):
+	result = ctrl.getDb().getVariable(variable_name)
+
+	res = { variable_name: result }
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'
