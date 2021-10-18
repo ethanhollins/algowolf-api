@@ -97,12 +97,13 @@ class Controller(object):
 		return sio
 
 	def emit(self, event, data=None, namespace=None, callback=None):
-		_id = shortuuid.uuid()
-		print(f"[emit] ({_id}) {event}, {data}, {namespace}, {callback}")
+		# _id = shortuuid.uuid()
+		# print(f"[emit] ({_id}) {event}, {data}, {namespace}, {callback}")
+		time.sleep(0.001)
 		try:
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
-			print(f"[emit] ({_id}) {traceback.format_exc()}")
+			print(f"[emit] {traceback.format_exc()}")
 
 
 	def onCommand(self, data):
