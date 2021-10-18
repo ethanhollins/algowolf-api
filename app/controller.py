@@ -45,6 +45,7 @@ class Controller(object):
 		self.app = app
 		self._msg_queue = {}
 		self._listeners = {}
+		self._emit_queue = []
 
 		self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
@@ -97,13 +98,19 @@ class Controller(object):
 		return sio
 
 	def emit(self, event, data=None, namespace=None, callback=None):
-		# _id = shortuuid.uuid()
+		_id = shortuuid.uuid()
 		# print(f"[emit] ({_id}) {event}, {data}, {namespace}, {callback}")
+		self._emit_queue.append(_id)
+		while self._emit_queue[0] != _id:
+			time.sleep(0.001)
+		
 		time.sleep(0.001)
 		try:
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
 			print(f"[emit] {traceback.format_exc()}")
+		finally:
+			del self._emit_queue[0]
 
 
 	def onCommand(self, data):
