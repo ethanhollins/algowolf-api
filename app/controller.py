@@ -97,6 +97,7 @@ class Controller(object):
 		return sio
 
 	def emit(self, event, data=None, namespace=None, callback=None):
+		print(f"[emit] {event}, {data}, {namespace}, {callback}")
 		try:
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
