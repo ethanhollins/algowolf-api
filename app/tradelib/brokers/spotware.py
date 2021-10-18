@@ -70,10 +70,10 @@ class Spotware(Broker):
 			self.is_auth = self._add_user()
 			self._subscribe_account_updates()
 
-			if self.is_auth:
-				for instrument in CHARTS:
-					print(f'LOADING {instrument}')
-					chart = self.createChart(instrument, await_completion=True)
+			# if self.is_auth:
+			# 	for instrument in CHARTS:
+			# 		print(f'LOADING {instrument}')
+			# 		chart = self.createChart(instrument, await_completion=True)
 
 		else:
 			self.access_token = access_token

@@ -93,13 +93,13 @@ class Oanda(Broker):
 
 
 		print('OANDA INIT 1')
-		if is_parent:
-			# Load Charts
-			CHARTS = ['EUR_USD']
-			PERIODS = [tl.period.FIVE_SECONDS, tl.period.ONE_MINUTE]
-			for instrument in CHARTS:
-				chart = self.createChart(instrument, await_completion=True)
-				# self.data_saver.subscribe(chart, PERIODS)
+		# if is_parent:
+		# 	# Load Charts
+		# 	CHARTS = ['EUR_USD']
+		# 	PERIODS = [tl.period.FIVE_SECONDS, tl.period.ONE_MINUTE]
+		# 	for instrument in CHARTS:
+		# 		chart = self.createChart(instrument, await_completion=True)
+		# 		# self.data_saver.subscribe(chart, PERIODS)
 
 		if not is_dummy:
 			Thread(target=self._periodic_check).start()
