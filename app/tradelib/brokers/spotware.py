@@ -174,7 +174,7 @@ class Spotware(Broker):
 					self._last_update = time.time()
 
 				else:
-					# self.update_positions()
+					self.update_positions()
 					self._last_update = time.time()
 
 			except Exception as e:
