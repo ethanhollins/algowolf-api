@@ -679,5 +679,5 @@ class Broker(object):
 
 from .brokers import (
 	Oanda, FXCM, IG, Spotware, IB, Dukascopy, FXOpen, 
-	TestSpotware
+	TestSpotware, LoadTest
 )

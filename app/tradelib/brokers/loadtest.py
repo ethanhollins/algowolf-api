@@ -439,8 +439,8 @@ class LoadTest(Broker):
 				new_order = self._convert_fxo_order(account_id, i)
 				new_orders.append(new_order)
 
-		self.positions = new_positions
-		self.orders = new_orders
+		# self.positions = new_positions
+		# self.orders = new_orders
 
 		return {
 			self.generateReference(): {
@@ -660,6 +660,28 @@ class LoadTest(Broker):
 
 	def onChartUpdate(self, *args):
 		return
+
+
+	def convertFromFXOInstrument(self, instrument):
+		if instrument == "EURUSD":
+			return "EUR_USD"
+		else:
+			return instrument
+
+
+	def convertToFXOInstrument(self, instrument):
+		if instrument == "EUR_USD":
+			return "EURUSD"
+		else:
+			return instrument
+
+
+	def convertToLotsize(self, size):
+		return size / 100000
+
+
+	def convertToUnitSize(self, size):
+		return int(size * 100000)
 
 
 	def subscribeAccountUpdates(self):

@@ -12,4 +12,5 @@ from .dukascopy import Dukascopy
 from .fxopen import FXOpen
 
 # Test Brokers
+from .loadtest import LoadTest
 from .test_brokers.test_spotware import TestSpotware

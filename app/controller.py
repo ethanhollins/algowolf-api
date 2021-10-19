@@ -100,12 +100,12 @@ class Controller(object):
 	def emit(self, event, data=None, namespace=None, callback=None):
 		_id = shortuuid.uuid()
 		# print(f"[emit] ({_id}) {event}, {data}, {namespace}, {callback}")
-		self._emit_queue.append(_id)
-		while self._emit_queue[0] != _id:
-			time.sleep(0.001)
-		
-		time.sleep(0.001)
 		try:
+			self._emit_queue.append(_id)
+			while self._emit_queue[0] != _id:
+				time.sleep(0.001)
+			
+			time.sleep(0.001)
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
 			print(f"[emit] {traceback.format_exc()}")

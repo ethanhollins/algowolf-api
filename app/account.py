@@ -953,6 +953,9 @@ class Account(object):
 					return None
 			elif broker_name == tl.broker.FXOPEN_NAME:
 				self.brokers[broker_args['broker_id']] = tl.broker.FXOpen(**broker_args)
+			elif broker_name == "loadtest":
+				print(f"[loadtest] -> {broker_args}")
+				self.brokers[broker_args['broker_id']] = tl.broker.LoadTest(**broker_args)
 
 		return self.brokers[broker_args['broker_id']]
 

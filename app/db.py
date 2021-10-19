@@ -681,6 +681,14 @@ class Database(object):
 				for account_id in accounts
 			}
 
+		elif broker_name == "loadtest":
+			print(props)
+			accounts = ["9000554"]
+			props['accounts'] = {
+				account_id: { 'active': True, 'nickname': '' }
+				for account_id in accounts
+			}
+
 		# Upload new broker info
 		key = jwt.encode(props, self.ctrl.app.config['SECRET_KEY'], algorithm='HS256').decode('utf8')
 		print(f'[createBroker] set broker: {broker_id}, {key}')
