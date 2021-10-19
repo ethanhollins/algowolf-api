@@ -141,44 +141,63 @@ class Controller(object):
 	def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
 		msg_id = shortuuid.uuid()
 
-		data = {
-			'msg_id': msg_id,
-			'broker': broker,
-			'broker_id': broker_id,
-			'cmd': func,
-			'args': list(args),
-			'kwargs': kwargs
-		}
 		try:
+			self._emit_queue.append(msg_id)
+			while self._emit_queue[0] != msg_id:
+				time.sleep(0.001)
+			
+			time.sleep(0.001)
+
+			data = {
+				'msg_id': msg_id,
+				'broker': broker,
+				'broker_id': broker_id,
+				'cmd': func,
+				'args': list(args),
+				'kwargs': kwargs
+			}
 			print(f"Emit: {data}")
 			self.sio.emit('broker_cmd', data=data, namespace='/admin')
-			return self._wait_broker_response(msg_id)
+			result = self._wait_broker_response(msg_id)
 		except Exception:
-			print(traceback.format_exc())
-			return {
+			print(f"[brokerRequest] {traceback.format_exc()}")
+			result = {
 				'error': 'No response.'
 			}
+		finally:
+			del self._emit_queue[0]
+			return result
+			
 
 
 	def mainBrokerRequest(self, broker, broker_id, func, *args, **kwargs):
 		msg_id = shortuuid.uuid()
 
-		data = {
-			'msg_id': msg_id,
-			'broker': broker,
-			'broker_id': broker_id,
-			'cmd': func,
-			'args': list(args),
-			'kwargs': kwargs
-		}
 		try:
+			self._emit_queue.append(msg_id)
+			while self._emit_queue[0] != msg_id:
+				time.sleep(0.001)
+			
+			time.sleep(0.001)
+
+			data = {
+				'msg_id': msg_id,
+				'broker': broker,
+				'broker_id': broker_id,
+				'cmd': func,
+				'args': list(args),
+				'kwargs': kwargs
+			}
 			self.main_sio.emit('broker_cmd', data=data, namespace='/admin')
-			return self._wait_broker_response(msg_id)
+			result = self._wait_broker_response(msg_id)
 		except Exception:
-			print(traceback.format_exc())
-			return {
+			print(f"[mainBrokerRequest] {traceback.format_exc()}")
+			result = {
 				'error': 'No response.'
 			}
+		finally:
+			del self._emit_queue[0]
+			return result
 
 
 	def addBrokerListener(self, msg_id, listener):
