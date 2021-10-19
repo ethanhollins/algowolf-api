@@ -564,6 +564,18 @@ def init_strategy_ept(strategy_id):
 	)
 
 
+@bp.route('/strategy/<strategy_id>/init/<broker_id>', methods=('POST',))
+def init_strategy_by_broker_id_ept(strategy_id, broker_id):
+	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)
+	account = ctrl.accounts.getAccount(user_id)
+	strategy = account.getStrategyByBrokerId(strategy_id, broker_id)
+
+	return Response(
+		json.dumps(strategy, indent=2), 
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/strategy/<strategy_id>/<broker_id>', methods=('GET',))
 def is_broker_authorized_ept(strategy_id, broker_id):
 	user_id, _ = key_or_login_required(strategy_id, AccessLevel.LIMITED)

@@ -162,6 +162,93 @@ class Account(object):
 		}
 
 
+	def getStrategyByBrokerId(self, strategy_id, broker_id):
+		if broker_id not in self.brokers:
+			self.getStrategy(strategy_id)
+
+		broker_info = {}
+		if broker_id in self.brokers:
+			brokers = {
+				**self.getAllBrokers(),
+				**{ 
+					strategy_id: { 
+						'name': 'Paper Trader',
+						'broker': 'papertrader',
+						'accounts': {
+							tl.broker.PAPERTRADER_NAME: {
+								'active': True,
+								'nickname': ''
+							} 
+						}
+					} 
+				}
+			}
+
+			broker_info[broker_id] = {
+				'name': brokers[broker_id]['name'],
+				'broker': brokers[broker_id]['broker'],
+				'is_auth': True,
+				'accounts': {},
+				'positions': [],
+				'orders': []
+			}
+
+			try:
+				self.brokers.get(broker_id).authCheck()
+			except Exception:
+				pass
+
+			if self.brokers.get(broker_id).is_auth:
+				try:
+					for acc in brokers.get(broker_id)['accounts']:
+						broker_info[broker_id]['accounts'][acc] = { 
+							'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
+							'balance': self.brokers.get(broker_id).getAccountInfo(acc)[acc].get('balance'),
+							**brokers.get(broker_id)['accounts'][acc]
+						}
+
+					broker_info[broker_id]['positions'] = self.brokers.get(broker_id).getAllPositions()
+					broker_info[broker_id]['orders'] = self.brokers.get(broker_id).getAllOrders()
+
+				except Exception as e:
+
+					if tl.isWeekend(datetime.utcnow()):
+						broker_info[broker_id]['is_auth'] = True
+					else:
+						broker_info[broker_id]['is_auth'] = False
+					
+					broker_info[broker_id]['accounts'] = {}
+					broker_info[broker_id]['positions'] = []
+					broker_info[broker_id]['orders'] = []
+					self.brokers.get(broker_id).is_auth = False
+
+					for acc in brokers.get(broker_id)['accounts']:
+						broker_info[broker_id]['accounts'][acc] = { 
+							'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
+							'balance': 0,
+							**brokers.get(broker_id)['accounts'][acc]
+						}
+						
+
+			else:
+				if tl.isWeekend(datetime.utcnow()):
+					broker_info[broker_id]['is_auth'] = True
+				else:
+					broker_info[broker_id]['is_auth'] = False
+				
+				for acc in brokers.get(broker_id)['accounts']:
+					broker_info[broker_id]['accounts'][acc] = { 
+						'strategy_status': self.isScriptRunning(strategy_id, broker_id, acc),
+						'balance': 0,
+						**brokers.get(broker_id)['accounts'][acc]
+					}
+
+		return {
+			'strategy_id': strategy_id,
+			'brokers': broker_info
+		}
+
+
 	def createStrategy(self, info):
 		queue_id = self.generateReference()
 		self._queue.append(queue_id)
