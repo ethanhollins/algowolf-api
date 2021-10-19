@@ -165,7 +165,7 @@ class Controller(object):
 				'error': 'No response.'
 			}
 		finally:
-			del self._emit_queue[0]
+			# del self._emit_queue[0]
 			return result
 			
 
@@ -196,7 +196,7 @@ class Controller(object):
 				'error': 'No response.'
 			}
 		finally:
-			del self._emit_queue[0]
+			# del self._emit_queue[0]
 			return result
 
 
