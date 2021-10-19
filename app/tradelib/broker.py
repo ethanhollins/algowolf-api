@@ -473,13 +473,13 @@ class Broker(object):
 				namespace='/admin'
 			)
 
-			if not is_update:
-				# Save transaction to storage
-				account_code = '.'.join((self.brokerId, str(account_id)))
-				self.userAccount.appendAccountGui(
-					self.strategyId, account_code,
-					{ 'transactions': transactions }
-				)
+			# if not is_update:
+			# 	# Save transaction to storage
+			# 	account_code = '.'.join((self.brokerId, str(account_id)))
+			# 	self.userAccount.appendAccountGui(
+			# 		self.strategyId, account_code,
+			# 		{ 'transactions': transactions }
+			# 	)
 
 
 	def handleOnGui(self, account_id, message):
