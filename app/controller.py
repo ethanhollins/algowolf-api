@@ -142,9 +142,9 @@ class Controller(object):
 		msg_id = shortuuid.uuid()
 
 		try:
-			self._emit_queue.append(msg_id)
-			while self._emit_queue[0] != msg_id:
-				time.sleep(0.001)
+			# self._emit_queue.append(msg_id)
+			# while self._emit_queue[0] != msg_id:
+			# 	time.sleep(0.001)
 			
 			time.sleep(0.001)
 
@@ -174,9 +174,9 @@ class Controller(object):
 		msg_id = shortuuid.uuid()
 
 		try:
-			self._emit_queue.append(msg_id)
-			while self._emit_queue[0] != msg_id:
-				time.sleep(0.001)
+			# self._emit_queue.append(msg_id)
+			# while self._emit_queue[0] != msg_id:
+			# 	time.sleep(0.001)
 			
 			time.sleep(0.001)
 
