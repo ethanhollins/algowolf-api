@@ -1104,47 +1104,50 @@ class FXOpen(Broker):
 			if len(self._account_update_queue):
 				update = self._account_update_queue[0]
 				del self._account_update_queue[0]
-
-				item = update.get("Result")
-				result = {}
-				account_id = None
-
-				if item is not None:
-					event = item.get("Event")
-					# On Filled Event
-					if event == "Filled":
-						# Position Updates
-						account_id = str(item["Trade"]["AccountId"])
-						if "Profit" in item:
-							item["Trade"]["Price"] = item["Fill"]["Price"]
-							result = self._handle_order_fill_close(item["Trade"])
-						else:
-							result = self._handle_order_fill_open(item["Trade"])
 				
-					# On Allocated Event
-					elif event == "Allocated":
-						if item["Trade"]["Type"] in ("Stop","Limit"):
+				try:
+					item = update.get("Result")
+					result = {}
+					account_id = None
+
+					if item is not None:
+						event = item.get("Event")
+						# On Filled Event
+						if event == "Filled":
+							# Position Updates
 							account_id = str(item["Trade"]["AccountId"])
-							result = self._handle_order_create(item["Trade"])
+							if "Profit" in item:
+								item["Trade"]["Price"] = item["Fill"]["Price"]
+								result = self._handle_order_fill_close(item["Trade"])
+							else:
+								result = self._handle_order_fill_open(item["Trade"])
+					
+						# On Allocated Event
+						elif event == "Allocated":
+							if item["Trade"]["Type"] in ("Stop","Limit"):
+								account_id = str(item["Trade"]["AccountId"])
+								result = self._handle_order_create(item["Trade"])
 
-					# On Canceled Event
-					elif event == "Canceled":
-						account_id = str(item["Trade"]["AccountId"])
-						result = self._handle_order_cancel(item["Trade"])
+						# On Canceled Event
+						elif event == "Canceled":
+							account_id = str(item["Trade"]["AccountId"])
+							result = self._handle_order_cancel(item["Trade"])
 
-					# On Modified Event
-					elif event == "Modified":
-						account_id = str(item["Trade"]["AccountId"])
-						result = self._handle_modify(item["Trade"])
+						# On Modified Event
+						elif event == "Modified":
+							account_id = str(item["Trade"]["AccountId"])
+							result = self._handle_modify(item["Trade"])
 
-					elif "Trades" in item:
-						result = self._handle_trades(item["Trades"])
+						elif "Trades" in item:
+							result = self._handle_trades(item["Trades"])
 
-					if event is not None:
-						print(f"[FXOpen._handle_account_updates] {update}")
+						if event is not None:
+							print(f"[FXOpen._handle_account_updates] {update}")
 
-				if len(result):
-					self.handleOnTrade(account_id, result)
+					if len(result):
+						self.handleOnTrade(account_id, result)
+				except Exception:
+					print(f"[_handle_account_updates] {traceback.format_exc()}")
 
 				
 
