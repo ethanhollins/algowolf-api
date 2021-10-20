@@ -109,8 +109,8 @@ class Controller(object):
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
 			print(f"[emit] {traceback.format_exc()}")
-		finally:
-			del self._emit_queue[0]
+		# finally:
+		# 	del self._emit_queue[0]
 
 
 	def onCommand(self, data):
