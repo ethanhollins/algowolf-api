@@ -986,7 +986,7 @@ def update_order(strategy_id, broker_id, data):
 			
 			order = broker.getOrderByID(order_id)
 			if order:
-				result = order.modify(**modify)
+				result = broker.order_manager.modify(order, **modify)
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1017,7 +1017,7 @@ def delete_order(strategy_id, broker_id, data):
 			order_id = delete['order_id']
 			order = broker.getOrderByID(order_id)
 			if order:
-				result = order.cancel()
+				result = broker.order_manager.cancel(order)
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1087,7 +1087,7 @@ def update_position(strategy_id, broker_id, data):
 			
 			pos = broker.getPositionByID(order_id)
 			if pos:
-				result = pos.modify(**modify)
+				result = broker.position_manager.modify(pos, **modify)
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1118,7 +1118,7 @@ def delete_position(strategy_id, broker_id, data):
 			order_id = delete['order_id']
 			pos = broker.getPositionByID(order_id)
 			if pos:
-				result = pos.close(delete.get('lotsize'))
+				result = broker.position_manager.close(pos, delete.get('lotsize'))
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {

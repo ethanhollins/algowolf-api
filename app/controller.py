@@ -9,7 +9,7 @@ from copy import copy
 from urllib.request import urlopen
 from flask import abort
 from threading import Thread
-from xecd_rates_client import XecdClient
+from redis import Redis
 
 
 STREAM_URL = 'http://nginx:3001'
@@ -46,6 +46,8 @@ class Controller(object):
 		self._msg_queue = {}
 		self._listeners = {}
 		self._emit_queue = []
+
+		self.redis_client = Redis(host='redis', port=6379, password="dev")
 
 		self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
@@ -109,8 +111,8 @@ class Controller(object):
 			self.sio.emit(event, data=data, namespace=namespace, callback=callback)
 		except Exception:
 			print(f"[emit] {traceback.format_exc()}")
-		finally:
-			del self._emit_queue[0]
+		# finally:
+		# 	del self._emit_queue[0]
 
 
 	def onCommand(self, data):

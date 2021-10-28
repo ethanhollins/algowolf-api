@@ -4,6 +4,7 @@ import datetime
 import shortuuid
 import time
 import math
+import json
 from app import tradelib as tl
 from threading import Thread
 from app.v1 import AccessLevel, key_or_login_required
@@ -49,11 +50,6 @@ Parent Broker Class
 '''
 class Broker(object):
 
-	__slots__ = (
-		'ctrl', 'userAccount', 'strategyId', 'brokerId', 'name', 'backtester', 'acceptLive', 
-		'accounts', 'charts', 'positions', 'orders', 'is_running', '_handled', 'transactions',
-		'ontrade_subs', 'display_name', 'is_dummy', 'is_auth'
-	)
 	def __init__(self, ctrl, user_account, strategy_id, broker_id, name, accounts, display_name, is_dummy, is_auth):
 		self.ctrl = ctrl
 		self.userAccount = user_account
@@ -71,12 +67,13 @@ class Broker(object):
 
 		self.acceptLive = False
 
+		self.position_manager = tl.PositionManager(self)
+		self.order_manager = tl.OrderManager(self)
+
 		# Containers
 		self.accounts = accounts
 
 		self.charts = []
-		self.positions = []
-		self.orders = []
 		self.ontrade_subs = {}
 		self.transactions = self._create_empty_transaction_df()
 		self._handled = {}
@@ -88,6 +85,14 @@ class Broker(object):
 		if self.userAccount:
 			self._handle_papertrader_setup()
 
+
+	def __getattribute__(self, key):
+		if key == 'positions':
+			return self.getDbPositions()
+		elif key == 'orders':
+			return self.getDbOrders()
+		else:
+			return super().__getattribute__(key)
 
 	'''
 	Utilities
@@ -122,17 +127,21 @@ class Broker(object):
 		orders = trades.get('orders')
 		earliest_trade_ts = None
 
+		result_positions = []
 		for pos in positions:
 			if earliest_trade_ts is None or pos['open_time'] < earliest_trade_ts:
 				earliest_trade_ts = pos['open_time']
 			if pos.get('account_id') in self.getAccounts():
-				self.positions.append(tl.Position.fromDict(self, pos))
+				result_positions.append(pos)
+		self.setDbPositions(result_positions)
 
+		result_orders = []
 		for order in orders:
 			if earliest_trade_ts is None or order['open_time'] < earliest_trade_ts:
 				earliest_trade_ts = order['open_time']
 			if order.get('account_id') in self.getAccounts():
-				self.orders.append(tl.Order.fromDict(self, order))
+				result_orders.append(order)
+		self.setDbOrders(result_orders)
 
 		return earliest_trade_ts
 
@@ -145,27 +154,27 @@ class Broker(object):
 
 	def _handle_live_strategy_positions(self):
 		# Get open positions
-		new_positions = []
+		positions = [i for i in self.getDbPositions() if i["account_id"] == tl.broker.PAPERTRADER_NAME]
 		for acc in self.getAccounts():
 			if acc != tl.broker.PAPERTRADER_NAME:
 				# LIVE positions
-				new_positions += self._get_all_positions(acc)[acc]
-		self.positions = new_positions
+				positions += self._get_all_positions(acc)[acc]
+		self.setDbPositions(positions)
 
 	def _handle_live_strategy_orders(self):
 		# Get open positions
-		new_orders = []
+		orders = [i for i in self.getDbOrders() if i["account_id"] == tl.broker.PAPERTRADER_NAME]
 		for acc in self.getAccounts():
 			if acc != tl.broker.PAPERTRADER_NAME:
 				# LIVE positions
-				new_orders += self._get_all_orders(acc)[acc]
-		self.orders = new_orders
+				orders += self._get_all_orders(acc)[acc]
+		self.setDbOrders(orders)
 
 	def _run_backtest(self, from_ts):
 		products = []
 		for i in self.positions + self.orders:
-			if i.product not in products:
-				products.append(i.product)
+			if i["product"] not in products:
+				products.append(i["product"])
 
 		for product in products:
 			chart = self.getChart(product)
@@ -225,6 +234,9 @@ class Broker(object):
 		return
 
 	# Public Functions
+	def getBrokerKey(self):
+		return self.strategyId + "." + self.brokerId
+
 	def generateReference(self):
 		return shortuuid.uuid()
 
@@ -265,31 +277,101 @@ class Broker(object):
 	def getLotSize(self, bank, risk, stop_range):
 		return round(bank * (risk / 100) / stop_range, 2)
 
+	def getDbPositions(self):
+		positions = self.ctrl.redis_client.hget(self.getBrokerKey(), "positions")
+		if positions is None:
+			positions = []
+		else:
+			positions = json.loads(positions)
+		return positions
+
+	def setDbPositions(self, positions):
+		self.ctrl.redis_client.hset(self.getBrokerKey(), "positions", json.dumps(positions))
+
+	def appendDbPosition(self, new_position):
+		positions = self.getDbPositions()
+		positions.append(new_position)
+		self.setDbPositions(positions)
+
+	def deleteDbPosition(self, order_id):
+		positions = self.getDbPositions()
+		for i in range(len(positions)):
+			if positions[i]["order_id"] == order_id:
+				del positions[i]
+				break
+		self.setDbPositions(positions)
+
+	def replaceDbPosition(self, position):
+		positions = self.getDbPositions()
+		for i in range(len(positions)):
+			if positions[i]["order_id"] == position["order_id"]:
+				positions[i] = position
+				break
+		self.setDbPositions(positions)
+
+	def convertJSONToPositions(self, positions):
+		return [tl.Position.fromDict(self, i) for i in positions]
+
 	def getAllPositions(self, account_id=None):
 		result = []
 		for pos in self.positions:
 			# Return specified account positions
-			if not account_id or pos.account_id == account_id:
+			if not account_id or pos["account_id"] == account_id:
 				result.append(pos)
 		return result
 
 	def getPositionByID(self, order_id):
-		for pos in self.getAllPositions():
-			if pos.order_id == order_id:
+		for pos in self.getDbPositions():
+			if pos["order_id"] == order_id:
 				return pos
 		return None
+
+	def getDbOrders(self):
+		orders = self.ctrl.redis_client.hget(self.getBrokerKey(), "orders")
+		if orders is None:
+			orders = []
+		else:
+			orders = json.loads(orders)
+		return orders
+
+	def setDbOrders(self, orders):
+		self.ctrl.redis_client.hset(self.getBrokerKey(), "orders", json.dumps(orders))
+
+	def appendDbOrder(self, new_order):
+		orders = self.getDbOrders()
+		orders.append(new_order)
+		self.setDbOrders(orders)
+
+	def deleteDbOrder(self, order_id):
+		orders = self.getDbOrders()
+		for i in range(len(orders)):
+			if orders[i]["order_id"] == order_id:
+				del orders[i]
+				break
+		self.setDbOrders(orders)
+
+	def replaceDbOrder(self, order):
+		orders = self.getDbOrders()
+		for i in range(len(orders)):
+			if orders[i]["order_id"] == order["order_id"]:
+				orders[i] = order
+				break
+		self.setDbOrders(orders)
+
+	def convertJSONToOrders(self, orders):
+		return [tl.Order.fromDict(self, i) for i in orders]
 
 	def getAllOrders(self, account_id=None):
 		result = []
 		for order in self.orders:
 			# Return specified account positions
-			if not account_id or order.account_id == account_id:
+			if not account_id or order["account_id"] == account_id:
 				result.append(order)
 		return result
 
 	def getOrderByID(self, order_id):
-		for order in self.getAllOrders():
-			if order.order_id == order_id:
+		for order in self.getDbOrders():
+			if order["order_id"] == order_id:
 				return order
 		return None
 
@@ -395,7 +477,7 @@ class Broker(object):
 		sl_price=None, tp_price=None
 	):
 		if len(self.positions) > 0:
-			direction = self.positions[-1].direction
+			direction = self.positions[-1]["direction"]
 			self.closeAllPositions()
 		else:
 			raise OrderException('Must be in position to stop and reverse.')
@@ -435,7 +517,7 @@ class Broker(object):
 		res = {
 			self.generateReference(): {
 				'timestamp': time.time(),
-				'type': UPDATE,
+				'type': tl.UPDATE,
 				'accepted': True,
 				'items': {
 					'positions': self.getAllPositions(),
@@ -531,40 +613,40 @@ class Broker(object):
 
 	def orderValidation(self, order, min_dist=0):
 
-		if order.direction == tl.LONG:
-			price = self.getAsk(order.product)
+		if order["direction"] == tl.LONG:
+			price = self.getAsk(order["product"])
 		else:
-			price = self.getBid(order.product)
+			price = self.getBid(order["product"])
 
 		# Entry validation
 		if order.get('type') == tl.STOP_ORDER or order.get('type') == tl.LIMIT_ORDER:
-			if order.entry_price == None:
+			if order["entry_price"] == None:
 				raise OrderException('Order must contain entry price.')
 			elif order_type == tl.LIMIT_ORDER:
 				if direction == tl.LONG:
-					if order.entry_price > price - tl.utils.convertToPrice(min_dist):
+					if order["entry_price"] > price - tl.utils.convertToPrice(min_dist):
 						raise OrderException('Long limit order entry must be lesser than current price.')
 				else:
-					if order.entry_price < price + tl.utils.convertToPrice(min_dist):
+					if order["entry_price"] < price + tl.utils.convertToPrice(min_dist):
 						raise OrderException('Short limit order entry must be greater than current price.')
 			elif order_type == tl.STOP_ORDER:
-				if order.direction == tl.LONG:
-					if order.entry_price < price + tl.utils.convertToPrice(min_dist):
+				if order["direction"] == tl.LONG:
+					if order["entry_price"] < price + tl.utils.convertToPrice(min_dist):
 						raise OrderException('Long stop order entry must be greater than current price.')
 				else:
-					if order.entry_price > price - tl.utils.convertToPrice(min_dist):
+					if order["entry_price"] > price - tl.utils.convertToPrice(min_dist):
 						raise OrderException('Short stop order entry must be lesser than current price.')
 
 		# SL/TP validation
-		if order.direction == tl.LONG:
-			if order.sl and order.sl > order.entry_price - tl.utils.convertToPrice(min_dist):
+		if order["direction"] == tl.LONG:
+			if order["sl"] and order["sl"] > order["entry_price"] - tl.utils.convertToPrice(min_dist):
 				raise OrderException('Stop loss price must be lesser than entry price.')
-			if order.tp and order.tp < order.entry_price + tl.utils.convertToPrice(min_dist):
+			if order["tp"] and order["tp"] < order["entry_price"] + tl.utils.convertToPrice(min_dist):
 				raise OrderException('Take profit price must be greater than entry price.')
 		else:
-			if order.sl and order.sl < order.entry_price + tl.utils.convertToPrice(min_dist):
+			if order["sl"] and order["sl"] < order["entry_price"] + tl.utils.convertToPrice(min_dist):
 				raise OrderException('Stop loss price must be greater than entry price.')
-			if order.tp and order.tp > order.entry_price - tl.utils.convertToPrice(min_dist):
+			if order["tp"] and order["tp"] > order["entry_price"] - tl.utils.convertToPrice(min_dist):
 				raise OrderException('Take profit price must be lesser than entry price.')
 
 

@@ -37,24 +37,10 @@ class LoadTest(Broker):
 		if not is_dummy and not is_parent:
 			Thread(target=self._handle_account_updates).start()
 			self.subscribeAccountUpdates()
-			# for account_id in self.getAccounts():
-			# 	if account_id != tl.broker.PAPERTRADER_NAME:
-			# 		self._subscribe_account_updates(account_id)
 
 			# Handle strategy
 			if self.userAccount and self.brokerId:
 				self._handle_live_strategy_setup()
-
-		# print('FXOPEN INIT 1')
-		# if is_parent:
-		# 	Thread(target=self._handle_price_updates).start()
-		# 	# Load Charts
-		# 	CHARTS = ['EUR_USD']
-		# 	print("CREATE CHARTS")
-		# 	for instrument in CHARTS:
-		# 		chart = self.createChart(instrument, await_completion=True)
-		# 		# self.data_saver.subscribe(chart, PERIODS)
-		# 	print("CREATE CHARTS DONE")
 
 		if not is_dummy:
 			Thread(target=self._periodic_check).start()
@@ -93,7 +79,7 @@ class LoadTest(Broker):
 
 		res = self.ctrl.brokerRequest(
 			'loadtest', self.brokerId, 'add_user',
-			user_id, self.brokerId, is_parent=self.is_parent
+			user_id, self.strategyId, self.brokerId, is_parent=self.is_parent
 		)
 
 		if 'error' in res:
@@ -114,25 +100,6 @@ class LoadTest(Broker):
 		force_download=False
 	):
 		
-		# dl_start = None
-		# dl_end = None
-		# if start:
-		# 	dl_start = tl.utils.convertTimeToTimestamp(start)
-		# if end:
-		# 	dl_end = tl.utils.convertTimeToTimestamp(end)
-
-		# res = self.ctrl.brokerRequest(
-		# 	self.name, self.brokerId, '_download_historical_data_broker',
-		# 	product, period, tz=tz, start=dl_start, end=dl_end,
-		# 	count=count, force_download=force_download
-		# )
-
-		# if 'error' in res:
-		# 	result = self._create_empty_df(period)
-		# else:
-		# 	result = pd.DataFrame.from_dict(res, dtype=float)
-		# 	result.index = result.index.astype(int)
-
 		return self._create_empty_df(period)
 
 
@@ -216,16 +183,13 @@ class LoadTest(Broker):
 		result = {}
 		client_id = trade.get("ClientId")
 		check_order = self.getOrderByID(str(trade["Id"]))
-		print(f"[_handle_order_create] 1: {check_order}")
 		if check_order is None:
 			order = self._convert_fxo_order(account_id, trade)
-			print(f"[_handle_order_create] 2: {order}")
-			self.orders.append(order)
-			print(f"[_handle_order_create] 3: {self.orders}")
+			self.appendDbOrder(order)
 
 			result[self.generateReference()] = {
-				'timestamp': order.open_time,
-				'type': order.order_type,
+				'timestamp': order["open_time"],
+				'type': order["order_type"],
 				'accepted': True,
 				'item': order
 			}
@@ -244,11 +208,11 @@ class LoadTest(Broker):
 		# Delete any existing order reference
 		from_order = self.getOrderByID(str(trade["Id"]))
 		if from_order is not None:
-			del self.orders[self.orders.index(from_order)]
+			self.deleteDbOrder(from_order["order_id"])
 
 			self.handleOnTrade(account_id, {
 				self.generateReference(): {
-					'timestamp': from_order.close_time,
+					'timestamp': from_order["close_time"],
 					'type': tl.ORDER_CANCEL,
 					'accepted': True,
 					'item': from_order
@@ -260,15 +224,15 @@ class LoadTest(Broker):
 		# Closed Position
 		pos = self.getPositionByID(str(trade["Id"]))
 		if pos is not None:
-			size = pos.lotsize - self.convertToLotsize(trade["RemainingAmount"])
+			size = pos["lotsize"] - self.convertToLotsize(trade["RemainingAmount"])
 
-			if size >= pos.lotsize:
+			if size >= pos["lotsize"]:
 				if trade.get("Price"):
-					pos.close_price = trade["Price"]
+					pos["close_price"] = trade["Price"]
 				else:
-					pos.close_price = trade["StopPrice"]
+					pos["close_price"] = trade["StopPrice"]
 
-				pos.close_time = trade["Modified"] / 1000
+				pos["close_time"] = trade["Modified"] / 1000
 
 				comment = trade.get("Comment")
 				if comment is not None and "TP" in comment:
@@ -279,12 +243,12 @@ class LoadTest(Broker):
 					order_type = tl.POSITION_CLOSE
 
 				result[self.generateReference()] = {
-					'timestamp': pos.close_price,
+					'timestamp': pos["close_price"],
 					'type': order_type,
 					'accepted': True,
 					'item': pos
 				}
-				del self.positions[self.positions.index(pos)]
+				self.deleteDbPosition(pos["order_id"])
 			
 			else:
 				cpy = tl.Position.fromDict(self, pos)
@@ -298,7 +262,8 @@ class LoadTest(Broker):
 				cpy.close_time = trade["Modified"] / 1000
 
 				# Modify open position
-				pos.lotsize = self.convertToLotsize(trade["RemainingAmount"])
+				pos["lotsize"] = self.convertToLotsize(trade["RemainingAmount"])
+				self.replaceDbPosition(pos)
 
 				result[self.generateReference()] = {
 					'timestamp': cpy.close_price,
@@ -322,11 +287,11 @@ class LoadTest(Broker):
 		# Delete any existing order reference
 		from_order = self.getOrderByID(str(trade["Id"]))
 		if from_order is not None:
-			del self.orders[self.orders.index(from_order)]
+			self.deleteDbOrder(from_order["order_id"])
 
 			self.handleOnTrade(account_id, {
 				self.generateReference(): {
-					'timestamp': from_order.close_time,
+					'timestamp': from_order["close_time"],
 					'type': tl.ORDER_CANCEL,
 					'accepted': True,
 					'item': from_order
@@ -340,11 +305,11 @@ class LoadTest(Broker):
 		check_pos = self.getPositionByID(str(trade["Id"]))
 		if check_pos is None:
 			pos = self._convert_fxo_position(account_id, trade)
-			self.positions.append(pos)
+			self.appendDbPosition(pos)
 
 			result[self.generateReference()] = {
-				'timestamp': pos.open_time,
-				'type': pos.order_type,
+				'timestamp': pos["open_time"],
+				'type': pos["order_type"],
 				'accepted': True,
 				'item': pos
 			}
@@ -364,11 +329,11 @@ class LoadTest(Broker):
 		client_id = trade.get("ClientId")
 		order = self.getOrderByID(str(trade["Id"]))
 		if order is not None:
-			order.close_time = trade["Modified"] / 1000
-			del self.orders[self.orders.index(order)]
+			order["close_time"] = trade["Modified"] / 1000
+			self.deleteDbOrder(order["order_id"])
 
 			result[self.generateReference()] = {
-				'timestamp': order.close_time,
+				'timestamp': order["close_time"],
 				'type': tl.ORDER_CANCEL,
 				'accepted': True,
 				'item': order
@@ -388,8 +353,10 @@ class LoadTest(Broker):
 		if trade["Type"] == "Position":
 			pos = self.getPositionByID(str(trade["Id"]))
 			if pos is not None:
-				pos.sl = trade.get("StopLoss")
-				pos.tp = trade.get("TakeProfit")
+				pos["sl"] = trade.get("StopLoss")
+				pos["tp"] = trade.get("TakeProfit")
+
+				self.replaceDbPosition(pos)
 
 				result[self.generateReference()] = {
 					'timestamp': trade["Modified"] / 1000,
@@ -404,14 +371,14 @@ class LoadTest(Broker):
 		else:
 			order = self.getOrderByID(str(trade["Id"]))
 			if order is not None:
-				order.sl = trade.get("StopLoss")
-				order.tp = trade.get("TakeProfit")
-				order.lotsize = self.convertToLotsize(trade["RemainingAmount"])
+				order["sl"] = trade.get("StopLoss")
+				order["tp"] = trade.get("TakeProfit")
+				order["lotsize"] = self.convertToLotsize(trade["RemainingAmount"])
 
 				if "StopPrice" in trade:
-					order.entry_price = trade["StopPrice"]
+					order["entry_price"] = trade["StopPrice"]
 				else:
-					order.entry_price = trade["Price"]
+					order["entry_price"] = trade["Price"]
 
 				result[self.generateReference()] = {
 					'timestamp': trade["Modified"] / 1000,
@@ -693,57 +660,76 @@ class LoadTest(Broker):
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 
-	def _on_account_update(self, update):
-		self._account_update_queue.append(update)
-
+	def _on_account_update(self, update, account_id, handled_id):
+		self._account_update_queue.append((update, account_id, handled_id))
 
 	def _handle_account_updates(self):
-		
 		while True:
 			if len(self._account_update_queue):
-				update = self._account_update_queue[0]
+				update, account_id, handled_id = self._account_update_queue[0]
 				del self._account_update_queue[0]
 
-				item = update.get("Result")
-				result = {}
-				account_id = None
+				try:
+					if handled_id is not None:
+						self._handled[handled_id] = update
 
-				if item is not None:
-					event = item.get("Event")
-					# On Filled Event
-					if event == "Filled":
-						# Position Updates
-						account_id = str(item["Trade"]["AccountId"])
-						if "Profit" in item:
-							item["Trade"]["Price"] = item["Fill"]["Price"]
-							result = self._handle_order_fill_close(item["Trade"])
-						else:
-							result = self._handle_order_fill_open(item["Trade"])
+					if len(update):
+						self.handleOnTrade(account_id, update)
+				except Exception:
+					print(f"[_handle_account_updates] {traceback.format_exc()}")
+			time.sleep(0.1)
+
+	# def _handle_account_updates(self):
+		
+	# 	while True:
+	# 		if len(self._account_update_queue):
+	# 			update = self._account_update_queue[0]
+	# 			del self._account_update_queue[0]
 				
-					# On Allocated Event
-					elif event == "Allocated":
-						if item["Trade"]["Type"] in ("Stop","Limit"):
-							account_id = str(item["Trade"]["AccountId"])
-							result = self._handle_order_create(item["Trade"])
+	# 			try:
+	# 				item = update.get("Result")
+	# 				result = {}
+	# 				account_id = None
 
-					# On Canceled Event
-					elif event == "Canceled":
-						account_id = str(item["Trade"]["AccountId"])
-						result = self._handle_order_cancel(item["Trade"])
+	# 				if item is not None:
+	# 					event = item.get("Event")
+	# 					# On Filled Event
+	# 					if event == "Filled":
+	# 						# Position Updates
+	# 						account_id = str(item["Trade"]["AccountId"])
+	# 						if "Profit" in item:
+	# 							item["Trade"]["Price"] = item["Fill"]["Price"]
+	# 							result = self._handle_order_fill_close(item["Trade"])
+	# 						else:
+	# 							result = self._handle_order_fill_open(item["Trade"])
+					
+	# 					# On Allocated Event
+	# 					elif event == "Allocated":
+	# 						if item["Trade"]["Type"] in ("Stop","Limit"):
+	# 							account_id = str(item["Trade"]["AccountId"])
+	# 							result = self._handle_order_create(item["Trade"])
 
-					# On Modified Event
-					elif event == "Modified":
-						account_id = str(item["Trade"]["AccountId"])
-						result = self._handle_modify(item["Trade"])
+	# 					# On Canceled Event
+	# 					elif event == "Canceled":
+	# 						account_id = str(item["Trade"]["AccountId"])
+	# 						result = self._handle_order_cancel(item["Trade"])
 
-					elif "Trades" in item:
-						result = self._handle_trades(item["Trades"])
+	# 					# On Modified Event
+	# 					elif event == "Modified":
+	# 						account_id = str(item["Trade"]["AccountId"])
+	# 						result = self._handle_modify(item["Trade"])
 
-					if event is not None:
-						print(f"[FXOpen._handle_account_updates] {update}")
+	# 					elif "Trades" in item:
+	# 						result = self._handle_trades(item["Trades"])
 
-				if len(result):
-					self.handleOnTrade(account_id, result)
+	# 					if event is not None:
+	# 						print(f"[FXOpen._handle_account_updates] {update}")
+
+	# 				if len(result):
+	# 					self.handleOnTrade(account_id, result)
+
+	# 			except Exception:
+	# 				print(traceback.format_exc())
 
 
 	def isPeriodCompatible(self, period):

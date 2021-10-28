@@ -137,7 +137,7 @@ class Oanda(Broker):
 
 		res = self.ctrl.brokerRequest(
 			'oanda', self.brokerId, 'add_user',
-			user_id, self.brokerId, self._key, self._is_demo, self.accounts,
+			user_id, self.strategyId, self.brokerId, self._key, self._is_demo, self.accounts,
 			is_parent=self.is_parent, is_dummy=self.is_dummy
 		)
 
@@ -248,7 +248,8 @@ class Oanda(Broker):
 			order_type, direction, lotsize,
 			entry_price, sl, tp, ts
 		)
-		self.orders.append(order)
+
+		self.appendDbOrder(order)
 
 		result[self.generateReference()] = {
 			'timestamp': ts,
@@ -274,11 +275,11 @@ class Oanda(Broker):
 
 		from_order = self.getOrderByID(res.get('orderID'))
 		if from_order is not None:
-			del self.orders[self.orders.index(from_order)]
+			self.deleteDbOrder(from_order["order_id"])
 
 			self.handleOnTrade(account_id, {
 				self.generateReference(): {
-					'timestamp': from_order.close_time,
+					'timestamp': from_order["close_time"],
 					'type': tl.ORDER_CANCEL,
 					'accepted': True,
 					'item': from_order
@@ -308,7 +309,8 @@ class Oanda(Broker):
 				order_type, direction, lotsize,
 				entry_price, None, None, ts
 			)
-			self.positions.append(pos)
+
+			self.appendDbPosition(pos)
 
 			result[self.generateReference()] = {
 				'timestamp': ts,
@@ -330,7 +332,8 @@ class Oanda(Broker):
 				))
 
 				# Modify open position
-				pos.lotsize -= self.convertToLotsize(abs(float(res['tradeReduced'].get('units'))))
+				pos["lotsize"] -= self.convertToLotsize(abs(float(res['tradeReduced'].get('units'))))
+				self.replaceDbPosition(pos)
 
 				result[self.generateReference()] = {
 					'timestamp': ts,
@@ -352,8 +355,8 @@ class Oanda(Broker):
 				order_id = trade.get('tradeID')
 				pos = self.getPositionByID(order_id)
 				if pos is not None:
-					pos.close_price = float(trade.get('price'))
-					pos.close_time = tl.convertTimeToTimestamp(datetime.strptime(
+					pos["close_price"] = float(trade.get('price'))
+					pos["close_time"] = tl.convertTimeToTimestamp(datetime.strptime(
 						res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
 					))
 
@@ -363,8 +366,7 @@ class Oanda(Broker):
 						'accepted': True,
 						'item': pos
 					}
-					del self.positions[self.positions.index(pos)]
-
+					self.deleteDbPosition(pos["order_id"])
 
 
 		# Add update to handled
@@ -384,8 +386,8 @@ class Oanda(Broker):
 			res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
 		))
 		if order is not None:
-			order.close_time = ts
-			del self.orders[self.orders.index(order)]
+			order["close_time"] = ts
+			self.deleteDbOrder(order["order_id"])
 			result[self.generateReference()] = {
 				'timestamp': ts,
 				'type': tl.ORDER_CANCEL,
@@ -397,10 +399,13 @@ class Oanda(Broker):
 			self._handled[oanda_id] = result
 
 		else:
-			for trade in self.positions:
-				if trade.sl_id == order_id:
-					trade.sl = None
-					trade.sl_id = None
+			positions = self.positions
+			for trade in positions:
+				if trade["sl_id"] == order_id:
+					trade["sl"] = None
+					trade["sl_id"] = None
+
+					self.replaceDbOrder(trade)
 
 					result[self.generateReference()] = {
 						'timestamp': ts,
@@ -409,9 +414,11 @@ class Oanda(Broker):
 						'item': trade
 					}
 
-				elif trade.tp_id == order_id:
-					trade.tp = None
-					trade.tp_id = None
+				elif trade["tp_id"] == order_id:
+					trade["tp"] = None
+					trade["tp_id"] = None
+
+					self.replaceDbOrder(trade)
 
 					result[self.generateReference()] = {
 						'timestamp': ts,
@@ -439,8 +446,10 @@ class Oanda(Broker):
 				res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
 			))
 
-			pos.sl = float(res.get('price'))
-			pos.sl_id = oanda_id
+			pos["sl"] = float(res.get('price'))
+			pos["sl_id"] = oanda_id
+
+			self.replaceDbPosition(pos)
 
 			result[self.generateReference()] = {
 				'timestamp': ts,
@@ -466,8 +475,10 @@ class Oanda(Broker):
 				res.get('time').split('.')[0], '%Y-%m-%dT%H:%M:%S'
 			))
 
-			pos.tp = float(res.get('price'))
-			pos.tp_id = oanda_id
+			pos["tp"] = float(res.get('price'))
+			pos["tp_id"] = oanda_id
+
+			self.replaceDbPosition(pos)
 
 			result[self.generateReference()] = {
 				'timestamp': ts,
@@ -542,12 +553,6 @@ class Oanda(Broker):
 
 		result = {}
 		if len(payload):
-			# endpoint = f'/v3/accounts/{order["account_id"]}/trades/{order["order_id"]}/orders'
-			# res = self._session.put(
-			# 	self._url + endpoint,
-			# 	headers=self._headers,
-			# 	data=json.dumps(payload)
-			# )
 
 			broker_result = self.ctrl.brokerRequest(
 				self.name, self.brokerId, 'modifyPosition',
@@ -629,6 +634,7 @@ class Oanda(Broker):
 		if 200 <= status_code < 300:
 			if res.get('orderFillTransaction'):
 				# Process entry
+				print(f"[Oanda.createPosition] {res}")
 				result.update(self._wait(
 					res['orderFillTransaction'].get('id'),
 					self._handle_order_fill, 
@@ -728,7 +734,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -740,7 +746,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': 'Oanda internal server error.',
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -784,7 +790,7 @@ class Oanda(Broker):
 						'accepted': False,
 						'message': msg,
 						'item': {
-							'order_id': pos.order_id
+							'order_id': pos["order_id"]
 						}
 					}
 				})
@@ -802,7 +808,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -814,7 +820,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': 'Oanda internal server error.',
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -969,7 +975,7 @@ class Oanda(Broker):
 						'accepted': False,
 						'message': res['replacingOrderCancelTransaction'].get('reason'),
 						'item': {
-							'order_id': order.order_id
+							'order_id': order["order_id"]
 						}
 					}
 				})
@@ -995,7 +1001,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -1007,7 +1013,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': 'Oanda internal server error.',
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -1051,7 +1057,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -1063,7 +1069,7 @@ class Oanda(Broker):
 					'accepted': False,
 					'message': 'Oanda internal server error.',
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -1266,14 +1272,14 @@ class Oanda(Broker):
 		new_positions = {}
 		new_orders = {}
 		for pos in self.positions:
-			if not str(pos.account_id) in new_positions:
-				new_positions[str(pos.account_id)] = []
-			new_positions[str(pos.account_id)].append(pos)
+			if not str(pos["account_id"]) in new_positions:
+				new_positions[str(pos["account_id"])] = []
+			new_positions[str(pos["account_id"])].append(pos)
 
 		for order in self.orders:
-			if not str(order.account_id) in new_orders:
-				new_orders[str(order.account_id)] = []
-			new_orders[str(order.account_id)].append(order)
+			if not str(order["account_id"]) in new_orders:
+				new_orders[str(order["account_id"])] = []
+			new_orders[str(order["account_id"])].append(order)
 
 		for account_id in self.accounts:
 			positions = new_positions.get(str(account_id), [])
@@ -1363,79 +1369,102 @@ class Oanda(Broker):
 		self._perform_account_connection(sub)
 
 
-	def _on_account_update(self, account_id, update):
-		self._account_update_queue.append((account_id, update))
+	def _on_account_update(self, account_id, update, handled_id):
+		self._account_update_queue.append((account_id, update, handled_id))
 
 
 	def _handle_account_updates(self):
-
 		while True:
 			if len(self._account_update_queue):
-				account_id, update = self._account_update_queue[0]
+				account_id, update, handled_id = self._account_update_queue[0]
 				del self._account_update_queue[0]
+				print(f"[Oanda._handle_account_updates] {update}, {account_id}, {handled_id}")
 
-				print(f'UPDATE: {account_id}, {update}')
+				try:
+					if handled_id is not None:
+						self._handled[handled_id] = update
 
-				res = {}
-				if update.get('type') == 'HEARTBEAT':
-					self._last_update = time.time()
-
-				elif update.get('type') == 'connected':
-					if not self.is_dummy and self.userAccount and self.brokerId:
-						print(f'[_on_account_update] CONNECTED, Retrieving positions/orders')
-						self._handle_live_strategy_setup()
-
-						res.update({
-							self.generateReference(): {
-								'timestamp': time.time(),
-								'type': 'update',
-								'accepted': True,
-								'item': {
-									'positions': self.positions,
-									'orders': self.orders
-								}
-							}
-						})
-
-				elif update.get('type') == 'ORDER_FILL':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_order_fill(account_id, update))
-
-				elif update.get('type') == 'STOP_LOSS_ORDER':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_stop_loss_order(update))
-
-				elif update.get('type') == 'TAKE_PROFIT_ORDER':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_take_profit_order(update))
-
-				elif update.get('type') == 'LIMIT_ORDER' or update.get('type') == 'STOP_ORDER':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_order_create(update))
-
-				elif update.get('type') == 'ORDER_CANCEL':
-					if self._handled.get(update.get('id')):
-						res.update(self._wait(update.get('id')))
-
-					else:
-						res.update(self._handle_order_cancel(update))
-
-				if len(res):
-					self.handleOnTrade(account_id, res)
-
+					if len(update):
+						self.handleOnTrade(account_id, update)
+				except Exception:
+					print(f"[_handle_account_updates] {traceback.format_exc()}")
+					
 			time.sleep(0.1)
+	
+
+	# def _handle_account_updates(self):
+
+	# 	while True:
+	# 		if len(self._account_update_queue):
+	# 			account_id, update = self._account_update_queue[0]
+	# 			del self._account_update_queue[0]
+				
+	# 			try:
+	# 				print(f'UPDATE: {account_id}, {update}')
+
+	# 				res = {}
+	# 				if update.get('type') == 'HEARTBEAT':
+	# 					self._last_update = time.time()
+
+	# 				elif update.get('type') == 'connected':
+	# 					if not self.is_dummy and self.userAccount and self.brokerId:
+	# 						print(f'[_on_account_update] CONNECTED, Retrieving positions/orders')
+	# 						self._handle_live_strategy_setup()
+
+	# 						res.update({
+	# 							self.generateReference(): {
+	# 								'timestamp': time.time(),
+	# 								'type': 'update',
+	# 								'accepted': True,
+	# 								'item': {
+	# 									'positions': self.positions,
+	# 									'orders': self.orders
+	# 								}
+	# 							}
+	# 						})
+
+	# 				elif update.get('type') == 'ORDER_FILL':
+	# 					if self._handled.get(update.get('id')):
+	# 						res.update(self._wait(update.get('id')))
+
+	# 					else:
+	# 						res.update(self._handle_order_fill(account_id, update))
+
+	# 				elif update.get('type') == 'STOP_LOSS_ORDER':
+	# 					if self._handled.get(update.get('id')):
+	# 						res.update(self._wait(update.get('id')))
+
+	# 					else:
+	# 						res.update(self._handle_stop_loss_order(update))
+
+	# 				elif update.get('type') == 'TAKE_PROFIT_ORDER':
+	# 					if self._handled.get(update.get('id')):
+	# 						res.update(self._wait(update.get('id')))
+
+	# 					else:
+	# 						res.update(self._handle_take_profit_order(update))
+
+	# 				elif update.get('type') == 'LIMIT_ORDER' or update.get('type') == 'STOP_ORDER':
+	# 					if self._handled.get(update.get('id')):
+	# 						res.update(self._wait(update.get('id')))
+
+	# 					else:
+	# 						res.update(self._handle_order_create(update))
+
+	# 				elif update.get('type') == 'ORDER_CANCEL':
+	# 					if self._handled.get(update.get('id')):
+	# 						res.update(self._wait(update.get('id')))
+
+	# 					else:
+	# 						res.update(self._handle_order_cancel(update))
+
+	# 				if len(res):
+	# 					self.handleOnTrade(account_id, res)
+
+	# 			except Exception:
+	# 				print(f"[_handle_account_updates] {traceback.format_exc()}")
+
+	# 		time.sleep(0.1)
 
 
 	def isPeriodCompatible(self, period):

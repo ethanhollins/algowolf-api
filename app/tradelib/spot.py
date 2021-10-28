@@ -38,11 +38,9 @@ class Spot(object):
 		self.ctrl = ctrl
 		self.currency = currency
 
-		if rate is None:
-			self.rate = self.getRateBackup()
-		else:
-			self.rate = rate
-		print(f'{self.currency} rate: {self.rate}')
+		if rate is not None:
+			self.ctrl.redis_client.hset("rates", currency, rate)
+		print(f'{self.currency} rate: {self.getRate()}')
 
 
 	def _get_pair(self):
@@ -52,11 +50,11 @@ class Spot(object):
 
 
 	def convertTo(self, price):
-		return price * (1 / self.rate)
+		return price * (1 / self.getRate())
 
 
 	def convertFrom(self, price):
-		return price * self.rate
+		return price * self.getRate()
 
 
 	def __getRate(self):
@@ -82,7 +80,7 @@ class Spot(object):
 
 
 	def getRate(self):
-		return self.rate
+		return self.ctrl.redis_client.hget("rates", self.currency)
 
 
 	def getRateBackup(self):
