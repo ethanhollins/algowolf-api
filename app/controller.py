@@ -332,7 +332,11 @@ class Controller(object):
 
 			if self.zmq_sub_socket in socks:
 				message = self.zmq_sub_socket.recv_json()
-				self.handleListenerMessage(message)
+				if message.get("type") == "price":
+					if self.connection_id == 0:
+						self.handleListenerMessage(message["message"])
+				else:
+					self.handleListenerMessage(message)
 
 			if self.zmq_req_socket in socks:
 				message = self.zmq_dealer_socket.recv()
