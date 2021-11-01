@@ -4,6 +4,7 @@ import datetime
 import time
 import traceback
 import json
+import zmq
 from threading import Thread
 from app import tradelib as tl
 from copy import copy
@@ -32,6 +33,8 @@ class Chart(object):
 		self._tick_queue = []
 
 		self.start(await_completion)
+
+		# Thread(target=self._mock_ticks).start()
 
 
 	def start(self, await_completion):
@@ -224,16 +227,17 @@ class Chart(object):
 	def _mock_ticks(self):
 		period = tl.period.ONE_MINUTE
 		while self.broker.is_running:
-			time.sleep(10)
+			time.sleep(30)
 			if self.lastTs.get(period):
 				result =[{
-					'broker': 'ig',
+					'broker': 'fxcm',
 					'product': self.product,
 					'period': period,
-					'bar_end': False,
+					'bar_end': True,
 					'timestamp': self.lastTs[period],
 					'item': {
 						'ask': self.ask[period].tolist(),
+						'mid': self.mid[period].tolist(),
 						'bid': self.bid[period].tolist()
 					}
 				}]
@@ -249,6 +253,19 @@ class Chart(object):
 			time.sleep(0.01)
 
 		try:
+			self.ctrl.zmq_dealer_socket.send_json(
+				{ 
+					"type": "ontick", 
+					"message": {
+						'broker': self.broker.name,
+						'product': self.product,
+						'period': 'all',
+						'items': result
+					}
+				},
+				zmq.NOBLOCK
+			)
+
 			self.ctrl.emit(
 				'ontick', 
 				{
@@ -271,6 +288,14 @@ class Chart(object):
 								Thread(target=func, args=(res,)).start()
 						except Exception as e:
 							pass
+				
+				# self.ctrl.zmq_dealer_socket.send_json(
+				# 	{ 
+				# 		"type": "ontick", 
+				# 		"message": res
+				# 	},
+				# 	zmq.NOBLOCK
+				# )
 
 				self.ctrl.emit(
 					'ontick', res, 

@@ -5,6 +5,7 @@ import shortuuid
 import time
 import math
 import json
+import zmq
 from app import tradelib as tl
 from threading import Thread
 from app.v1 import AccessLevel, key_or_login_required
@@ -548,6 +549,11 @@ class Broker(object):
 				func(res)
 
 			print(f'on trade: {res}')
+
+			self.ctrl.zmq_dealer_socket.send_json(
+				{ "type": "ontrade", "broker_id": self.brokerId, "message": res }, 
+				zmq.NOBLOCK
+			)
 
 			self.ctrl.sio.emit(
 				'ontrade', 

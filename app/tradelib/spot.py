@@ -80,7 +80,7 @@ class Spot(object):
 
 
 	def getRate(self):
-		return self.ctrl.redis_client.hget("rates", self.currency)
+		return float(self.ctrl.redis_client.hget("rates", self.currency).decode())
 
 
 	def getRateBackup(self):

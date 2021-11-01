@@ -5,6 +5,7 @@ import requests
 import shortuuid
 import time
 import traceback
+import zmq
 from copy import copy
 from urllib.request import urlopen
 from flask import abort
@@ -48,6 +49,9 @@ class Controller(object):
 		self._emit_queue = []
 
 		self.redis_client = Redis(host='redis', port=6379, password="dev")
+		self._setup_zmq_connections()
+
+
 
 		self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
@@ -72,6 +76,32 @@ class Controller(object):
 		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
 			Thread(target=self.restartScripts).start()
 		
+	def _setup_zmq_connections(self):
+		self.zmq_context = zmq.Context()
+
+		self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
+		self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
+
+		self.zmq_sub_socket = self.zmq_context.socket(zmq.SUB)
+		self.zmq_sub_socket.connect("tcp://zmq_broker:5556")
+		self.zmq_sub_socket.setsockopt(zmq.SUBSCRIBE, b'')
+
+		self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
+		self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
+
+		self.zmq_req_socket = self.zmq_context.socket(zmq.REQ)
+		self.zmq_req_socket.connect("tcp://zmq_broker:5563")
+
+		self.zmq_poller = zmq.Poller()
+		self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
+		self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
+		self.zmq_poller.register(self.zmq_req_socket, zmq.POLLIN)
+		
+		self.zmq_req_socket.send_json({"type": "connection_id"})
+		message = self.zmq_req_socket.recv_json()
+		self.connection_id = message["connection_id"]
+
+		Thread(target=self.zmq_message_loop).start()
 
 	def closeApp(self):
 		# Discontinue any threads
@@ -140,34 +170,68 @@ class Controller(object):
 		}
 
 
+	# def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
+	# 	msg_id = shortuuid.uuid()
+
+	# 	try:
+	# 		# self._emit_queue.append(msg_id)
+	# 		# while self._emit_queue[0] != msg_id:
+	# 		# 	time.sleep(0.001)
+			
+	# 		time.sleep(0.001)
+
+	# 		data = {
+	# 			'msg_id': msg_id,
+	# 			'broker': broker,
+	# 			'broker_id': broker_id,
+	# 			'cmd': func,
+	# 			'args': list(args),
+	# 			'kwargs': kwargs
+	# 		}
+	# 		print(f"Emit: {data}")
+	# 		self.sio.emit('broker_cmd', data=data, namespace='/admin')
+	# 		result = self._wait_broker_response(msg_id)
+	# 	except Exception:
+	# 		print(f"[brokerRequest] {traceback.format_exc()}")
+	# 		result = {
+	# 			'error': 'No response.'
+	# 		}
+	# 	finally:
+	# 		# del self._emit_queue[0]
+	# 		return result
+
+	
 	def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
 		msg_id = shortuuid.uuid()
 
 		try:
-			# self._emit_queue.append(msg_id)
-			# while self._emit_queue[0] != msg_id:
-			# 	time.sleep(0.001)
-			
-			time.sleep(0.001)
-
 			data = {
-				'msg_id': msg_id,
-				'broker': broker,
-				'broker_id': broker_id,
-				'cmd': func,
-				'args': list(args),
-				'kwargs': kwargs
+				"type": broker,
+				"message": {
+					'msg_id': msg_id,
+					'broker': broker,
+					'broker_id': broker_id,
+					'cmd': func,
+					'args': list(args),
+					'kwargs': kwargs
+				}
 			}
-			print(f"Emit: {data}")
-			self.sio.emit('broker_cmd', data=data, namespace='/admin')
+			print(f"[brokerRequest] Emit: {data}")
+			# self.sio.emit('broker_cmd', data=data, namespace='/admin')
+			# result = self._wait_broker_response(msg_id)
+
+			self.zmq_dealer_socket.send_json(data, zmq.NOBLOCK)
 			result = self._wait_broker_response(msg_id)
+			
+			# result = self.zmq_dealer_socket.recv_json()
+			print(f"[brokerRequest] Result: {result}")
+			
 		except Exception:
 			print(f"[brokerRequest] {traceback.format_exc()}")
 			result = {
 				'error': 'No response.'
 			}
 		finally:
-			# del self._emit_queue[0]
 			return result
 			
 
@@ -251,6 +315,29 @@ class Controller(object):
 									# Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
 
 
+	def handleListenerMessage(self, message):
+		if "msg_id" in message:
+			if message["msg_id"] in self._listeners:
+				result = message['result']
+				self._listeners[message['msg_id']](*result.get('args'), **result.get('kwargs'))
+			else:
+				self._msg_queue[message['msg_id']] = message
+
+
+	def zmq_message_loop(self):
+		while True:
+			socks = dict(self.zmq_poller.poll())
+
+			if self.zmq_pull_socket in socks:
+				message = self.zmq_pull_socket.recv_json()
+				self.handleListenerMessage(message)
+
+			if self.zmq_sub_socket in socks:
+				message = self.zmq_sub_socket.recv_json()
+				self.handleListenerMessage(message)
+
+			if self.zmq_req_socket in socks:
+				message = self.zmq_dealer_socket.recv()
 
 
 	def getAccounts(self):

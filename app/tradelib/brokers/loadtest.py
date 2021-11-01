@@ -661,6 +661,7 @@ class LoadTest(Broker):
 
 
 	def _on_account_update(self, update, account_id, handled_id):
+		print(f"[_on_account_update] {handled_id}", flush=True)
 		self._account_update_queue.append((update, account_id, handled_id))
 
 	def _handle_account_updates(self):
@@ -668,6 +669,7 @@ class LoadTest(Broker):
 			if len(self._account_update_queue):
 				update, account_id, handled_id = self._account_update_queue[0]
 				del self._account_update_queue[0]
+				print(f"[_handle_account_updates] {handled_id}", flush=True)
 
 				try:
 					if handled_id is not None:
