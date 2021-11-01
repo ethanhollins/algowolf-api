@@ -317,7 +317,7 @@ class Controller(object):
 		if "msg_id" in message:
 			if message["msg_id"] in self._listeners:
 				result = message['result']
-				self._listeners[message['msg_id']](*result.get('args'), **result.get('kwargs'))
+				Thread(target=self._listeners[message['msg_id']], args=result.get('args'), kwargs=result.get('kwargs')).start()
 			else:
 				self._msg_queue[message['msg_id']] = message
 
