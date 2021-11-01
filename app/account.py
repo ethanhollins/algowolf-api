@@ -86,6 +86,7 @@ class Account(object):
 
 
 	def getStrategy(self, strategy_id):
+		print(f"[getStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
 		self.ctrl.zmq_dealer_socket.send_json(
 			{
 				"type": "start_strategy", 

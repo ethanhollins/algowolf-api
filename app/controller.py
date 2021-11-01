@@ -337,10 +337,12 @@ class Controller(object):
 						if self.connection_id == 0:
 							self.handleListenerMessage(message["message"])
 					elif message.get("type") == "start_strategy":
+						print("[zmq_message_loop] START STRATEGY", flush=True)
 						user_id = message["message"]["user_id"]
 						strategy_id = message["message"]["strategy_id"]
 						account = ctrl.accounts.getAccount(user_id)
-						account.getStrategy(strategy_id)
+						print(f"[zmq_message_loop] {account}")
+						Thread(target=account.getStrategy, args=(strategy_id))
 					else:
 						self.handleListenerMessage(message)
 
