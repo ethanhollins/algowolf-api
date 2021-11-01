@@ -163,7 +163,7 @@ class Controller(object):
 				del self._msg_queue[msg_id]
 				print('WAIT RECV', flush=True)
 				return res.get('result')
-			time.sleep(0.1)
+			time.sleep(0.01)
 
 		return {
 			'error': 'No response.'
@@ -244,8 +244,6 @@ class Controller(object):
 			# while self._emit_queue[0] != msg_id:
 			# 	time.sleep(0.001)
 			
-			time.sleep(0.001)
-
 			data = {
 				'msg_id': msg_id,
 				'broker': broker,
