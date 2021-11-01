@@ -324,22 +324,31 @@ class Controller(object):
 
 	def zmq_message_loop(self):
 		while True:
-			socks = dict(self.zmq_poller.poll())
+			try:
+				socks = dict(self.zmq_poller.poll())
 
-			if self.zmq_pull_socket in socks:
-				message = self.zmq_pull_socket.recv_json()
-				self.handleListenerMessage(message)
-
-			if self.zmq_sub_socket in socks:
-				message = self.zmq_sub_socket.recv_json()
-				if message.get("type") == "price":
-					if self.connection_id == 0:
-						self.handleListenerMessage(message["message"])
-				else:
+				if self.zmq_pull_socket in socks:
+					message = self.zmq_pull_socket.recv_json()
 					self.handleListenerMessage(message)
 
-			if self.zmq_req_socket in socks:
-				message = self.zmq_dealer_socket.recv()
+				if self.zmq_sub_socket in socks:
+					message = self.zmq_sub_socket.recv_json()
+					if message.get("type") == "price":
+						if self.connection_id == 0:
+							self.handleListenerMessage(message["message"])
+					elif message.get("type") == "start_strategy":
+						user_id = message["message"]["user_id"]
+						strategy_id = message["message"]["strategy_id"]
+						account = ctrl.accounts.getAccount(user_id)
+						account.getStrategy(strategy_id)
+					else:
+						self.handleListenerMessage(message)
+
+				if self.zmq_req_socket in socks:
+					message = self.zmq_dealer_socket.recv()
+
+			except Exception:
+				print(traceback.format_exc())
 
 
 	def getAccounts(self):

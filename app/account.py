@@ -5,6 +5,7 @@ import string, random
 import requests
 import shortuuid
 import traceback
+import zmq
 from copy import deepcopy
 from datetime import datetime
 from app.controller import DictQueue
@@ -85,6 +86,17 @@ class Account(object):
 
 
 	def getStrategy(self, strategy_id):
+		self.ctrl.zmq_dealer_socket.send_json(
+			{
+				"type": "start_strategy", 
+				"message": {
+					"user_id": self.userId,
+					"strategy_id": strategy_id
+				}
+			}, 
+			zmq.NOBLOCK
+		)
+
 		if strategy_id not in self.brokers:
 			self.startStrategy(strategy_id)
 			
