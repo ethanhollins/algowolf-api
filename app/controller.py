@@ -62,12 +62,12 @@ class Controller(object):
 		# self.charts = Charts(self)
 		# self.brokers = Brokers(self)
 
-		self.spots = Spots(self, [
-			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
-			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
-			'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
-			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
-		])
+		# self.spots = Spots(self, [
+		# 	'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+		# 	'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+		# 	'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
+		# 	'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
+		# ])
 
 		# print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
 		# if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
@@ -441,12 +441,20 @@ class Controller(object):
 
 		if self.connection_id == 0:
 			self.redis_client.set("workers_complete", 0)
+
 		self.redis_client.set("strategies_" + str(self.connection_id), json.dumps({}))
 		
 		self.accounts = Accounts(self)
 		self.db = Database(self, self.app.config['ENV'])
 		self.charts = Charts(self)
 		self.brokers = Brokers(self)
+
+		self.spots = Spots(self, [
+			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+			'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
+			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
+		])
 
 
 	def performRestartScripts(self):
