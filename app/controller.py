@@ -50,9 +50,6 @@ class Controller(object):
 		self._emit_queue = []
 		self._send_queue = []
 
-		self.redis_client = Redis(host='redis', port=6379, password="dev")
-		self.redis_client.set("workers_complete", 0)
-
 		# self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		# self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
@@ -227,7 +224,7 @@ class Controller(object):
 			result = self._wait_broker_response(msg_id)
 			
 			# result = self.zmq_dealer_socket.recv_json()
-			print(f"[brokerRequest] Result: {result}")
+			print(f"[brokerRequest] Result: ({msg_id}) {result}")
 			
 		except Exception:
 			print(f"[brokerRequest] {traceback.format_exc()}")
@@ -430,6 +427,8 @@ class Controller(object):
 
 
 	def startModules(self):
+
+		self.redis_client = Redis(host='redis', port=6379, password="dev")
 		
 		self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
@@ -439,6 +438,9 @@ class Controller(object):
 			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
 		self._setup_zmq_connections()
+
+		if self.connection_id == 0:
+			self.redis_client.set("workers_complete", 0)
 		self.redis_client.set("strategies_" + str(self.connection_id), json.dumps({}))
 		
 		self.accounts = Accounts(self)
