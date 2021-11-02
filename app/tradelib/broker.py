@@ -213,7 +213,7 @@ class Broker(object):
 						if trans_match is not None:
 							item is trans_match
 					return item
-			# print(self._handled)
+			print(self.getHandled())
 			time.sleep(polling)
 		item = self.getHandled()[ref]
 		self.deleteHandledItem(ref)

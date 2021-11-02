@@ -681,7 +681,9 @@ class LoadTest(Broker):
 
 				try:
 					if handled_id is not None:
+						print(F"[LoadTest._handle_account_updates] HANDLED 1: {handled_id}, {update}", flush=True)
 						self.addHandledItem(handled_id, update)
+						print(F"[LoadTest._handle_account_updates] HANDLED 2: {self.getHandled()}", flush=True)
 						# self._handled[handled_id] = update
 
 					if len(update):
