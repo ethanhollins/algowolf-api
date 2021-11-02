@@ -196,7 +196,8 @@ class LoadTest(Broker):
 			print(f"[_handle_order_create] 4: {result}")
 
 			if client_id is not None:
-				self._handled["ordercreate_" + client_id] = result
+				# self._handled["ordercreate_" + client_id] = result
+				self.addHandledItem("ordercreate_" + client_id, result)
 
 		return result
 
@@ -273,7 +274,8 @@ class LoadTest(Broker):
 				}
 			
 			if client_id is not None:
-				self._handled["fillclose_" + client_id] = result
+				# self._handled["fillclose_" + client_id] = result
+				self.addHandledItem("fillclose_" + client_id, result)
 		
 		return result
 
@@ -315,7 +317,8 @@ class LoadTest(Broker):
 			}
 
 			if client_id is not None:
-				self._handled["fillopen_" + client_id] = result
+				# self._handled["fillopen_" + client_id] = result
+				self.addHandledItem("fillopen_" + client_id, result)
 	
 		print(f"[_handle_order_fill_open] {result}")
 		print(f"[_handle_order_fill_open] {self._handled}")
@@ -340,7 +343,8 @@ class LoadTest(Broker):
 			}
 
 			if client_id is not None:
-				self._handled["ordercancel_" + client_id] = result
+				# self._handled["ordercancel_" + client_id] = result
+				self.addHandledItem("ordercancel_" + client_id, result)
 
 		return result
 
@@ -366,7 +370,8 @@ class LoadTest(Broker):
 				}
 
 				if client_id is not None:
-					self._handled["modify_" + client_id] = result
+					# self._handled["modify_" + client_id] = result
+					self.addHandledItem("modify_" + client_id, result)
 
 		else:
 			order = self.getOrderByID(str(trade["Id"]))
@@ -388,7 +393,8 @@ class LoadTest(Broker):
 				}
 
 				if client_id is not None:
-					self._handled["modify_" + client_id] = result
+					# self._handled["modify_" + client_id] = result
+					self.addHandledItem("modify_" + client_id, result)
 
 		return result
 
@@ -675,7 +681,8 @@ class LoadTest(Broker):
 
 				try:
 					if handled_id is not None:
-						self._handled[handled_id] = update
+						self.addHandledItem(handled_id, update)
+						# self._handled[handled_id] = update
 
 					if len(update):
 						self.handleOnTrade(account_id, update)

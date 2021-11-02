@@ -77,7 +77,9 @@ class Broker(object):
 		self.charts = []
 		self.ontrade_subs = {}
 		self.transactions = self._create_empty_transaction_df()
-		self._handled = {}
+		if self.strategyId is not None:
+			self.resetHandled()
+		# self._handled = {}
 
 		self.is_running = True
 		self.is_auth = is_auth
@@ -198,7 +200,7 @@ class Broker(object):
 	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=30):
 		print(f"[_wait] {ref}")
 		start = time.time()
-		while not ref in self._handled:
+		while not ref in self.getHandled():
 			if time.time() - start >= timeout:
 				print(f"[{ref}] TIMED OUT")
 				if func and res: 
@@ -211,10 +213,10 @@ class Broker(object):
 						if trans_match is not None:
 							item is trans_match
 					return item
-			print(self._handled)
+			# print(self._handled)
 			time.sleep(polling)
-		item = self._handled[ref]
-		del self._handled[ref]
+		item = self.getHandled()[ref]
+		self.deleteHandledItem(ref)
 		return item
 
 
@@ -375,6 +377,23 @@ class Broker(object):
 			if order["order_id"] == order_id:
 				return order
 		return None
+
+	def resetHandled(self):
+		self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps({}))
+
+	def getHandled(self):
+		return json.loads(self.ctrl.redis_client.hget("handled", self.strategyId).decode())
+
+	def addHandledItem(self, handled_id, item):
+		handled = self.getHandled()
+		handled[handled_id] = item
+		self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
+
+	def deleteHandledItem(self, handled_id):
+		handled = self.getHandled()
+		if handled_id in handled:
+			del handled[handled_id]
+			self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
 
 	def getUserAccount(self):
 		return self.userAccount

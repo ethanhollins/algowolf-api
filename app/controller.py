@@ -6,6 +6,7 @@ import shortuuid
 import time
 import traceback
 import zmq
+import jwt
 from copy import copy
 from urllib.request import urlopen
 from flask import abort
@@ -50,6 +51,7 @@ class Controller(object):
 		self._send_queue = []
 
 		self.redis_client = Redis(host='redis', port=6379, password="dev")
+		self.redis_client.set("workers_complete", 0)
 
 		# self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		# self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
@@ -270,6 +272,11 @@ class Controller(object):
 
 
 	def restartScripts(self):
+		print(f"[restartScripts] WORKERS: {int(self.redis_client.get('workers_complete').decode())}", flush=True)
+		while int(self.redis_client.get("workers_complete").decode()) != 5:
+			time.sleep(1)
+		time.sleep(1)
+
 		print("RESTARTING SCRIPTS...")
 		all_users = self.getDb().getAllUsers()
 
@@ -322,6 +329,43 @@ class Controller(object):
 			else:
 				self._msg_queue[message['msg_id']] = message
 
+	
+	def handleRequestMessage(self, message):
+		if message.get("ept") == "init_strategy_by_broker_id_ept":
+			print(f"[handleRequestMessage] RECEIVED init_strategy_by_broker_id_ept {message}")
+			msg_id = message["msg_id"]
+			key = message.get("Authorization")
+			strategy_id = message["args"][0]
+			broker_id = message["args"][1]
+
+			print(f"[handleRequestMessage] {key}, {strategy_id}", flush=True)
+			user_id, _ = self.check_auth_key(key, strategy_id)
+			print(f"[handleRequestMessage] {user_id}", flush=True)
+
+			if isinstance(user_id, str):
+				account = self.accounts.getAccount(user_id)
+				print(f"[handleRequestMessage] getStrategyByBrokerId", flush=True)
+				strategy = account.getStrategyByBrokerId(strategy_id, broker_id)
+				print(f"[handleRequestMessage] {strategy}", flush=True)
+
+				self._send_queue.append({
+					"type": "response",
+					"message": {
+						"msg_id": msg_id,
+						"result": strategy
+					}
+				})
+			
+			else:
+				print(f"[handleRequestMessage] NOPE", flush=True)
+				self._send_queue.append({
+					"type": "response",
+					"message": {
+						"msg_id": msg_id,
+						"result": user_id
+					}
+				})
+
 
 	def zmq_message_loop(self):
 		self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
@@ -342,7 +386,12 @@ class Controller(object):
 				if self.zmq_pull_socket in socks:
 					message = self.zmq_pull_socket.recv_json()
 					print(f"[zmq_message_loop] {message}", flush=True)
-					self.handleListenerMessage(message)
+
+					if message.get("type") == "request":
+						self.handleRequestMessage(message["message"])
+					else:
+						print(f"[handleListenerMessage] {'msg_id' in message}, {message}")
+						self.handleListenerMessage(message)
 
 				if self.zmq_sub_socket in socks:
 					message = self.zmq_sub_socket.recv_json()
@@ -355,7 +404,7 @@ class Controller(object):
 						strategy_id = message["message"]["strategy_id"]
 						account = ctrl.accounts.getAccount(user_id)
 						print(f"[zmq_message_loop] {account}")
-						Thread(target=account.getStrategy, args=(strategy_id))
+						Thread(target=account.startStrategy, args=(strategy_id,)).start()
 					else:
 						self.handleListenerMessage(message)
 
@@ -381,6 +430,7 @@ class Controller(object):
 
 
 	def startModules(self):
+		
 		self.sio = self.setupSio(self.app.config['STREAM_URL'])
 		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
@@ -389,6 +439,8 @@ class Controller(object):
 			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
 		self._setup_zmq_connections()
+		self.redis_client.set("strategies_" + str(self.connection_id), json.dumps({}))
+		
 		self.accounts = Accounts(self)
 		self.db = Database(self, self.app.config['ENV'])
 		self.charts = Charts(self)
@@ -399,6 +451,35 @@ class Controller(object):
 		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
 		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
 			Thread(target=self.restartScripts).start()
+
+
+	def check_auth_key(self, key, strategy_id):
+		key = key.split(' ')
+		if len(key) == 2:
+			if key[0] == 'Bearer':
+				# Decode JWT API key
+				try:
+					payload = jwt.decode(key[1], self.app.config['SECRET_KEY'], algorithms=['HS256'])
+				except jwt.exceptions.DecodeError:
+					error = {
+						'error': 'AuthorizationException',
+						'message': 'Invalid authorization key.'
+					}
+					return error, 403
+				except jwt.exceptions.ExpiredSignatureError:
+					error = {
+						'error': 'AuthorizationException',
+						'message': 'Authorization key expired.'
+					}
+					return error, 403
+
+				return payload.get('sub'), 200
+
+		error = {
+			'error': 'ValueError',
+			'message': 'Unrecognizable authorization key.'
+		}
+		return error, 400
 
 
 	def getAccounts(self):

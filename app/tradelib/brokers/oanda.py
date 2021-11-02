@@ -46,6 +46,7 @@ class Oanda(Broker):
 	):
 		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.OANDA_NAME, accounts, display_name, is_dummy, True)
 
+		print(f'OANDA INIT 1: {strategy_id}, {broker_id}', flush=True)
 		self.dl = tl.DataLoader(broker=self)
 		self.data_saver = tl.DataSaver(broker=self)
 
@@ -85,6 +86,7 @@ class Oanda(Broker):
 		if not is_dummy:
 			for account_id in self.getAccounts():
 				if account_id != tl.broker.PAPERTRADER_NAME:
+					print(f'OANDA INIT 2: {strategy_id}, {broker_id}', flush=True)
 					self._subscribe_account_updates(account_id)
 
 			# Handle strategy
@@ -92,7 +94,6 @@ class Oanda(Broker):
 				self._handle_live_strategy_setup()
 
 
-		print('OANDA INIT 1')
 		# if is_parent:
 		# 	# Load Charts
 		# 	CHARTS = ['EUR_USD']
@@ -104,7 +105,7 @@ class Oanda(Broker):
 		if not is_dummy:
 			Thread(target=self._periodic_check).start()
 
-		print('OANDA INIT 2')
+		print('OANDA INIT 3')
 
 	def _periodic_check(self):
 		WAIT_PERIOD = 60
@@ -259,7 +260,8 @@ class Oanda(Broker):
 		}
 
 		# Add update to handled
-		self._handled[oanda_id] = result
+		# self._handled[oanda_id] = result
+		self.addHandledItem(oanda_id, result)
 
 		return result
 
@@ -370,7 +372,8 @@ class Oanda(Broker):
 
 
 		# Add update to handled
-		self._handled[oanda_id] = result
+		# self._handled[oanda_id] = result
+		self.addHandledItem(oanda_id, result)
 
 		return result
 
@@ -396,7 +399,8 @@ class Oanda(Broker):
 			}
 
 			# Add update to handled
-			self._handled[oanda_id] = result
+			# self._handled[oanda_id] = result
+			self.addHandledItem(oanda_id, result)
 
 		else:
 			positions = self.positions
@@ -429,7 +433,8 @@ class Oanda(Broker):
 
 			if result:
 				# Add update to handled
-				self._handled[oanda_id] = result
+				# self._handled[oanda_id] = result
+				self.addHandledItem(oanda_id, result)
 
 		return result
 
@@ -459,7 +464,8 @@ class Oanda(Broker):
 			}
 
 			# Add update to handled
-			self._handled[oanda_id] = result
+			# self._handled[oanda_id] = result
+			self.addHandledItem(oanda_id, result)
 
 		return result
 
@@ -488,7 +494,8 @@ class Oanda(Broker):
 			}
 
 			# Add update to handled
-			self._handled[oanda_id] = result
+			# self._handled[oanda_id] = result
+			self.addHandledItem(oanda_id, result)
 
 		return result
 
@@ -1388,7 +1395,10 @@ class Oanda(Broker):
 
 				try:
 					if handled_id is not None:
-						self._handled[handled_id] = update
+						print(F"[Oanda._handle_account_updates] HANDLED 1: {handled_id}, {update}")
+						self.addHandledItem(handled_id, update)
+						print(F"[Oanda._handle_account_updates] HANDLED 2: {self.getHandled()}")
+						# self._handled[handled_id] = update
 
 					if len(update):
 						self.handleOnTrade(account_id, update)

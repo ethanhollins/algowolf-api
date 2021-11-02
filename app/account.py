@@ -66,19 +66,24 @@ class Account(object):
 
 	# Strategy Functions
 	def startStrategy(self, strategy_id):
+
+		if self.ctrl.redis_client.exists("strategies_" + str(self.ctrl.connection_id)):
+			started_strategies = json.loads(self.ctrl.redis_client.get("strategies_" + str(self.ctrl.connection_id)))
+			print(f"[startStrategy] {started_strategies}", flush=True)
+			if strategy_id in started_strategies and started_strategies[strategy_id]:
+				print(f"[startStrategy] SKIP {strategy_id}", flush=True)
+				return
+		else:
+			started_strategies = {}
+
+		started_strategies[strategy_id] = True
+		print(f"[startStrategy] STARTED: ({strategy_id}) {started_strategies}", flush=True)
+		self.ctrl.redis_client.set("strategies_" + str(self.ctrl.connection_id), json.dumps(started_strategies))
+
 		if strategy_id in self.brokers: return
 
-		print(f"[getStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
-		# self.ctrl.zmq_dealer_socket.send_json(
-		# 	{
-		# 		"type": "start_strategy", 
-		# 		"message": {
-		# 			"user_id": self.userId,
-		# 			"strategy_id": strategy_id
-		# 		}
-		# 	}, 
-		# 	zmq.NOBLOCK
-		# )
+		print(f"[startStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
+
 		self.ctrl._send_queue.append({
 			"type": "start_strategy", 
 			"message": {
@@ -132,6 +137,7 @@ class Account(object):
 				except Exception:
 					pass
 
+				print(f"[getStrategy] ({broker_id}) {self.brokers.get(broker_id).is_auth}", flush=True)
 				if self.brokers.get(broker_id).is_auth:
 					try:
 						for acc in brokers.get(broker_id)['accounts']:
@@ -145,6 +151,7 @@ class Account(object):
 						broker_info[broker_id]['orders'] = self.brokers.get(broker_id).getAllOrders()
 
 					except Exception as e:
+						print(traceback.format_exc())
 
 						if tl.isWeekend(datetime.utcnow()):
 							broker_info[broker_id]['is_auth'] = True
@@ -184,8 +191,11 @@ class Account(object):
 
 
 	def getStrategyByBrokerId(self, strategy_id, broker_id):
+		print(f"[getStrategyByBrokerId] 1", flush=True)
 		if broker_id not in self.brokers:
+			print(f"[getStrategyByBrokerId] 2", flush=True)
 			self.getStrategy(strategy_id)
+		print(f"[getStrategyByBrokerId] 3", flush=True)
 
 		broker_info = {}
 		if broker_id in self.brokers:
@@ -263,6 +273,7 @@ class Account(object):
 						'balance': 0,
 						**brokers.get(broker_id)['accounts'][acc]
 					}
+		print(f"[getStrategyByBrokerId] 4", flush=True)
 
 		return {
 			'strategy_id': strategy_id,

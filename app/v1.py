@@ -352,15 +352,7 @@ def is_multiple_packages_in_use_ept():
 	)
 
 
-def check_key(strategy_id, req_access):
-	key = request.headers.get('Authorization')
-	if key is None:
-		error = {
-			'error': 'AuthorizationException',
-			'message': 'Invalid authorization key.'
-		}
-		return error, 403
-
+def check_auth_key(key, strategy_id, req_access):
 	key = key.split(' ')
 	if len(key) == 2:
 		if key[0] == 'Bearer':
@@ -405,6 +397,19 @@ def check_key(strategy_id, req_access):
 		'message': 'Unrecognizable authorization key.'
 	}
 	return error, 400
+
+
+def check_key(strategy_id, req_access):
+	key = request.headers.get('Authorization')
+	if key is None:
+		error = {
+			'error': 'AuthorizationException',
+			'message': 'Invalid authorization key.'
+		}
+		return error, 403
+
+	return check_auth_key(key, strategy_id, req_access)
+
 
 def key_or_login_required(strategy_id, req_access, disable_abort=False):
 	res, status = auth.check_login()

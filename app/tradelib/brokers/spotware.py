@@ -37,10 +37,12 @@ class Spotware(Broker):
 		self.is_parent = is_parent
 		self.is_dummy = is_dummy
 
-		self._handled_position_events = {
-			tl.MARKET_ENTRY: {},
-			tl.POSITION_CLOSE: {}
-		}
+		# self._handled_position_events = {
+		# 	tl.MARKET_ENTRY: {},
+		# 	tl.POSITION_CLOSE: {}
+		# }
+		if self.strategyId is not None:
+			self.resetHandledPositionEvents()
 
 		self._price_queue = []
 		self._account_update_queue = []
@@ -236,34 +238,34 @@ class Spotware(Broker):
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
 		start = time.time()
-		while not ref_id in self._handled:
+		while not ref_id in self.getHandled():
 			if time.time() - start >= timeout:
 				return None
 			time.sleep(polling)
 
-		item = self._handled[ref_id]
-		del self._handled[ref_id]
+		item = self.getHandled()[ref_id]
+		self.deleteHandledItem(ref_id)
 		return item
 
 
 	def _wait_for_position(self, order_id, polling=0.1, timeout=30):
 		start = time.time()
-		while not order_id in self._handled_position_events[tl.MARKET_ENTRY]:
+		while not order_id in self.getHandledPositionEvents()[tl.MARKET_ENTRY]:
 			if time.time() - start >= timeout:
 				return None
 			time.sleep(polling)
 
-		return self._handled_position_events[tl.MARKET_ENTRY][order_id]
+		return self.getHandledPositionEvents()[tl.MARKET_ENTRY][order_id]
 
 
 	def _wait_for_close(self, order_id, polling=0.1, timeout=30):
 		start = time.time()
-		while not order_id in self._handled_position_events[tl.POSITION_CLOSE]:
+		while not order_id in self.getHandledPositionEvents()[tl.POSITION_CLOSE]:
 			if time.time() - start >= timeout:
 				return None
 			time.sleep(polling)
 
-		return self._handled_position_events[tl.POSITION_CLOSE][order_id]
+		return self.getHandledPositionEvents()[tl.POSITION_CLOSE][order_id]
 
 
 	def _get_client(self, account_id):
@@ -1095,6 +1097,31 @@ class Spotware(Broker):
 
 			time.sleep(0.1)
 
+
+	def resetHandledPositionEvents(self):
+		self.ctrl.redis_client.hset(
+			"handled_position_events", self.strategyId, 
+			json.dumps({
+				tl.MARKET_ENTRY: {},
+				tl.POSITION_CLOSE: {}
+			})
+		)
+
+	def getHandledPositionEvents(self):
+		return json.loads(self.ctrl.redis_client.hget("handled_position_events", self.strategyId).decode())
+
+	def addHandledPositionEventsItem(self, position_event, order_id, item):
+		handled_position_events = self.getHandledPositionEvents()
+		handled_position_events[position_event][order_id] = item
+		self.ctrl.redis_client.hset("handled_position_events", self.strategyId, json.dumps(handled_position_events))
+
+	def deleteHandledPositionEventsItem(self, position_event, order_id):
+		handled_position_events = self.getHandledPositionEvents()
+		if position_event in handled_position_events:
+			del handled_position_events[position_event][order_id]
+			self.ctrl.redis_client.hset("handled_position_events", self.strategyId, json.dumps(handled_position_events))
+
+
 	def _handle_account_update(self, account_id, result, position_event, msg_id):
 		for ref_id in result:
 			update = result[ref_id]
@@ -1102,14 +1129,23 @@ class Spotware(Broker):
 
 			if position_event is not None:
 				order_id = result[ref_id]["item"]["order_id"]
-				self._handled_position_events[position_event][order_id] = {
-					ref_id: result[ref_id]
-				}
+				# self._handled_position_events[position_event][order_id] = {
+				# 	ref_id: result[ref_id]
+				# }
+				self.addHandledPositionEventsItem(
+					position_event, order_id,
+					{
+						ref_id: result[ref_id]
+					}
+				)
 			
 		if len(result):
 			print(f'SEND IT: {result}', flush=True)
 			if msg_id is not None:
-				self._handled[msg_id] = result
+				print(F"[Spotware._handle_account_updates] HANDLED 1: {msg_id}, {result}")
+				self.addHandledItem(msg_id, result)
+				print(F"[Spotware._handle_account_updates] HANDLED 2: {self.getHandled()}")
+				# self._handled[msg_id] = result
 			self.handleOnTrade(account_id, result)
 			return result
 		else:

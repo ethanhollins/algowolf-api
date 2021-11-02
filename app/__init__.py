@@ -3,6 +3,7 @@ import platform
 import json
 import traceback
 import sys
+import time
 from flask import Flask, Response
 from flask_cors import CORS
 from app.error import (
@@ -152,9 +153,14 @@ def create_app(test_config=None):
 	def preload():
 		print("[preload] Hello World!", flush=True)
 		controller.ctrl.startModules()
+		# controller.ctrl.redis_client.incr("workers_complete")
+		# print("[preload] COMPLETE 1", flush=True)
+		# while int(controller.ctrl.redis_client.get("workers_complete").decode()) != 5:
+		# 	time.sleep(1)
 		if controller.ctrl.connection_id == 0:
 			controller.ctrl.performRestartScripts()
-		print("[preload] COMPLETE", flush=True)
+		print("[preload] COMPLETE 2", flush=True)
+		controller.ctrl.redis_client.incr("workers_complete")
 
 
 	return app

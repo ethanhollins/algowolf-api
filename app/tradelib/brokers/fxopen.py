@@ -268,7 +268,8 @@ class FXOpen(Broker):
 			print(f"[_handle_order_create] 4: {result}")
 
 			if client_id is not None:
-				self._handled["ordercreate_" + client_id] = result
+				# self._handled["ordercreate_" + client_id] = result
+				self.addHandledItem("ordercreate_" + client_id, result)
 
 		return result
 
@@ -346,7 +347,8 @@ class FXOpen(Broker):
 				}
 			
 			if client_id is not None:
-				self._handled["fillclose_" + client_id] = result
+				# self._handled["fillclose_" + client_id] = result
+				self.addHandledItem("fillclose_" + client_id, result)
 		
 		return result
 
@@ -388,7 +390,8 @@ class FXOpen(Broker):
 			}
 
 			if client_id is not None:
-				self._handled["fillopen_" + client_id] = result
+				# self._handled["fillopen_" + client_id] = result
+				self.addHandledItem("fillopen_" + client_id, result)
 	
 		print(f"[_handle_order_fill_open] {result}")
 		print(f"[_handle_order_fill_open] {self._handled}")
@@ -413,7 +416,8 @@ class FXOpen(Broker):
 			}
 
 			if client_id is not None:
-				self._handled["ordercancel_" + client_id] = result
+				# self._handled["ordercancel_" + client_id] = result
+				self.addHandledItem("ordercancel_" + client_id, result)
 
 		return result
 
@@ -439,7 +443,8 @@ class FXOpen(Broker):
 				}
 
 				if client_id is not None:
-					self._handled["modify_" + client_id] = result
+					# self._handled["modify_" + client_id] = result
+					self.addHandledItem("modify_" + client_id, result)
 
 		else:
 			order = self.getOrderByID(str(trade["Id"]))
@@ -463,7 +468,8 @@ class FXOpen(Broker):
 				}
 
 				if client_id is not None:
-					self._handled["modify_" + client_id] = result
+					# self._handled["modify_" + client_id] = result
+					self.addHandledItem("modify_" + client_id, result)
 
 		return result
 
@@ -1113,7 +1119,10 @@ class FXOpen(Broker):
 				print(f"HANDLED ID: {handled_id}")
 				try:
 					if handled_id is not None:
-						self._handled[handled_id] = update
+						print(F"[FXOpen._handle_account_updates] HANDLED 1: {handled_id}, {update}")
+						self.addHandledItem(handled_id, update)
+						print(F"[FXOpen._handle_account_updates] HANDLED 2: {self.getHandled()}")
+						# self._handled[handled_id] = update
 
 					if len(update):
 						self.handleOnTrade(account_id, update)
