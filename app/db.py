@@ -172,7 +172,8 @@ class Database(object):
 					'open_strategies': []
 				},
 				'registration_date': datetime.utcnow().isoformat(),
-				'analytics': {}
+				'analytics': {},
+				'server': 2
 			}
 		)
 
