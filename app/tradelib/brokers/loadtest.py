@@ -17,7 +17,7 @@ class LoadTest(Broker):
 	):
 		super().__init__(ctrl, user_account, strategy_id, broker_id, "loadtest", accounts, display_name, is_dummy, True)
 		
-		print(f'LOADTEST INIT')
+		print(f'LOADTEST INIT: {strategy_id}, {broker_id}', flush=True)
 
 		self.dl = tl.DataLoader(broker=self)
 		self.data_saver = tl.DataSaver(broker=self)
