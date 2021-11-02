@@ -321,7 +321,7 @@ class LoadTest(Broker):
 				self.addHandledItem("fillopen_" + client_id, result)
 	
 		print(f"[_handle_order_fill_open] {result}")
-		print(f"[_handle_order_fill_open] {self._handled}")
+		# print(f"[_handle_order_fill_open] {self._handled}")
 	
 		return result
 
