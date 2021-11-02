@@ -1051,6 +1051,8 @@ class Spotware(Broker):
 		res = self.ctrl.brokerRequest(
 			'spotware', self.brokerId, '_subscribe_account_updates', stream_id
 		)
+		stream_id = res
+		print(f"[Spotware.subscribeAccountUpdates] {stream_id}")
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 

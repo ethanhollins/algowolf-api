@@ -657,6 +657,8 @@ class LoadTest(Broker):
 		res = self.ctrl.brokerRequest(
 			'loadtest', self.brokerId, 'subscribe_account_updates', stream_id
 		)
+		stream_id = res
+		print(f"[LoadTest.subscribeAccountUpdates] {stream_id}")
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 

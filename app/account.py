@@ -66,19 +66,26 @@ class Account(object):
 
 	# Strategy Functions
 	def startStrategy(self, strategy_id):
-		print(f"[getStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
-		self.ctrl.zmq_dealer_socket.send_json(
-			{
-				"type": "start_strategy", 
-				"message": {
-					"user_id": self.userId,
-					"strategy_id": strategy_id
-				}
-			}, 
-			zmq.NOBLOCK
-		)
-
 		if strategy_id in self.brokers: return
+
+		print(f"[getStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
+		# self.ctrl.zmq_dealer_socket.send_json(
+		# 	{
+		# 		"type": "start_strategy", 
+		# 		"message": {
+		# 			"user_id": self.userId,
+		# 			"strategy_id": strategy_id
+		# 		}
+		# 	}, 
+		# 	zmq.NOBLOCK
+		# )
+		self.ctrl._send_queue.append({
+			"type": "start_strategy", 
+			"message": {
+				"user_id": self.userId,
+				"strategy_id": strategy_id
+			}
+		})
 
 		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 		if strategy_info is None:

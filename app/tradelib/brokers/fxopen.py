@@ -1095,6 +1095,8 @@ class FXOpen(Broker):
 		res = self.ctrl.brokerRequest(
 			'fxopen', self.brokerId, 'subscribe_account_updates', stream_id
 		)
+		stream_id = res
+		print(f"[FXOpen.subscribeAccountUpdates] {stream_id}")
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 

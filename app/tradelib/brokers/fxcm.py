@@ -344,6 +344,8 @@ class FXCM(Broker):
 	def _subscribe_chart_updates(self, instrument, listener):
 		stream_id = self.generateReference()
 		res = self.brokerRequest(self.name, self.brokerId, '_subscribe_chart_updates', stream_id, instrument)
+		stream_id = res
+		print(f"[FXCM._subscribe_chart_updates] {stream_id}")
 		self.ctrl.addBrokerListener(stream_id, listener)
 
 

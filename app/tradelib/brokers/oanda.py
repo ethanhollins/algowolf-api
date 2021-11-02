@@ -1106,6 +1106,8 @@ class Oanda(Broker):
 		res = self.ctrl.brokerRequest(
 			'oanda', self.brokerId, '_subscribe_chart_updates', stream_id, instrument
 		)
+		stream_id = res
+
 		self.ctrl.addBrokerListener(stream_id, listener)
 
 
@@ -1310,6 +1312,9 @@ class Oanda(Broker):
 		res = self.ctrl.brokerRequest(
 			'oanda', self.brokerId, '_subscribe_account_updates', stream_id, account_id
 		)
+		stream_id = res
+		print(f"[_subscribe_account_updates] {stream_id}")
+
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 
@@ -1370,6 +1375,7 @@ class Oanda(Broker):
 
 
 	def _on_account_update(self, account_id, update, handled_id):
+		print(f"[Oanda._on_account_update] {update}")
 		self._account_update_queue.append((account_id, update, handled_id))
 
 

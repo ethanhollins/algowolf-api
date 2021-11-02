@@ -47,23 +47,21 @@ class Controller(object):
 		self._msg_queue = {}
 		self._listeners = {}
 		self._emit_queue = []
+		self._send_queue = []
 
 		self.redis_client = Redis(host='redis', port=6379, password="dev")
-		self._setup_zmq_connections()
 
+		# self.sio = self.setupSio(self.app.config['STREAM_URL'])
+		# self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
+		# if not self.app.config['IS_MAIN_STREAM']:
+		# 	self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
+		# 	self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
-		self.sio = self.setupSio(self.app.config['STREAM_URL'])
-		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
-
-		if not self.app.config['IS_MAIN_STREAM']:
-			self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
-			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
-
-		self.accounts = Accounts(self)
-		self.db = Database(self, app.config['ENV'])
-		self.charts = Charts(self)
-		self.brokers = Brokers(self)
+		# self.accounts = Accounts(self)
+		# self.db = Database(self, app.config['ENV'])
+		# self.charts = Charts(self)
+		# self.brokers = Brokers(self)
 
 		self.spots = Spots(self, [
 			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
@@ -72,36 +70,38 @@ class Controller(object):
 			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
 		])
 
-		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
-		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
-			Thread(target=self.restartScripts).start()
+		# print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
+		# if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
+		# 	Thread(target=self.restartScripts).start()
 		
 	def _setup_zmq_connections(self):
 		self.zmq_context = zmq.Context()
 
-		self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
-		self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
+		# self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
+		# self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
 
-		self.zmq_sub_socket = self.zmq_context.socket(zmq.SUB)
-		self.zmq_sub_socket.connect("tcp://zmq_broker:5556")
-		self.zmq_sub_socket.setsockopt(zmq.SUBSCRIBE, b'')
+		# self.zmq_sub_socket = self.zmq_context.socket(zmq.SUB)
+		# self.zmq_sub_socket.connect("tcp://zmq_broker:5556")
+		# self.zmq_sub_socket.setsockopt(zmq.SUBSCRIBE, b'')
 
-		self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
-		self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
+		# self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
+		# self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
 
+
+		# self.zmq_poller = zmq.Poller()
+		# self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
+		# self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
+		
 		self.zmq_req_socket = self.zmq_context.socket(zmq.REQ)
 		self.zmq_req_socket.connect("tcp://zmq_broker:5563")
-
-		self.zmq_poller = zmq.Poller()
-		self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
-		self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
-		self.zmq_poller.register(self.zmq_req_socket, zmq.POLLIN)
-		
 		self.zmq_req_socket.send_json({"type": "connection_id"})
+
 		message = self.zmq_req_socket.recv_json()
 		self.connection_id = message["connection_id"]
+		print(f"CONNECTION ID: {self.connection_id}", flush=True)
 
 		Thread(target=self.zmq_message_loop).start()
+		Thread(target=self.zmq_send_loop).start()
 
 	def closeApp(self):
 		# Discontinue any threads
@@ -220,7 +220,8 @@ class Controller(object):
 			# self.sio.emit('broker_cmd', data=data, namespace='/admin')
 			# result = self._wait_broker_response(msg_id)
 
-			self.zmq_dealer_socket.send_json(data, zmq.NOBLOCK)
+			# self.zmq_dealer_socket.send_json(data, zmq.NOBLOCK)
+			self._send_queue.append(data)
 			result = self._wait_broker_response(msg_id)
 			
 			# result = self.zmq_dealer_socket.recv_json()
@@ -309,8 +310,8 @@ class Controller(object):
 									# Run Script
 									print(f'STARTING {strategy_id}, {broker_id}, {account_id}')
 
-									account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
-									# Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
+									# account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
+									Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
 
 
 	def handleListenerMessage(self, message):
@@ -323,12 +324,24 @@ class Controller(object):
 
 
 	def zmq_message_loop(self):
+		self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
+		self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
+
+		self.zmq_sub_socket = self.zmq_context.socket(zmq.SUB)
+		self.zmq_sub_socket.connect("tcp://zmq_broker:5556")
+		self.zmq_sub_socket.setsockopt(zmq.SUBSCRIBE, b'')
+
+		self.zmq_poller = zmq.Poller()
+		self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
+		self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
+
 		while True:
 			try:
 				socks = dict(self.zmq_poller.poll())
 
 				if self.zmq_pull_socket in socks:
 					message = self.zmq_pull_socket.recv_json()
+					print(f"[zmq_message_loop] {message}", flush=True)
 					self.handleListenerMessage(message)
 
 				if self.zmq_sub_socket in socks:
@@ -346,11 +359,46 @@ class Controller(object):
 					else:
 						self.handleListenerMessage(message)
 
-				if self.zmq_req_socket in socks:
-					message = self.zmq_dealer_socket.recv()
+			except Exception:
+				print(traceback.format_exc())
+	
+	def zmq_send_loop(self):
+		self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
+		self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
+		
+		while True:
+			try:
+				if len(self._send_queue):
+					item = self._send_queue[0]
+					del self._send_queue[0]
+
+					self.zmq_dealer_socket.send_json(item, zmq.NOBLOCK)
 
 			except Exception:
 				print(traceback.format_exc())
+			
+			time.sleep(0.01)
+
+
+	def startModules(self):
+		self.sio = self.setupSio(self.app.config['STREAM_URL'])
+		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+
+		if not self.app.config['IS_MAIN_STREAM']:
+			self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
+			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+
+		self._setup_zmq_connections()
+		self.accounts = Accounts(self)
+		self.db = Database(self, self.app.config['ENV'])
+		self.charts = Charts(self)
+		self.brokers = Brokers(self)
+
+
+	def performRestartScripts(self):
+		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
+		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
+			Thread(target=self.restartScripts).start()
 
 
 	def getAccounts(self):
@@ -358,6 +406,9 @@ class Controller(object):
 
 	def getBrokers(self):
 		return self.brokers
+
+	def setBrokers(self):
+		self.brokers = Brokers(self)
 
 	def getCharts(self):
 		return self.charts

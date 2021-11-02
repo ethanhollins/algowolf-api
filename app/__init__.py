@@ -9,6 +9,7 @@ from app.error import (
 	AccountException, AuthorizationException, BrokerException, 
 	OrderException
 )
+import uwsgidecorators
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -146,6 +147,15 @@ def create_app(test_config=None):
 	v1.ctrl = controller.ctrl
 	app.register_blueprint(v1.bp)
 	app.add_url_rule('/', endpoint='index')
+
+	@uwsgidecorators.postfork
+	def preload():
+		print("[preload] Hello World!", flush=True)
+		controller.ctrl.startModules()
+		if controller.ctrl.connection_id == 0:
+			controller.ctrl.performRestartScripts()
+		print("[preload] COMPLETE", flush=True)
+
 
 	return app
 

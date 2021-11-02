@@ -550,9 +550,12 @@ class Broker(object):
 
 			print(f'on trade: {res}')
 
-			self.ctrl.zmq_dealer_socket.send_json(
-				{ "type": "ontrade", "broker_id": self.brokerId, "message": res }, 
-				zmq.NOBLOCK
+			# self.ctrl.zmq_dealer_socket.send_json(
+			# 	{ "type": "ontrade", "broker_id": self.brokerId, "message": res }, 
+			# 	zmq.NOBLOCK
+			# )
+			self.ctrl._send_queue.append(
+				{ "type": "ontrade", "broker_id": self.brokerId, "message": res }
 			)
 
 			self.ctrl.sio.emit(
