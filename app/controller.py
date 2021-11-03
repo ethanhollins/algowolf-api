@@ -385,7 +385,7 @@ class Controller(object):
 					print(f"[zmq_message_loop] {message}", flush=True)
 
 					if message.get("type") == "request":
-						Thread(target=self.handleRequestMessage, args=(message["message"])).start()
+						Thread(target=self.handleRequestMessage, args=(message["message"],)).start()
 					else:
 						print(f"[handleListenerMessage] {'msg_id' in message}, {message}")
 						self.handleListenerMessage(message)
