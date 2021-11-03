@@ -100,11 +100,11 @@ class Account(object):
 		brokers = self._set_brokers(strategy_id, strategy_info)
 
 
-	def getStrategyInfo(self, broker_id):		
-		strategy = self.strategies.get(broker_id)
+	def getStrategyInfo(self, strategy_id):		
+		strategy = self.strategies.get(strategy_id)
 		if strategy is None:
-			self.startStrategy(broker_id)
-			strategy = self.strategies.get(broker_id)
+			self.startStrategy(strategy_id)
+			strategy = self.strategies.get(strategy_id)
 
 		return strategy
 
@@ -445,7 +445,7 @@ class Account(object):
 
 
 	def runStrategyScript(self, strategy_id, broker_id, accounts, input_variables):
-		strategy = self.getStrategyInfo(broker_id)
+		strategy = self.getStrategyInfo(strategy_id)
 
 		Thread(target=strategy.run, args=(accounts, input_variables)).start()
 		return strategy.package
