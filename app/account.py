@@ -84,9 +84,8 @@ class Account(object):
 
 		# print(f"[startStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
 
-		brokers = self.getAllBrokers()
 		brokers = {
-			**brokers,
+			**self.getAllBrokers(),
 			**{ 
 				strategy_id: { 
 					'name': 'Paper Trader',
@@ -103,6 +102,24 @@ class Account(object):
 		missing_brokers = [not broker_id in self.brokers for broker_id in brokers]
 
 		if any(missing_brokers):
+			strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+			if strategy_info is None:
+				raise AccountException('Strategy not found.')
+
+			self.ctrl._send_queue.append({
+				"type": "start_strategy", 
+				"message": {
+					"user_id": self.userId,
+					"strategy_id": strategy_id
+				}
+			})
+
+			# Handle broker info
+			brokers = self._set_brokers(strategy_id, strategy_info)
+
+	
+	def startStrategyBroker(self, strategy_id, broker_id):
+		if not broker_id in self.brokers:
 			strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
 			if strategy_info is None:
 				raise AccountException('Strategy not found.')
