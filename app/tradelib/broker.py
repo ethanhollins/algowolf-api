@@ -382,10 +382,13 @@ class Broker(object):
 		self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps({}))
 
 	def getHandled(self):
-		return json.loads(self.ctrl.redis_client.hget("handled", self.strategyId).decode())
+		result = json.loads(self.ctrl.redis_client.hget("handled", self.strategyId).decode())
+		print(f"GET HANDLED: {self.strategyId}, {result}", flush=True)
+		return result
 
 	def addHandledItem(self, handled_id, item):
 		handled = self.getHandled()
+		print(f"ADD HANDLED: {self.strategyId}, {handled}", flush=True)
 		handled[handled_id] = item
 		self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
 
