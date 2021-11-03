@@ -67,23 +67,6 @@ class Account(object):
 	# Strategy Functions
 	def startStrategy(self, strategy_id):
 
-		# if self.ctrl.redis_client.exists("strategies_" + str(self.ctrl.connection_id)):
-		# 	started_strategies = json.loads(self.ctrl.redis_client.get("strategies_" + str(self.ctrl.connection_id)))
-		# 	print(f"[startStrategy] {started_strategies}", flush=True)
-		# 	if strategy_id in started_strategies and started_strategies[strategy_id]:
-		# 		print(f"[startStrategy] SKIP {strategy_id}", flush=True)
-		# 		return
-		# else:
-		# 	started_strategies = {}
-
-		# started_strategies[strategy_id] = True
-		# print(f"[startStrategy] STARTED: ({strategy_id}) {started_strategies}", flush=True)
-		# self.ctrl.redis_client.set("strategies_" + str(self.ctrl.connection_id), json.dumps(started_strategies))
-
-		# # if strategy_id in self.brokers: return
-
-		# print(f"[startStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
-
 		brokers = {
 			**self.getAllBrokers(),
 			**{ 
@@ -99,41 +82,70 @@ class Account(object):
 				} 
 			}
 		}
-		missing_brokers = [not broker_id in self.brokers for broker_id in brokers]
 
-		if any(missing_brokers):
-			strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
-			if strategy_info is None:
-				raise AccountException('Strategy not found.')
+		if self.ctrl.redis_client.exists("strategies_" + str(self.ctrl.connection_id)):
+			started_strategies = json.loads(self.ctrl.redis_client.get("strategies_" + str(self.ctrl.connection_id)))
+			print(f"[startStrategy] {started_strategies}", flush=True)
+			if strategy_id in started_strategies:
+				existing_brokers = [broker_id in started_strategies[strategy_id] for broker_id in brokers]
+				if all(existing_brokers):
+					print(f"[startStrategy] SKIP {strategy_id}", flush=True)
+					return
+		else:
+			started_strategies = {}
 
-			self.ctrl._send_queue.append({
-				"type": "start_strategy", 
-				"message": {
-					"user_id": self.userId,
-					"strategy_id": strategy_id
-				}
-			})
+		started_strategies[strategy_id] = list(brokers.keys())
+		print(f"[startStrategy] STARTED: ({strategy_id}) {started_strategies}", flush=True)
+		self.ctrl.redis_client.set("strategies_" + str(self.ctrl.connection_id), json.dumps(started_strategies))
 
-			# Handle broker info
-			brokers = self._set_brokers(strategy_id, strategy_info)
+		# if strategy_id in self.brokers: return
+
+		print(f"[startStrategy] SEND START: {self.userId}, {strategy_id}", flush=True)
+
+		strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+		if strategy_info is None:
+			raise AccountException('Strategy not found.')
+
+		self.ctrl._send_queue.append({
+			"type": "start_strategy", 
+			"message": {
+				"user_id": self.userId,
+				"strategy_id": strategy_id
+			}
+		})
+
+		# Handle broker info
+		brokers = self._set_brokers(strategy_id, strategy_info)
 
 	
 	def startStrategyBroker(self, strategy_id, broker_id):
-		if not broker_id in self.brokers:
-			strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
-			if strategy_info is None:
-				raise AccountException('Strategy not found.')
+		if self.ctrl.redis_client.exists("strategies_" + str(self.ctrl.connection_id)):
+			started_strategies = json.loads(self.ctrl.redis_client.get("strategies_" + str(self.ctrl.connection_id)))
+			print(f"[startStrategyBroker] {started_strategies}", flush=True)
+			if strategy_id in started_strategies:
+				if broker_id in started_strategies[strategy_id]:
+					print(f"[startStrategyBroker] SKIP {strategy_id}", flush=True)
+					return
+		else:
+			started_strategies = {}
 
-			self.ctrl._send_queue.append({
-				"type": "start_strategy", 
-				"message": {
-					"user_id": self.userId,
-					"strategy_id": strategy_id
-				}
-			})
+		self.startStrategy(strategy_id)
 
-			# Handle broker info
-			brokers = self._set_brokers(strategy_id, strategy_info)
+		# if not broker_id in self.brokers:
+		# 	strategy_info = self.ctrl.getDb().getStrategy(self.userId, strategy_id)
+		# 	if strategy_info is None:
+		# 		raise AccountException('Strategy not found.')
+
+		# 	self.ctrl._send_queue.append({
+		# 		"type": "start_strategy", 
+		# 		"message": {
+		# 			"user_id": self.userId,
+		# 			"strategy_id": strategy_id
+		# 		}
+		# 	})
+
+		# 	# Handle broker info
+		# 	brokers = self._set_brokers(strategy_id, strategy_info)
 
 
 	def getStrategyInfo(self, strategy_id):		
