@@ -673,13 +673,14 @@ class LoadTest(Broker):
 		self._account_update_queue.append((update, account_id, handled_id))
 
 	def _handle_account_updates(self):
+		handled_delete_check = time.time()
 		while True:
-			if len(self._account_update_queue):
-				update, account_id, handled_id = self._account_update_queue[0]
-				del self._account_update_queue[0]
-				print(f"[_handle_account_updates] ({time.time()}) {handled_id}", flush=True)
+			try:
+				if len(self._account_update_queue):
+					update, account_id, handled_id = self._account_update_queue[0]
+					del self._account_update_queue[0]
+					print(f"[_handle_account_updates] ({time.time()}) {handled_id}", flush=True)
 
-				try:
 					if handled_id is not None:
 						print(F"[LoadTest._handle_account_updates] HANDLED 1: {handled_id}, {update}", flush=True)
 						self.addHandledItem(handled_id, update)
@@ -688,9 +689,15 @@ class LoadTest(Broker):
 
 					if len(update):
 						self.handleOnTrade(account_id, update)
-				except Exception:
-					print(f"[_handle_account_updates] {traceback.format_exc()}")
-			time.sleep(0.1)
+					
+				if time.time() - handled_delete_check > 30:
+					handled_delete_check = time.time()
+					self.deleteOldHandledIds()
+					
+				time.sleep(0.1)
+				
+			except Exception:
+				print(f"[_handle_account_updates] {traceback.format_exc()}")
 
 	# def _handle_account_updates(self):
 		

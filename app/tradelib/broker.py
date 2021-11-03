@@ -80,6 +80,7 @@ class Broker(object):
 		# if self.strategyId is not None:
 		# 	self.resetHandled()
 		# self._handled = {}
+		self._handled_ids = {}
 
 		self.is_running = True
 		self.is_auth = is_auth
@@ -200,7 +201,7 @@ class Broker(object):
 	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=30):
 		print(f"[_wait] {ref}")
 		start = time.time()
-		while self.getHandled(ref) is not None:
+		while self.getHandled(ref) is None:
 			if time.time() - start >= timeout:
 				print(f"[{ref}] TIMED OUT")
 				if func and res: 
@@ -215,6 +216,7 @@ class Broker(object):
 					return item
 			time.sleep(polling)
 		item = self.getHandled(ref)
+		print(f"[_wait] FOUND: {item}")
 		self.deleteHandledItem(ref)
 		return item
 
@@ -393,6 +395,7 @@ class Broker(object):
 		print(f"ADD HANDLED: {self.strategyId + '_' + handled_id}, {handled}", flush=True)
 		# handled[handled_id] = item
 		self.ctrl.redis_client.hset("handled", self.strategyId + '_' + handled_id, json.dumps(item))
+		self._handled_ids[handled_id] = time.time()
 
 	def deleteHandledItem(self, handled_id):
 		# handled = self.getHandled(handled_id)
@@ -401,6 +404,13 @@ class Broker(object):
 			# del handled[handled_id]
 			# self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
 			self.ctrl.redis_client.hdel("handled", self.strategyId + '_' + handled_id)
+
+	def deleteOldHandledIds(self):
+		for i in copy(list(self._handled_ids.keys())):
+			if time.time() - self._handled_ids[i] > 30:
+				self.deleteHandledItem(i)
+				del self._handled_ids[i]
+
 
 	def getUserAccount(self):
 		return self.userAccount

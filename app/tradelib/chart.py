@@ -253,29 +253,30 @@ class Chart(object):
 			time.sleep(0.01)
 
 		try:
-			self.ctrl.zmq_dealer_socket.send_json(
-				{ 
-					"type": "ontick", 
-					"message": {
+			if self.ctrl.connection_id == 0:
+				self.ctrl.zmq_dealer_socket.send_json(
+					{ 
+						"type": "ontick", 
+						"message": {
+							'broker': self.broker.name,
+							'product': self.product,
+							'period': 'all',
+							'items': result
+						}
+					},
+					zmq.NOBLOCK
+				)
+
+				self.ctrl.emit(
+					'ontick', 
+					{
 						'broker': self.broker.name,
 						'product': self.product,
 						'period': 'all',
 						'items': result
-					}
-				},
-				zmq.NOBLOCK
-			)
-
-			self.ctrl.emit(
-				'ontick', 
-				{
-					'broker': self.broker.name,
-					'product': self.product,
-					'period': 'all',
-					'items': result
-				}, 
-				namespace='/admin'
-			)
+					}, 
+					namespace='/admin'
+				)
 
 			for res in result:
 				period = res.get('period')
@@ -297,10 +298,11 @@ class Chart(object):
 				# 	zmq.NOBLOCK
 				# )
 
-				self.ctrl.emit(
-					'ontick', res, 
-					namespace='/admin'
-				)
+				if self.ctrl.connection_id == 0:
+					self.ctrl.emit(
+						'ontick', res, 
+						namespace='/admin'
+					)
 
 		except Exception:
 			print(traceback.format_exc(), flush=True)

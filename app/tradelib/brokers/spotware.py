@@ -71,6 +71,7 @@ class Spotware(Broker):
 
 			self.is_auth = self._add_user()
 			self._subscribe_account_updates()
+			print(f"SPOTWARE PARENT AUTH: {self.is_auth}")
 
 			# if self.is_auth:
 			# 	for instrument in CHARTS:
@@ -85,6 +86,7 @@ class Spotware(Broker):
 			self.parent.addChild(self)
 
 			self.is_auth = self._add_user()
+			print(f"SPOTWARE AUTH: {self.is_auth}")
 
 			# self.client = self.parent.client
 			# self._authorize_accounts(accounts)
@@ -159,6 +161,7 @@ class Spotware(Broker):
 	def _periodic_refresh(self):
 		print("PERIODIC REFRESH")
 		WAIT_PERIOD = 60
+		handled_delete_check = time.time()
 		while self.is_running:
 			# if time.time() - self._last_update > WAIT_PERIOD:
 			print("PERIODIC REFRESH")
@@ -178,6 +181,10 @@ class Spotware(Broker):
 				else:
 					# self.update_positions()
 					self._last_update = time.time()
+
+					if time.time() - handled_delete_check > 30:
+						handled_delete_check = time.time()
+						self.deleteOldHandledIds()
 
 			except Exception as e:
 				print(f'[SC] {str(e)}')
@@ -220,6 +227,17 @@ class Spotware(Broker):
 				return True
 
 	
+	def authCheck(self):
+		result = self.ctrl.brokerRequest(
+			self.name, self.brokerId, 'authCheck'
+		)
+		print(f"[Spotware.authCheck] {result}")
+		if result is not None and result.get('result'):
+			self.is_auth = True
+		else:
+			self.is_auth = False
+
+
 	def reauthorize_accounts(self):
 		print("[SW] Reauthorizing Accounts...")
 		self.is_auth = self._add_user()
@@ -238,12 +256,13 @@ class Spotware(Broker):
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
 		start = time.time()
-		while not ref_id in self.getHandled(ref_id):
+		while self.getHandled(ref_id) is None:
 			if time.time() - start >= timeout:
 				return None
 			time.sleep(polling)
 
 		item = self.getHandled(ref_id)
+		print(f"[_wait] FOUND: {item}")
 		self.deleteHandledItem(ref_id)
 		return item
 
@@ -1150,8 +1169,6 @@ class Spotware(Broker):
 			return result
 		else:
 			return None
-		
-		return
 
 
 	# def _handle_account_update(self, payload_type, account_id, update, msg_id):

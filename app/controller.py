@@ -399,8 +399,8 @@ class Controller(object):
 				if self.zmq_sub_socket in socks:
 					message = self.zmq_sub_socket.recv_json()
 					if message.get("type") == "price":
-						if self.connection_id == 0:
-							self.handleListenerMessage(message["message"])
+						# if self.connection_id == 0:
+						self.handleListenerMessage(message["message"])
 					elif message.get("type") == "start_strategy":
 						print("[zmq_message_loop] START STRATEGY", flush=True)
 						user_id = message["message"]["user_id"]
@@ -449,7 +449,9 @@ class Controller(object):
 			self.redis_client.set("workers_complete", 0)
 
 		self.redis_client.set("strategies_" + str(self.connection_id), json.dumps({}))
-		self.redis_client.hdel("handled", *self.redis_client.hkeys("handled"))
+		all_handled_keys = list(self.redis_client.hgetall("handled").keys())
+		if len(all_handled_keys):
+			self.redis_client.hdel("handled", *all_handled_keys)
 
 		self.accounts = Accounts(self)
 		self.db = Database(self, self.app.config['ENV'])

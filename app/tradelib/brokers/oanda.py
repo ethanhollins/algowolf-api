@@ -1387,13 +1387,14 @@ class Oanda(Broker):
 
 
 	def _handle_account_updates(self):
+		handled_delete_check = time.time()
 		while True:
-			if len(self._account_update_queue):
-				account_id, update, handled_id = self._account_update_queue[0]
-				del self._account_update_queue[0]
-				print(f"[Oanda._handle_account_updates] {update}, {account_id}, {handled_id}")
+			try:
+				if len(self._account_update_queue):
+					account_id, update, handled_id = self._account_update_queue[0]
+					del self._account_update_queue[0]
+					print(f"[Oanda._handle_account_updates] {update}, {account_id}, {handled_id}")
 
-				try:
 					if handled_id is not None:
 						print(F"[Oanda._handle_account_updates] HANDLED 1: {handled_id}, {update}")
 						self.addHandledItem(handled_id, update)
@@ -1402,10 +1403,13 @@ class Oanda(Broker):
 
 					if len(update):
 						self.handleOnTrade(account_id, update)
-				except Exception:
-					print(f"[_handle_account_updates] {traceback.format_exc()}")
-					
-			time.sleep(0.1)
+						
+				if time.time() - handled_delete_check > 30:
+					handled_delete_check = time.time()
+					self.deleteOldHandledIds()
+				time.sleep(0.1)
+			except Exception:
+				print(f"[_handle_account_updates] {traceback.format_exc()}")
 	
 
 	# def _handle_account_updates(self):
