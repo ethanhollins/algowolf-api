@@ -449,7 +449,8 @@ class Controller(object):
 			self.redis_client.set("workers_complete", 0)
 
 		self.redis_client.set("strategies_" + str(self.connection_id), json.dumps({}))
-		
+		self.redis_client.hdel("handled", *self.redis_client.hkeys("handled"))
+
 		self.accounts = Accounts(self)
 		self.db = Database(self, self.app.config['ENV'])
 		self.charts = Charts(self)

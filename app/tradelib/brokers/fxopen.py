@@ -1121,7 +1121,7 @@ class FXOpen(Broker):
 					if handled_id is not None:
 						print(F"[FXOpen._handle_account_updates] HANDLED 1: {handled_id}, {update}")
 						self.addHandledItem(handled_id, update)
-						print(F"[FXOpen._handle_account_updates] HANDLED 2: {self.getHandled()}")
+						print(F"[FXOpen._handle_account_updates] HANDLED 2: {self.getHandled(handled_id)}")
 						# self._handled[handled_id] = update
 
 					if len(update):

@@ -238,12 +238,12 @@ class Spotware(Broker):
 
 	def _wait(self, ref_id, polling=0.1, timeout=30):
 		start = time.time()
-		while not ref_id in self.getHandled():
+		while not ref_id in self.getHandled(ref_id):
 			if time.time() - start >= timeout:
 				return None
 			time.sleep(polling)
 
-		item = self.getHandled()[ref_id]
+		item = self.getHandled(ref_id)
 		self.deleteHandledItem(ref_id)
 		return item
 
@@ -1144,7 +1144,7 @@ class Spotware(Broker):
 			if msg_id is not None:
 				print(F"[Spotware._handle_account_updates] HANDLED 1: {msg_id}, {result}")
 				self.addHandledItem(msg_id, result)
-				print(F"[Spotware._handle_account_updates] HANDLED 2: {self.getHandled()}")
+				print(F"[Spotware._handle_account_updates] HANDLED 2: {self.getHandled(msg_id)}")
 				# self._handled[msg_id] = result
 			self.handleOnTrade(account_id, result)
 			return result

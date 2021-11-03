@@ -77,8 +77,8 @@ class Broker(object):
 		self.charts = []
 		self.ontrade_subs = {}
 		self.transactions = self._create_empty_transaction_df()
-		if self.strategyId is not None:
-			self.resetHandled()
+		# if self.strategyId is not None:
+		# 	self.resetHandled()
 		# self._handled = {}
 
 		self.is_running = True
@@ -200,7 +200,7 @@ class Broker(object):
 	def _wait(self, ref, func=None, res=None, polling=0.1, timeout=30):
 		print(f"[_wait] {ref}")
 		start = time.time()
-		while not ref in self.getHandled():
+		while self.getHandled(ref) is not None:
 			if time.time() - start >= timeout:
 				print(f"[{ref}] TIMED OUT")
 				if func and res: 
@@ -214,7 +214,7 @@ class Broker(object):
 							item is trans_match
 					return item
 			time.sleep(polling)
-		item = self.getHandled()[ref]
+		item = self.getHandled(ref)
 		self.deleteHandledItem(ref)
 		return item
 
@@ -377,25 +377,30 @@ class Broker(object):
 				return order
 		return None
 
-	def resetHandled(self):
-		self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps({}))
+	# def resetHandled(self):
+	# 	self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps({}))
 
-	def getHandled(self):
-		result = json.loads(self.ctrl.redis_client.hget("handled", self.strategyId).decode())
+	def getHandled(self, handled_id):
+		if self.ctrl.redis_client.hexists("handled", self.strategyId + '_' + handled_id):
+			result = json.loads(self.ctrl.redis_client.hget("handled", self.strategyId + '_' + handled_id).decode())
+		else:
+			result = None
 		print(f"GET HANDLED: {self.strategyId}, {result}", flush=True)
 		return result
 
 	def addHandledItem(self, handled_id, item):
-		handled = self.getHandled()
-		print(f"ADD HANDLED: {self.strategyId}, {handled}", flush=True)
-		handled[handled_id] = item
-		self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
+		handled = self.getHandled(handled_id)
+		print(f"ADD HANDLED: {self.strategyId + '_' + handled_id}, {handled}", flush=True)
+		# handled[handled_id] = item
+		self.ctrl.redis_client.hset("handled", self.strategyId + '_' + handled_id, json.dumps(item))
 
 	def deleteHandledItem(self, handled_id):
-		handled = self.getHandled()
-		if handled_id in handled:
-			del handled[handled_id]
-			self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
+		# handled = self.getHandled(handled_id)
+		# if handled_id in handled:
+		if self.ctrl.redis_client.hexists("handled", self.strategyId + '_' + handled_id):
+			# del handled[handled_id]
+			# self.ctrl.redis_client.hset("handled", self.strategyId, json.dumps(handled))
+			self.ctrl.redis_client.hdel("handled", self.strategyId + '_' + handled_id)
 
 	def getUserAccount(self):
 		return self.userAccount
