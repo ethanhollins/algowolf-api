@@ -215,7 +215,7 @@ class Controller(object):
 					'kwargs': kwargs
 				}
 			}
-			print(f"[brokerRequest] Emit: {data}")
+			print(f"[brokerRequest] Send: ({msg_id}) {time.time()}, {data}")
 			# self.sio.emit('broker_cmd', data=data, namespace='/admin')
 			# result = self._wait_broker_response(msg_id)
 
@@ -224,7 +224,7 @@ class Controller(object):
 			result = self._wait_broker_response(msg_id)
 			
 			# result = self.zmq_dealer_socket.recv_json()
-			print(f"[brokerRequest] Result: ({msg_id}) {result}")
+			print(f"[brokerRequest] Result: ({msg_id}) {time.time()}, {result}")
 			
 		except Exception:
 			print(f"[brokerRequest] {traceback.format_exc()}")
@@ -387,7 +387,7 @@ class Controller(object):
 					if message.get("type") == "request":
 						Thread(target=self.handleRequestMessage, args=(message["message"],)).start()
 					else:
-						print(f"[handleListenerMessage] {'msg_id' in message}, {message}")
+						print(f"[handleListenerMessage] {time.time()} {message}", flush=True)
 						self.handleListenerMessage(message)
 
 				if self.zmq_sub_socket in socks:
