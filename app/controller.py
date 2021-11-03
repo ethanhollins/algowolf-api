@@ -5,11 +5,13 @@ import requests
 import shortuuid
 import time
 import traceback
+import zmq
+import jwt
 from copy import copy
 from urllib.request import urlopen
 from flask import abort
 from threading import Thread
-from xecd_rates_client import XecdClient
+from redis import Redis
 
 
 STREAM_URL = 'http://nginx:3001'
@@ -46,30 +48,59 @@ class Controller(object):
 		self._msg_queue = {}
 		self._listeners = {}
 		self._emit_queue = []
+		self._send_queue = []
 
-		self.sio = self.setupSio(self.app.config['STREAM_URL'])
-		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+		# self.sio = self.setupSio(self.app.config['STREAM_URL'])
+		# self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
-		if not self.app.config['IS_MAIN_STREAM']:
-			self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
-			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+		# if not self.app.config['IS_MAIN_STREAM']:
+		# 	self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
+		# 	self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
 
-		self.accounts = Accounts(self)
-		self.db = Database(self, app.config['ENV'])
-		self.charts = Charts(self)
-		self.brokers = Brokers(self)
+		# self.accounts = Accounts(self)
+		# self.db = Database(self, app.config['ENV'])
+		# self.charts = Charts(self)
+		# self.brokers = Brokers(self)
 
-		self.spots = Spots(self, [
-			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
-			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
-			'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
-			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
-		])
+		# self.spots = Spots(self, [
+		# 	'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+		# 	'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+		# 	'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
+		# 	'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
+		# ])
 
-		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
-		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
-			Thread(target=self.restartScripts).start()
+		# print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
+		# if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
+		# 	Thread(target=self.restartScripts).start()
 		
+	def _setup_zmq_connections(self):
+		self.zmq_context = zmq.Context()
+
+		# self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
+		# self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
+
+		# self.zmq_sub_socket = self.zmq_context.socket(zmq.SUB)
+		# self.zmq_sub_socket.connect("tcp://zmq_broker:5556")
+		# self.zmq_sub_socket.setsockopt(zmq.SUBSCRIBE, b'')
+
+		# self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
+		# self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
+
+
+		# self.zmq_poller = zmq.Poller()
+		# self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
+		# self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
+		
+		self.zmq_req_socket = self.zmq_context.socket(zmq.REQ)
+		self.zmq_req_socket.connect("tcp://zmq_broker:5563")
+		self.zmq_req_socket.send_json({"type": "connection_id"})
+
+		message = self.zmq_req_socket.recv_json()
+		self.connection_id = message["connection_id"]
+		print(f"CONNECTION ID: {self.connection_id}", flush=True)
+
+		Thread(target=self.zmq_message_loop).start()
+		Thread(target=self.zmq_send_loop).start()
 
 	def closeApp(self):
 		# Discontinue any threads
@@ -131,41 +162,76 @@ class Controller(object):
 				del self._msg_queue[msg_id]
 				print('WAIT RECV', flush=True)
 				return res.get('result')
-			time.sleep(0.1)
+			time.sleep(0.01)
 
 		return {
 			'error': 'No response.'
 		}
 
 
+	# def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
+	# 	msg_id = shortuuid.uuid()
+
+	# 	try:
+	# 		# self._emit_queue.append(msg_id)
+	# 		# while self._emit_queue[0] != msg_id:
+	# 		# 	time.sleep(0.001)
+			
+	# 		time.sleep(0.001)
+
+	# 		data = {
+	# 			'msg_id': msg_id,
+	# 			'broker': broker,
+	# 			'broker_id': broker_id,
+	# 			'cmd': func,
+	# 			'args': list(args),
+	# 			'kwargs': kwargs
+	# 		}
+	# 		print(f"Emit: {data}")
+	# 		self.sio.emit('broker_cmd', data=data, namespace='/admin')
+	# 		result = self._wait_broker_response(msg_id)
+	# 	except Exception:
+	# 		print(f"[brokerRequest] {traceback.format_exc()}")
+	# 		result = {
+	# 			'error': 'No response.'
+	# 		}
+	# 	finally:
+	# 		# del self._emit_queue[0]
+	# 		return result
+
+	
 	def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
 		msg_id = shortuuid.uuid()
 
 		try:
-			# self._emit_queue.append(msg_id)
-			# while self._emit_queue[0] != msg_id:
-			# 	time.sleep(0.001)
-			
-			time.sleep(0.001)
-
 			data = {
-				'msg_id': msg_id,
-				'broker': broker,
-				'broker_id': broker_id,
-				'cmd': func,
-				'args': list(args),
-				'kwargs': kwargs
+				"type": broker,
+				"message": {
+					'msg_id': msg_id,
+					'broker': broker,
+					'broker_id': broker_id,
+					'cmd': func,
+					'args': list(args),
+					'kwargs': kwargs
+				}
 			}
-			print(f"Emit: {data}")
-			self.sio.emit('broker_cmd', data=data, namespace='/admin')
+			print(f"[brokerRequest] Send: ({msg_id}) {time.time()}, {data}")
+			# self.sio.emit('broker_cmd', data=data, namespace='/admin')
+			# result = self._wait_broker_response(msg_id)
+
+			# self.zmq_dealer_socket.send_json(data, zmq.NOBLOCK)
+			self._send_queue.append(data)
 			result = self._wait_broker_response(msg_id)
+			
+			# result = self.zmq_dealer_socket.recv_json()
+			print(f"[brokerRequest] Result: ({msg_id}) {time.time()}, {result}")
+			
 		except Exception:
 			print(f"[brokerRequest] {traceback.format_exc()}")
 			result = {
 				'error': 'No response.'
 			}
 		finally:
-			# del self._emit_queue[0]
 			return result
 			
 
@@ -178,8 +244,6 @@ class Controller(object):
 			# while self._emit_queue[0] != msg_id:
 			# 	time.sleep(0.001)
 			
-			time.sleep(0.001)
-
 			data = {
 				'msg_id': msg_id,
 				'broker': broker,
@@ -205,10 +269,17 @@ class Controller(object):
 
 
 	def restartScripts(self):
+		print(f"[restartScripts] WORKERS: {int(self.redis_client.get('workers_complete').decode())}", flush=True)
+		while int(self.redis_client.get("workers_complete").decode()) != 5:
+			time.sleep(1)
+		time.sleep(1)
+
 		print("RESTARTING SCRIPTS...")
 		all_users = self.getDb().getAllUsers()
 
 		server_number = self.app.config["SERVER"]
+		script_count = 0
+		start_time = time.time()
 		print(f"SERVER NUMBER: {server_number}")
 		for user in all_users:
 			user_id = user.get('user_id')
@@ -246,9 +317,185 @@ class Controller(object):
 									print(f'STARTING {strategy_id}, {broker_id}, {account_id}')
 
 									account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
+									script_count += 1
+									print(f"SCRIPT COUNT: {script_count}")
 									# Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
 
+		print("RESTART COMPLETE ({:.2f}s)".format(time.time() - start_time))
 
+
+	def handleListenerMessage(self, message):
+		if "msg_id" in message:
+			if message["msg_id"] in self._listeners:
+				result = message['result']
+				Thread(target=self._listeners[message['msg_id']], args=result.get('args'), kwargs=result.get('kwargs')).start()
+			else:
+				self._msg_queue[message['msg_id']] = message
+
+	
+	def handleRequestMessage(self, message):
+		if message.get("ept") == "init_strategy_by_broker_id_ept":
+			print(f"[handleRequestMessage] RECEIVED init_strategy_by_broker_id_ept {message}")
+			msg_id = message["msg_id"]
+			key = message.get("Authorization")
+			strategy_id = message["args"][0]
+			broker_id = message["args"][1]
+
+			print(f"[handleRequestMessage] {key}, {strategy_id}", flush=True)
+			user_id, _ = self.check_auth_key(key, strategy_id)
+			print(f"[handleRequestMessage] {user_id}", flush=True)
+
+			if isinstance(user_id, str):
+				account = self.accounts.getAccount(user_id)
+				print(f"[handleRequestMessage] getStrategyByBrokerId", flush=True)
+				strategy = account.getStrategyByBrokerId(strategy_id, broker_id)
+				print(f"[handleRequestMessage] {strategy}", flush=True)
+
+				self._send_queue.append({
+					"type": "response",
+					"message": {
+						"msg_id": msg_id,
+						"result": strategy
+					}
+				})
+			
+			else:
+				print(f"[handleRequestMessage] NOPE", flush=True)
+				self._send_queue.append({
+					"type": "response",
+					"message": {
+						"msg_id": msg_id,
+						"result": user_id
+					}
+				})
+
+
+	def zmq_message_loop(self):
+		self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
+		self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
+
+		self.zmq_sub_socket = self.zmq_context.socket(zmq.SUB)
+		self.zmq_sub_socket.connect("tcp://zmq_broker:5556")
+		self.zmq_sub_socket.setsockopt(zmq.SUBSCRIBE, b'')
+
+		self.zmq_poller = zmq.Poller()
+		self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
+		self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
+
+		while True:
+			try:
+				socks = dict(self.zmq_poller.poll())
+
+				if self.zmq_pull_socket in socks:
+					message = self.zmq_pull_socket.recv_json()
+					print(f"[zmq_message_loop] {message}", flush=True)
+
+					if message.get("type") == "request":
+						Thread(target=self.handleRequestMessage, args=(message["message"],)).start()
+					else:
+						print(f"[handleListenerMessage] {time.time()} {message}", flush=True)
+						self.handleListenerMessage(message)
+
+				if self.zmq_sub_socket in socks:
+					message = self.zmq_sub_socket.recv_json()
+					if message.get("type") == "price":
+						if self.connection_id == 0:
+							self.handleListenerMessage(message["message"])
+					elif message.get("type") == "start_strategy":
+						print("[zmq_message_loop] START STRATEGY", flush=True)
+						user_id = message["message"]["user_id"]
+						strategy_id = message["message"]["strategy_id"]
+						account = ctrl.accounts.getAccount(user_id)
+						print(f"[zmq_message_loop] {account}")
+						Thread(target=account.startStrategy, args=(strategy_id,)).start()
+					else:
+						self.handleListenerMessage(message)
+
+			except Exception:
+				print(traceback.format_exc())
+	
+	def zmq_send_loop(self):
+		self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
+		self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
+		
+		while True:
+			try:
+				if len(self._send_queue):
+					item = self._send_queue[0]
+					del self._send_queue[0]
+
+					self.zmq_dealer_socket.send_json(item, zmq.NOBLOCK)
+
+			except Exception:
+				print(traceback.format_exc())
+			
+			time.sleep(0.01)
+
+
+	def startModules(self):
+
+		self.redis_client = Redis(host='redis', port=6379, password="dev")
+		
+		self.sio = self.setupSio(self.app.config['STREAM_URL'])
+		self.sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+
+		if not self.app.config['IS_MAIN_STREAM']:
+			self.main_sio = self.setupSio(self.app.config['MAIN_STREAM_URL'])
+			self.main_sio.on('broker_res', handler=self.onCommand, namespace='/admin')
+
+		self._setup_zmq_connections()
+
+		if self.connection_id == 0:
+			self.redis_client.set("workers_complete", 0)
+
+		self.redis_client.set("strategies_" + str(self.connection_id), json.dumps({}))
+		
+		self.accounts = Accounts(self)
+		self.db = Database(self, self.app.config['ENV'])
+		self.charts = Charts(self)
+		self.brokers = Brokers(self)
+
+		self.spots = Spots(self, [
+			'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'GBP',
+			'JPY', 'MXN', 'NOK', 'NZD', 'SEK',
+			'RUB', 'CNY', 'TRY', 'ZAR', 'PLN',
+			'HUF', 'CZK', 'SGD', 'HKD', 'DKK'
+		])
+
+
+	def performRestartScripts(self):
+		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
+		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
+			Thread(target=self.restartScripts).start()
+
+
+	def check_auth_key(self, key, strategy_id):
+		key = key.split(' ')
+		if len(key) == 2:
+			if key[0] == 'Bearer':
+				# Decode JWT API key
+				try:
+					payload = jwt.decode(key[1], self.app.config['SECRET_KEY'], algorithms=['HS256'])
+				except jwt.exceptions.DecodeError:
+					error = {
+						'error': 'AuthorizationException',
+						'message': 'Invalid authorization key.'
+					}
+					return error, 403
+				except jwt.exceptions.ExpiredSignatureError:
+					error = {
+						'error': 'AuthorizationException',
+						'message': 'Authorization key expired.'
+					}
+					return error, 403
+
+				return payload.get('sub'), 200
+
+		error = {
+			'error': 'ValueError',
+			'message': 'Unrecognizable authorization key.'
+		}
+		return error, 400
 
 
 	def getAccounts(self):
@@ -256,6 +503,9 @@ class Controller(object):
 
 	def getBrokers(self):
 		return self.brokers
+
+	def setBrokers(self):
+		self.brokers = Brokers(self)
 
 	def getCharts(self):
 		return self.charts

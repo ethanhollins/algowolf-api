@@ -352,15 +352,7 @@ def is_multiple_packages_in_use_ept():
 	)
 
 
-def check_key(strategy_id, req_access):
-	key = request.headers.get('Authorization')
-	if key is None:
-		error = {
-			'error': 'AuthorizationException',
-			'message': 'Invalid authorization key.'
-		}
-		return error, 403
-
+def check_auth_key(key, strategy_id, req_access):
 	key = key.split(' ')
 	if len(key) == 2:
 		if key[0] == 'Bearer':
@@ -405,6 +397,19 @@ def check_key(strategy_id, req_access):
 		'message': 'Unrecognizable authorization key.'
 	}
 	return error, 400
+
+
+def check_key(strategy_id, req_access):
+	key = request.headers.get('Authorization')
+	if key is None:
+		error = {
+			'error': 'AuthorizationException',
+			'message': 'Invalid authorization key.'
+		}
+		return error, 403
+
+	return check_auth_key(key, strategy_id, req_access)
+
 
 def key_or_login_required(strategy_id, req_access, disable_abort=False):
 	res, status = auth.check_login()
@@ -895,7 +900,7 @@ def replace_account_input_variables_ept(strategy_id, broker_id, account_id):
 def create_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	# Validation
@@ -937,7 +942,7 @@ def create_order(strategy_id, broker_id, data):
 def get_all_orders(strategy_id, broker_id, accounts):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -957,7 +962,7 @@ def get_all_orders(strategy_id, broker_id, accounts):
 def get_orders(strategy_id, broker_id, order_ids):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -974,7 +979,7 @@ def get_orders(strategy_id, broker_id, order_ids):
 def update_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -986,7 +991,7 @@ def update_order(strategy_id, broker_id, data):
 			
 			order = broker.getOrderByID(order_id)
 			if order:
-				result = order.modify(**modify)
+				result = broker.order_manager.modify(order, **modify)
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1008,7 +1013,7 @@ def update_order(strategy_id, broker_id, data):
 def delete_order(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -1017,7 +1022,7 @@ def delete_order(strategy_id, broker_id, data):
 			order_id = delete['order_id']
 			order = broker.getOrderByID(order_id)
 			if order:
-				result = order.cancel()
+				result = broker.order_manager.cancel(order)
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1038,7 +1043,7 @@ def delete_order(strategy_id, broker_id, data):
 def get_all_positions(strategy_id, broker_id, accounts):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -1059,7 +1064,7 @@ def get_all_positions(strategy_id, broker_id, accounts):
 def get_positions(strategy_id, broker_id, order_ids):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -1076,7 +1081,7 @@ def get_positions(strategy_id, broker_id, order_ids):
 def update_position(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -1087,7 +1092,7 @@ def update_position(strategy_id, broker_id, data):
 			
 			pos = broker.getPositionByID(order_id)
 			if pos:
-				result = pos.modify(**modify)
+				result = broker.position_manager.modify(pos, **modify)
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1109,7 +1114,7 @@ def update_position(strategy_id, broker_id, data):
 def delete_position(strategy_id, broker_id, data):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = {}
@@ -1118,7 +1123,7 @@ def delete_position(strategy_id, broker_id, data):
 			order_id = delete['order_id']
 			pos = broker.getPositionByID(order_id)
 			if pos:
-				result = pos.close(delete.get('lotsize'))
+				result = broker.position_manager.close(pos, delete.get('lotsize'))
 				res.update(result)
 			else:
 				res[broker.generateReference()] = {
@@ -1138,7 +1143,7 @@ def delete_position(strategy_id, broker_id, data):
 def get_account_info(strategy_id, broker_id, account_id):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = broker.getAccountInfo(account_id)
@@ -1147,7 +1152,7 @@ def get_account_info(strategy_id, broker_id, account_id):
 def get_transaction_info(strategy_id, broker_id, account_id):
 	user_id = get_user_id()
 	account = ctrl.accounts.getAccount(user_id)
-	# account.getStrategy(strategy_id)
+	account.startStrategyBroker(strategy_id, broker_id)
 	broker = account.getStrategyBroker(broker_id)
 
 	res = broker.getTransactionInfo(account_id)

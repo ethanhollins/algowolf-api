@@ -106,7 +106,7 @@ class FXOpen(Broker):
 
 		res = self.ctrl.brokerRequest(
 			'fxopen', self.brokerId, 'add_user',
-			user_id, self.brokerId, self._key, self._web_api_id, self._web_api_secret, self._is_demo, self.accounts,
+			user_id, self.strategyId, self.brokerId, self._key, self._web_api_id, self._web_api_secret, self._is_demo, self.accounts,
 			is_parent=self.is_parent, is_dummy=self.is_dummy
 		)
 
@@ -254,23 +254,22 @@ class FXOpen(Broker):
 		result = {}
 		client_id = trade.get("ClientId")
 		check_order = self.getOrderByID(str(trade["Id"]))
-		print(f"[_handle_order_create] 1: {check_order}")
 		if check_order is None:
 			order = self._convert_fxo_order(account_id, trade)
-			print(f"[_handle_order_create] 2: {order}")
-			self.orders.append(order)
-			print(f"[_handle_order_create] 3: {self.orders}")
+
+			self.appendDbOrder(order)
 
 			result[self.generateReference()] = {
-				'timestamp': order.open_time,
-				'type': order.order_type,
+				'timestamp': order["open_time"],
+				'type': order["order_type"],
 				'accepted': True,
 				'item': order
 			}
 			print(f"[_handle_order_create] 4: {result}")
 
 			if client_id is not None:
-				self._handled["ordercreate_" + client_id] = result
+				# self._handled["ordercreate_" + client_id] = result
+				self.addHandledItem("ordercreate_" + client_id, result)
 
 		return result
 
@@ -282,11 +281,11 @@ class FXOpen(Broker):
 		# Delete any existing order reference
 		from_order = self.getOrderByID(str(trade["Id"]))
 		if from_order is not None:
-			del self.orders[self.orders.index(from_order)]
+			self.deleteDbOrder(from_order["order_id"])
 
 			self.handleOnTrade(account_id, {
 				self.generateReference(): {
-					'timestamp': from_order.close_time,
+					'timestamp': from_order["close_time"],
 					'type': tl.ORDER_CANCEL,
 					'accepted': True,
 					'item': from_order
@@ -298,15 +297,15 @@ class FXOpen(Broker):
 		# Closed Position
 		pos = self.getPositionByID(str(trade["Id"]))
 		if pos is not None:
-			size = pos.lotsize - self.convertToLotsize(trade["RemainingAmount"])
+			size = pos["lotsize"] - self.convertToLotsize(trade["RemainingAmount"])
 
-			if size >= pos.lotsize:
+			if size >= pos["lotsize"]:
 				if trade.get("Price"):
-					pos.close_price = trade["Price"]
+					pos["close_price"] = trade["Price"]
 				else:
-					pos.close_price = trade["StopPrice"]
+					pos["close_price"] = trade["StopPrice"]
 
-				pos.close_time = trade["Modified"] / 1000
+				pos["close_time"] = trade["Modified"] / 1000
 
 				comment = trade.get("Comment")
 				if comment is not None and "TP" in comment:
@@ -317,12 +316,12 @@ class FXOpen(Broker):
 					order_type = tl.POSITION_CLOSE
 
 				result[self.generateReference()] = {
-					'timestamp': pos.close_price,
+					'timestamp': pos["close_price"],
 					'type': order_type,
 					'accepted': True,
 					'item': pos
 				}
-				del self.positions[self.positions.index(pos)]
+				self.deleteDbPosition(pos["order_id"])
 			
 			else:
 				cpy = tl.Position.fromDict(self, pos)
@@ -336,7 +335,9 @@ class FXOpen(Broker):
 				cpy.close_time = trade["Modified"] / 1000
 
 				# Modify open position
-				pos.lotsize = self.convertToLotsize(trade["RemainingAmount"])
+				pos["lotsize"] = self.convertToLotsize(trade["RemainingAmount"])
+
+				self.replaceDbPosition(pos)
 
 				result[self.generateReference()] = {
 					'timestamp': cpy.close_price,
@@ -346,7 +347,8 @@ class FXOpen(Broker):
 				}
 			
 			if client_id is not None:
-				self._handled["fillclose_" + client_id] = result
+				# self._handled["fillclose_" + client_id] = result
+				self.addHandledItem("fillclose_" + client_id, result)
 		
 		return result
 
@@ -360,11 +362,11 @@ class FXOpen(Broker):
 		# Delete any existing order reference
 		from_order = self.getOrderByID(str(trade["Id"]))
 		if from_order is not None:
-			del self.orders[self.orders.index(from_order)]
+			self.deleteDbOrder(from_order["order_id"])
 
 			self.handleOnTrade(account_id, {
 				self.generateReference(): {
-					'timestamp': from_order.close_time,
+					'timestamp': from_order["close_time"],
 					'type': tl.ORDER_CANCEL,
 					'accepted': True,
 					'item': from_order
@@ -378,17 +380,18 @@ class FXOpen(Broker):
 		check_pos = self.getPositionByID(str(trade["Id"]))
 		if check_pos is None:
 			pos = self._convert_fxo_position(account_id, trade)
-			self.positions.append(pos)
+			self.appendDbPosition(pos)
 
 			result[self.generateReference()] = {
-				'timestamp': pos.open_time,
-				'type': pos.order_type,
+				'timestamp': pos["open_time"],
+				'type': pos["order_type"],
 				'accepted': True,
 				'item': pos
 			}
 
 			if client_id is not None:
-				self._handled["fillopen_" + client_id] = result
+				# self._handled["fillopen_" + client_id] = result
+				self.addHandledItem("fillopen_" + client_id, result)
 	
 		print(f"[_handle_order_fill_open] {result}")
 		print(f"[_handle_order_fill_open] {self._handled}")
@@ -402,18 +405,19 @@ class FXOpen(Broker):
 		client_id = trade.get("ClientId")
 		order = self.getOrderByID(str(trade["Id"]))
 		if order is not None:
-			order.close_time = trade["Modified"] / 1000
-			del self.orders[self.orders.index(order)]
+			order["close_time"] = trade["Modified"] / 1000
+			self.deleteDbOrder(order["order_id"])
 
 			result[self.generateReference()] = {
-				'timestamp': order.close_time,
+				'timestamp': order["close_time"],
 				'type': tl.ORDER_CANCEL,
 				'accepted': True,
 				'item': order
 			}
 
 			if client_id is not None:
-				self._handled["ordercancel_" + client_id] = result
+				# self._handled["ordercancel_" + client_id] = result
+				self.addHandledItem("ordercancel_" + client_id, result)
 
 		return result
 
@@ -426,8 +430,10 @@ class FXOpen(Broker):
 		if trade["Type"] == "Position":
 			pos = self.getPositionByID(str(trade["Id"]))
 			if pos is not None:
-				pos.sl = trade.get("StopLoss")
-				pos.tp = trade.get("TakeProfit")
+				pos["sl"] = trade.get("StopLoss")
+				pos["tp"] = trade.get("TakeProfit")
+
+				self.replaceDbPosition(pos)
 
 				result[self.generateReference()] = {
 					'timestamp': trade["Modified"] / 1000,
@@ -437,19 +443,22 @@ class FXOpen(Broker):
 				}
 
 				if client_id is not None:
-					self._handled["modify_" + client_id] = result
+					# self._handled["modify_" + client_id] = result
+					self.addHandledItem("modify_" + client_id, result)
 
 		else:
 			order = self.getOrderByID(str(trade["Id"]))
 			if order is not None:
-				order.sl = trade.get("StopLoss")
-				order.tp = trade.get("TakeProfit")
-				order.lotsize = self.convertToLotsize(trade["RemainingAmount"])
+				order["sl"] = trade.get("StopLoss")
+				order["tp"] = trade.get("TakeProfit")
+				order["lotsize"] = self.convertToLotsize(trade["RemainingAmount"])
 
 				if "StopPrice" in trade:
-					order.entry_price = trade["StopPrice"]
+					order["entry_price"] = trade["StopPrice"]
 				else:
-					order.entry_price = trade["Price"]
+					order["entry_price"] = trade["Price"]
+
+				self.replaceDbOrder(order)
 
 				result[self.generateReference()] = {
 					'timestamp': trade["Modified"] / 1000,
@@ -459,7 +468,8 @@ class FXOpen(Broker):
 				}
 
 				if client_id is not None:
-					self._handled["modify_" + client_id] = result
+					# self._handled["modify_" + client_id] = result
+					self.addHandledItem("modify_" + client_id, result)
 
 		return result
 
@@ -477,8 +487,8 @@ class FXOpen(Broker):
 				new_order = self._convert_fxo_order(account_id, i)
 				new_orders.append(new_order)
 
-		self.positions = new_positions
-		self.orders = new_orders
+		self.setDbPositions(new_positions)
+		self.setDbOrders(new_orders)
 
 		return {
 			self.generateReference(): {
@@ -632,7 +642,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -644,7 +654,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': 'FXOpen internal server error.',
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -687,7 +697,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -699,7 +709,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': 'FXOpen internal server error.',
 					'item': {
-						'order_id': pos.order_id
+						'order_id': pos["order_id"]
 					}
 				}
 			})
@@ -843,7 +853,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -855,7 +865,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': 'FXOpen internal server error.',
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -896,7 +906,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': msg,
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -908,7 +918,7 @@ class FXOpen(Broker):
 					'accepted': False,
 					'message': 'FXOpen internal server error.',
 					'item': {
-						'order_id': order.order_id
+						'order_id': order["order_id"]
 					}
 				}
 			})
@@ -1091,63 +1101,86 @@ class FXOpen(Broker):
 		res = self.ctrl.brokerRequest(
 			'fxopen', self.brokerId, 'subscribe_account_updates', stream_id
 		)
+		stream_id = res
+		print(f"[FXOpen.subscribeAccountUpdates] {stream_id}")
 		self.ctrl.addBrokerListener(stream_id, self._on_account_update)
 
 
-	def _on_account_update(self, update):
-		self._account_update_queue.append(update)
+	def _on_account_update(self, update, account_id, handled_id):
+		self._account_update_queue.append((update, account_id, handled_id))
 
 
 	def _handle_account_updates(self):
-		
 		while True:
 			if len(self._account_update_queue):
-				update = self._account_update_queue[0]
+				update, account_id, handled_id = self._account_update_queue[0]
 				del self._account_update_queue[0]
-				
+
+				print(f"HANDLED ID: {handled_id}")
 				try:
-					item = update.get("Result")
-					result = {}
-					account_id = None
+					if handled_id is not None:
+						print(F"[FXOpen._handle_account_updates] HANDLED 1: {handled_id}, {update}")
+						self.addHandledItem(handled_id, update)
+						print(F"[FXOpen._handle_account_updates] HANDLED 2: {self.getHandled()}")
+						# self._handled[handled_id] = update
 
-					if item is not None:
-						event = item.get("Event")
-						# On Filled Event
-						if event == "Filled":
-							# Position Updates
-							account_id = str(item["Trade"]["AccountId"])
-							if "Profit" in item:
-								item["Trade"]["Price"] = item["Fill"]["Price"]
-								result = self._handle_order_fill_close(item["Trade"])
-							else:
-								result = self._handle_order_fill_open(item["Trade"])
-					
-						# On Allocated Event
-						elif event == "Allocated":
-							if item["Trade"]["Type"] in ("Stop","Limit"):
-								account_id = str(item["Trade"]["AccountId"])
-								result = self._handle_order_create(item["Trade"])
-
-						# On Canceled Event
-						elif event == "Canceled":
-							account_id = str(item["Trade"]["AccountId"])
-							result = self._handle_order_cancel(item["Trade"])
-
-						# On Modified Event
-						elif event == "Modified":
-							account_id = str(item["Trade"]["AccountId"])
-							result = self._handle_modify(item["Trade"])
-
-						elif "Trades" in item:
-							result = self._handle_trades(item["Trades"])
-
-						if event is not None:
-							print(f"[FXOpen._handle_account_updates] {update}")
-
-					if len(result):
-						self.handleOnTrade(account_id, result)
+					if len(update):
+						self.handleOnTrade(account_id, update)
 				except Exception:
 					print(f"[_handle_account_updates] {traceback.format_exc()}")
+			time.sleep(0.1)
+
+			
+	# def _handle_account_updates(self):
+		
+	# 	while True:
+	# 		if len(self._account_update_queue):
+	# 			update = self._account_update_queue[0]
+	# 			del self._account_update_queue[0]
+				
+	# 			try:
+	# 				item = update.get("Result")
+	# 				result = {}
+	# 				account_id = None
+
+	# 				if item is not None:
+	# 					event = item.get("Event")
+	# 					# On Filled Event
+	# 					if event == "Filled":
+	# 						# Position Updates
+	# 						account_id = str(item["Trade"]["AccountId"])
+	# 						if "Profit" in item:
+	# 							item["Trade"]["Price"] = item["Fill"]["Price"]
+	# 							result = self._handle_order_fill_close(item["Trade"])
+	# 						else:
+	# 							result = self._handle_order_fill_open(item["Trade"])
+					
+	# 					# On Allocated Event
+	# 					elif event == "Allocated":
+	# 						if item["Trade"]["Type"] in ("Stop","Limit"):
+	# 							account_id = str(item["Trade"]["AccountId"])
+	# 							result = self._handle_order_create(item["Trade"])
+
+	# 					# On Canceled Event
+	# 					elif event == "Canceled":
+	# 						account_id = str(item["Trade"]["AccountId"])
+	# 						result = self._handle_order_cancel(item["Trade"])
+
+	# 					# On Modified Event
+	# 					elif event == "Modified":
+	# 						account_id = str(item["Trade"]["AccountId"])
+	# 						result = self._handle_modify(item["Trade"])
+
+	# 					elif "Trades" in item:
+	# 						result = self._handle_trades(item["Trades"])
+
+	# 					if event is not None:
+	# 						print(f"[FXOpen._handle_account_updates] {update}")
+
+	# 				if len(result):
+	# 					self.handleOnTrade(account_id, result)
+	# 			except Exception:
+	# 				print(f"[_handle_account_updates] {traceback.format_exc()}")
 
 				
 

@@ -3,6 +3,8 @@ import numpy as np
 import datetime
 import time
 import traceback
+import json
+import zmq
 from threading import Thread
 from app import tradelib as tl
 from copy import copy
@@ -31,6 +33,8 @@ class Chart(object):
 		self._tick_queue = []
 
 		self.start(await_completion)
+
+		# Thread(target=self._mock_ticks).start()
 
 
 	def start(self, await_completion):
@@ -61,6 +65,99 @@ class Chart(object):
 
 	def getActivePeriods(self):
 		return list(self.ask.keys())
+
+	
+	def getAllData(self):
+		data = self.ctrl.redis_client.hget(self.broker, self.product)
+		if data is None:
+			data = {}
+		else:
+			data = json.loads(data)
+		return data
+
+
+	def setAllData(self, data):
+		self.ctrl.redis_client.hset(self.broker, self.product, json.dumps(data))
+		
+
+	def getAsk(self, period):
+		data = self.getAllData()
+		if "asks" in data and period in data["asks"]:
+			return data["asks"][period]
+		else:
+			return None
+
+
+	def setAsk(self, period, value):
+		data = self.getAllData()
+		if not "asks" in data:
+			data["asks"] = {}
+		data["asks"][period] = value
+		self.setAllData(data)
+
+
+	def getMid(self, period):
+		data = self.getAllData()
+		if "mids" in data and period in data["mids"]:
+			return data["mids"][period]
+		else:
+			return None
+
+	
+	def setMid(self, period, value):
+		data = self.getAllData()
+		if not "mids" in data:
+			data["mids"] = {}
+		data["mids"][period] = value
+		self.setAllData(data)
+
+
+	def getBid(self, period):
+		data = self.getAllData()
+		if "bids" in data and period in data["bids"]:
+			return data["bids"][period]
+		else:
+			return None
+
+	
+	def setBid(self, period, value):
+		data = self.getAllData()
+		if not "bids" in data:
+			data["bids"] = {}
+		data["bids"][period] = value
+		self.setAllData(data)
+
+
+	def getVolume(self, period):
+		data = self.getAllData()
+		if "volume" in data and period in data["volume"]:
+			return data["volume"][period]
+		else:
+			return None
+
+	
+	def setVolume(self, period, value):
+		data = self.getAllData()
+		if not "volume" in data:
+			data["volume"] = {}
+		data["volume"][period] = value
+		self.setAllData(data)
+
+
+	def getLastTs(self, period):
+		data = self.getAllData()
+		if "last_ts" in data and period in data["last_ts"]:
+			return data["last_ts"][period]
+		else:
+			return None
+
+	
+	def setLastTs(self, period, value):
+		data = self.getAllData()
+		if not "last_ts" in data:
+			data["last_ts"] = {}
+		data["last_ts"][period] = value
+		self.setAllData(data)
 
 
 	def _generate_period_dict(self):
@@ -130,16 +227,17 @@ class Chart(object):
 	def _mock_ticks(self):
 		period = tl.period.ONE_MINUTE
 		while self.broker.is_running:
-			time.sleep(10)
+			time.sleep(30)
 			if self.lastTs.get(period):
 				result =[{
-					'broker': 'ig',
+					'broker': 'fxcm',
 					'product': self.product,
 					'period': period,
-					'bar_end': False,
+					'bar_end': True,
 					'timestamp': self.lastTs[period],
 					'item': {
 						'ask': self.ask[period].tolist(),
+						'mid': self.mid[period].tolist(),
 						'bid': self.bid[period].tolist()
 					}
 				}]
@@ -155,6 +253,19 @@ class Chart(object):
 			time.sleep(0.01)
 
 		try:
+			self.ctrl.zmq_dealer_socket.send_json(
+				{ 
+					"type": "ontick", 
+					"message": {
+						'broker': self.broker.name,
+						'product': self.product,
+						'period': 'all',
+						'items': result
+					}
+				},
+				zmq.NOBLOCK
+			)
+
 			self.ctrl.emit(
 				'ontick', 
 				{
@@ -177,6 +288,14 @@ class Chart(object):
 								Thread(target=func, args=(res,)).start()
 						except Exception as e:
 							pass
+				
+				# self.ctrl.zmq_dealer_socket.send_json(
+				# 	{ 
+				# 		"type": "ontick", 
+				# 		"message": res
+				# 	},
+				# 	zmq.NOBLOCK
+				# )
 
 				self.ctrl.emit(
 					'ontick', res, 
