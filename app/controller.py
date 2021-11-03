@@ -278,6 +278,7 @@ class Controller(object):
 		all_users = self.getDb().getAllUsers()
 
 		server_number = self.app.config["SERVER"]
+		script_count = 0
 		print(f"SERVER NUMBER: {server_number}")
 		for user in all_users:
 			user_id = user.get('user_id')
@@ -315,7 +316,11 @@ class Controller(object):
 									print(f'STARTING {strategy_id}, {broker_id}, {account_id}')
 
 									account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
+									script_count += 1
+									print(f"SCRIPT COUNT: {script_count}")
 									# Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
+
+		print(f"RESTART COMPLETE")
 
 
 	def handleListenerMessage(self, message):
