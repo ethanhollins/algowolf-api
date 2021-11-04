@@ -384,7 +384,9 @@ class Broker(object):
 
 	def getHandled(self, handled_id):
 		if self.ctrl.redis_client.hexists("handled", self.strategyId + '_' + handled_id):
-			result = json.loads(self.ctrl.redis_client.hget("handled", self.strategyId + '_' + handled_id).decode())
+			result = self.ctrl.redis_client.hget("handled", self.strategyId + '_' + handled_id)
+			if result is not None:
+				result = json.loads(result.decode())
 		else:
 			result = None
 		print(f"GET HANDLED: {self.strategyId}, {result}", flush=True)
