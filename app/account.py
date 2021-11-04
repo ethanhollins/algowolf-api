@@ -1029,7 +1029,6 @@ class Account(object):
 
 			broker = self.brokers.get(broker_id)
 
-			print(f'[_set_brokers] {brokers[broker_id].get("broker") == tl.broker.DUKASCOPY_NAME}, {not brokers[broker_id].get("complete")}, {brokers[broker_id]}')
 			if brokers[broker_id].get('broker') == tl.broker.DUKASCOPY_NAME and not brokers[broker_id].get('complete'):
 				delete.append(broker_id)
 			elif broker is not None:
@@ -1063,7 +1062,7 @@ class Account(object):
 			if broker_id == strategy_id:
 				broker_name = tl.broker.PAPERTRADER_NAME
 				broker_args.update({
-					'name': tl.broker.OANDA_NAME,
+					'name': tl.broker.FXCM_NAME,
 					'display_name': 'Paper Trader',
 					'is_dummy': False,
 					'is_auth': True

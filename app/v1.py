@@ -2832,6 +2832,39 @@ def cancel_subscription(plan):
 	)
 
 
+@bp.route('/payments/all', methods=('GET',))
+def list_all_subscribed_user_ids():
+	starting_after = None
+	user_ids = ["WbcHtB9iqBkehm3YvAGMzd", "8M5LU6uEZY9DDiH8nftqEH"]
+	while True:
+		print(f"Starting after: {starting_after}")
+		res = stripe.Subscription.list(
+			api_key=ctrl.app.config['STRIPE_API_KEY'],
+			starting_after=starting_after
+		)
+		for i in res["data"]:
+			customer = stripe.Customer.retrieve(
+				i["customer"],
+				api_key=ctrl.app.config['STRIPE_API_KEY']
+			)
+
+			try:
+				user_ids.append(customer["metadata"]["user_id"])
+			except Exception:
+				pass
+
+		if not res["has_more"]:
+			break
+		else:
+			starting_after = res["data"][-1]
+			
+
+	return Response(
+		json.dumps(user_ids, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/payments/subscribe', methods=('GET',))
 @auth.login_required
 def get_subscriptions():

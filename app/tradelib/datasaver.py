@@ -510,7 +510,7 @@ class DataSaver(object):
 
 	def _save_data(self, product, period, data):
 		''' Save data to storage '''
-		if data.size > 0:
+		if data.size > 0 and self.broker.ctrl.connection_id == 0:
 			start_ts = data.index.values[0]
 			start_dt = tl.convertTimestampToTime(start_ts)
 			end_ts = data.index.values[-1]

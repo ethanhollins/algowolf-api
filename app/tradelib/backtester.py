@@ -64,7 +64,8 @@ class Backtester(object):
 		self.broker.orderValidation(order)
 
 		# Add to broker position list
-		self.broker.positions.append(order)
+		# self.broker.positions.append(order)
+		self.broker.appendDbPosition(order)
 		
 		return order
 
@@ -120,43 +121,47 @@ class Backtester(object):
 		# Validate order
 		self.broker.orderValidation(order)
 		# Add to broker order list
-		self.broker.orders.append(order)
+		# self.broker.orders.append(order)
+		self.broker.appendDbOrder(order)
 
 		return order
 
 
 	def modifyPosition(self, pos, sl_range=None, tp_range=None, sl_price=None, tp_price=None):
 		if sl_range != None:
-			if pos.direction == tl.LONG:
-				pos.sl = round(pos.entry_price - tl.utils.convertToPrice(sl_range), 5)
+			if pos["direction"] == tl.LONG:
+				pos["sl"] = round(pos["entry_price"] - tl.utils.convertToPrice(sl_range), 5)
 			else:
-				pos.sl = round(pos.entry_price + tl.utils.convertToPrice(sl_range), 5)
+				pos["sl"] = round(pos["entry_price"] + tl.utils.convertToPrice(sl_range), 5)
 		elif sl_price:
-			pos.sl = sl_price
+			pos["sl"] = sl_price
 
 		if tp_range != None:
-			if pos.direction == tl.LONG:
-				pos.tp = round(pos.entry_price + tl.utils.convertToPrice(tp_range), 5)
+			if pos["direction"] == tl.LONG:
+				pos["tp"] = round(pos["entry_price"] + tl.utils.convertToPrice(tp_range), 5)
 			else:
-				pos.tp = round(pos.entry_price - tl.utils.convertToPrice(tp_range), 5)
+				pos["tp"] = round(pos["entry_price"] - tl.utils.convertToPrice(tp_range), 5)
 		elif tp_price:
-			pos.tp = tp_price
+			pos["tp"] = tp_price
+
+		self.broker.replaceDbPosition(pos)
 
 		return pos
 
 
 	def deletePosition(self, pos, lotsize):
-		if lotsize >= pos.lotsize:
-			if pos.direction == tl.LONG:
-				pos.close_price = self.broker.getBid(pos.product)
+		if lotsize >= pos["lotsize"]:
+			if pos["direction"] == tl.LONG:
+				pos["close_price"] = self.broker.getBid(pos["product"])
 			else:
-				pos.close_price = self.broker.getAsk(pos.product)
-			pos.close_time = self.broker.getTimestamp(tl.product.GBPUSD, tl.period.ONE_MINUTE)
+				pos["close_price"] = self.broker.getAsk(pos["product"])
+			pos["close_time"] = self.broker.getTimestamp(tl.product.EURUSD, tl.period.ONE_MINUTE)
 
 			result = pos
 
 			# Delete position from broker positions
-			del self.broker.positions[self.broker.positions.index(pos)]
+			# del self.broker.positions[self.broker.positions.index(pos)]
+			self.broker.deleteDbPosition(pos["order_id"])
 
 		elif lotsize <= 0:
 			# Raise error
@@ -165,53 +170,59 @@ class Backtester(object):
 		else:
 			cpy = tl.Position.fromDict(self.broker, pos)
 			cpy.lotsize = lotsize
-			if pos.direction == tl.LONG:
-				cpy.close_price = self.broker.getBid(pos.product)
+			if pos["direction"] == tl.LONG:
+				cpy.close_price = self.broker.getBid(pos["product"])
 			else:
-				cpy.close_price = self.broker.getAsk(pos.product)
-			cpy.close_time =  self.broker.getTimestamp(tl.product.GBPUSD, tl.period.ONE_MINUTE)
+				cpy.close_price = self.broker.getAsk(pos["product"])
+			cpy.close_time =  self.broker.getTimestamp(tl.product.EURUSD, tl.period.ONE_MINUTE)
 			
 			result = cpy
 
-			pos.lotsize -= lotsize
+			pos["lotsize"] -= lotsize
+			self.broker.replaceDbPosition(pos)
 
 		return result
 
 
 	def modifyOrder(self, order, lotsize, entry_price, sl_price, tp_price):
 		if lotsize:
-			order.lotsize = lotsize
+			order["lotsize"] = lotsize
 
 		# Convert to price
 		if entry_price:
-			order.entry_price = entry_price
+			order["entry_price"] = entry_price
 
 		if sl_price:
-			order.sl = sl_price
+			order["sl"] = sl_price
 
 		if tp_price:
-			order.tp = tp_price
+			order["tp"] = tp_price
+
+		self.broker.replaceDbOrder(order)
 
 		return order
 
 
 	def deleteOrder(self, order):
-		order.close_time = self.broker.getTimestamp(tl.product.GBPUSD, tl.period.ONE_MINUTE)
-		del self.broker.orders[self.broker.orders.index(order)]
+		order["close_time"] = self.broker.getTimestamp(tl.product.EURUSD, tl.period.ONE_MINUTE)
+		# del self.broker.orders[self.broker.orders.index(order)]
+		self.broker.deleteDbOrder(order["order_id"])
 
 		return order
 
 	def createOrderPosition(self, order):
-		if order.order_type == tl.LIMIT_ORDER:
+		if order["order_type"] == tl.LIMIT_ORDER:
 			order_type = tl.LIMIT_ENTRY
-		elif order.order_type == tl.STOP_ORDER:
+		elif order["order_type"] == tl.STOP_ORDER:
 			order_type = tl.STOP_ENTRY
 		else:
 			order_type = tl.MARKET_ENTRY
 
 		pos = tl.Position.fromOrder(self.broker, order)
 		pos.order_type = order_type
-		self.broker.positions.append(pos)
+
+		# self.broker.positions.append(pos)
+		self.broker.appendDbPosition(pos)
 
 		res = {
 			self.broker.generateReference(): {
@@ -248,6 +259,7 @@ class Backtester(object):
 		bid = ohlc[4:]
 
 		for order in self.broker.getAllOrders():
+			order = tl.Order.fromDict(self.broker, order)
 			if order.product != product or order.account_id != tl.broker.PAPERTRADER_NAME:
 				continue
 
@@ -262,7 +274,8 @@ class Backtester(object):
 						order.close_time = timestamp
 
 						# Delete Order
-						del self.broker.orders[self.broker.orders.index(order)]
+						# del self.broker.orders[self.broker.orders.index(order)]
+						self.broker.deleteDbOrder(order.order_id)
 
 						# On Trade
 						if pos and self.broker.acceptLive:
@@ -297,7 +310,8 @@ class Backtester(object):
 						order.close_time = timestamp
 						
 						# Delete Order
-						del self.broker.orders[self.broker.orders.index(order)]		
+						# del self.broker.orders[self.broker.orders.index(order)]		
+						self.broker.deleteDbOrder(order.order_id)
 
 						# On Trade
 						if pos and self.broker.acceptLive:
@@ -335,7 +349,8 @@ class Backtester(object):
 						order.close_time = timestamp
 
 						# Delete Order
-						del self.broker.orders[self.broker.orders.index(order)]
+						# del self.broker.orders[self.broker.orders.index(order)]
+						self.broker.deleteDbOrder(order.order_id)
 
 						# On Trade
 						if pos and self.broker.acceptLive:
@@ -370,7 +385,8 @@ class Backtester(object):
 						order.close_time = timestamp
 
 						# Delete Order
-						del self.broker.orders[self.broker.orders.index(order)]
+						# del self.broker.orders[self.broker.orders.index(order)]
+						self.broker.deleteDbOrder(order.order_id)
 
 						# On Trade
 						if pos and self.broker.acceptLive:
@@ -404,6 +420,7 @@ class Backtester(object):
 		ask = ohlc[:4]
 		bid = ohlc[4:]
 		for pos in self.broker.getAllPositions():
+			pos = tl.Position.fromDict(self.broker, pos)
 			if pos.product != product or not pos.sl or pos.account_id != tl.broker.PAPERTRADER_NAME:
 				continue
 
@@ -415,7 +432,8 @@ class Backtester(object):
 				pos.close_time = timestamp
 
 				# Delete Position
-				del self.broker.positions[self.broker.positions.index(pos)]
+				# del self.broker.positions[self.broker.positions.index(pos)]
+				self.broker.deleteDbPosition(pos.order_id)
 
 				res = {
 					self.broker.generateReference(): {
@@ -441,6 +459,7 @@ class Backtester(object):
 		bid = ohlc[4:]
 
 		for pos in self.broker.positions:
+			pos = tl.Position.fromDict(self.broker, pos)
 			if pos.product != product or not pos.tp or pos.account_id != tl.broker.PAPERTRADER_NAME:
 				continue
 
@@ -452,7 +471,8 @@ class Backtester(object):
 				pos.close_time = timestamp
 
 				# Delete Position
-				del self.broker.positions[self.broker.positions.index(pos)]
+				# del self.broker.positions[self.broker.positions.index(pos)]
+				self.broker.deleteDbPosition(pos.order_id)
 
 				res = {
 					self.broker.generateReference(): {
@@ -488,7 +508,7 @@ class IGBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.open_time,
+				'timestamp': result["open_time"],
 				'type': tl.MARKET_ENTRY,
 				'accepted': True,
 				'item': result
@@ -516,8 +536,8 @@ class IGBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.open_time,
-				'type': result.order_type,
+				'timestamp': result["open_time"],
+				'type': result["order_type"],
 				'accepted': True,
 				'item': result
 			}
@@ -547,7 +567,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
@@ -558,7 +578,7 @@ class IGBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.close_time,
+				'timestamp': result["close_time"],
 				'type': tl.POSITION_CLOSE,
 				'accepted': True,
 				'item': result
@@ -567,7 +587,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
@@ -589,7 +609,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
@@ -600,7 +620,7 @@ class IGBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.close_time,
+				'timestamp': result["close_time"],
 				'type': tl.ORDER_CANCEL,
 				'accepted': True,
 				'item': result
@@ -609,7 +629,7 @@ class IGBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
@@ -626,17 +646,17 @@ class OandaBacktester(Backtester):
 		positions = sorted(
 			[
 				pos for pos in self.broker.getAllPositions(account_id=account_id) 
-				if pos.direction != direction
-				if pos.account_id == tl.broker.PAPERTRADER_NAME
+				if pos["direction"] != direction
+				if pos["account_id"] == tl.broker.PAPERTRADER_NAME
 			],
-			key=lambda x: x.open_time,
+			key=lambda x: x["open_time"],
 			reverse=self._sort_reversed
 		)
 
 		res = {}
 		remaining = lotsize
 		for pos in positions:
-			delete_size = min(pos.lotsize, remaining)
+			delete_size = min(pos["lotsize"], remaining)
 			res.update(self.deletePosition(pos, delete_size))
 			remaining -= delete_size
 			if remaining <= 0:
@@ -661,7 +681,7 @@ class OandaBacktester(Backtester):
 
 			entry_res = {
 				self.broker.generateReference(): {
-					'timestamp': result.open_time,
+					'timestamp': result["open_time"],
 					'type': tl.MARKET_ENTRY,
 					'accepted': True,
 					'item': result
@@ -671,7 +691,7 @@ class OandaBacktester(Backtester):
 
 			if self.broker.acceptLive:
 				# Handle On Trade
-				self.broker.handleOnTrade(result.account_id, entry_res)
+				self.broker.handleOnTrade(result["account_id"], entry_res)
 
 			# Add SL
 			if sl_range or sl_price:
@@ -690,7 +710,7 @@ class OandaBacktester(Backtester):
 
 				if self.broker.acceptLive:
 					# Handle On Trade
-					self.broker.handleOnTrade(t_result.account_id, sl_res)
+					self.broker.handleOnTrade(t_result["account_id"], sl_res)
 
 			# Add TP
 			if tp_range or tp_price:
@@ -709,7 +729,7 @@ class OandaBacktester(Backtester):
 
 				if self.broker.acceptLive:
 					# Handle On Trade
-					self.broker.handleOnTrade(t_result.account_id, tp_res)
+					self.broker.handleOnTrade(t_result["account_id"], tp_res)
 
 			self.handleTransaction(res)
 
@@ -729,15 +749,15 @@ class OandaBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.open_time,
-				'type': result.order_type,
+				'timestamp': result["open_time"],
+				'type': result["order_type"],
 				'accepted': True,
 				'item': result
 			}
 		}
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
@@ -746,7 +766,7 @@ class OandaBacktester(Backtester):
 	def modifyPosition(self, pos, sl_price, tp_price):
 		res = {}
 		# Handle sl modify
-		if pos.sl != sl_price:
+		if pos["sl"] != sl_price:
 			result = super(OandaBacktester, self).modifyPosition(
 				pos, sl_price=sl_price
 			)
@@ -762,10 +782,10 @@ class OandaBacktester(Backtester):
 
 			if self.broker.acceptLive:
 				# Handle On Trade
-				self.broker.handleOnTrade(result.account_id, sl_res)
+				self.broker.handleOnTrade(result["account_id"], sl_res)
 
 		# Handle tp modify
-		if pos.tp != tp_price:
+		if pos["tp"] != tp_price:
 			result = super(OandaBacktester, self).modifyPosition(
 				pos, tp_price=tp_price
 			)
@@ -781,7 +801,7 @@ class OandaBacktester(Backtester):
 
 			if self.broker.acceptLive:
 				# Handle On Trade
-				self.broker.handleOnTrade(result.account_id, tp_res)
+				self.broker.handleOnTrade(result["account_id"], tp_res)
 
 		self.handleTransaction(res)
 
@@ -793,7 +813,7 @@ class OandaBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.close_time,
+				'timestamp': result["close_time"],
 				'type': tl.POSITION_CLOSE,
 				'accepted': True,
 				'item': result
@@ -802,7 +822,7 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
@@ -813,14 +833,15 @@ class OandaBacktester(Backtester):
 		new_order.order_id = self.broker.generateReference()
 
 		# Cancel current order
-		order.close_time = math.floor(time.time())
-		del self.broker.orders[self.broker.orders.index(order)]
+		order["close_time"] = math.floor(time.time())
+		# del self.broker.orders[self.broker.orders.index(order)]
+		self.broker.deleteDbOrder(order["order_id"])
 
 		res = {}
 
 		cancel_res = {
 			self.broker.generateReference(): {
-				'timestamp': order.close_time,
+				'timestamp': order["close_time"],
 				'type': tl.ORDER_CANCEL,
 				'accepted': True,
 				'item': order
@@ -831,7 +852,7 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(order.account_id, cancel_res)
+			self.broker.handleOnTrade(order["account_id"], cancel_res)
 
 		# Modify new order
 		result = super(OandaBacktester, self).modifyOrder(
@@ -843,7 +864,7 @@ class OandaBacktester(Backtester):
 		modify_res = {
 			self.broker.generateReference(): {
 				'timestamp': math.floor(time.time()),
-				'type': result.order_type,
+				'type': result["order_type"],
 				'accepted': True,
 				'item': result
 			}
@@ -852,7 +873,7 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, modify_res)
+			self.broker.handleOnTrade(result["account_id"], modify_res)
 		self.handleTransaction(res)
 
 		return res
@@ -863,7 +884,7 @@ class OandaBacktester(Backtester):
 
 		res = {
 			self.broker.generateReference(): {
-				'timestamp': result.close_time,
+				'timestamp': result["close_time"],
 				'type': tl.ORDER_CANCEL,
 				'accepted': True,
 				'item': result
@@ -873,32 +894,33 @@ class OandaBacktester(Backtester):
 
 		if self.broker.acceptLive:
 			# Handle On Trade
-			self.broker.handleOnTrade(result.account_id, res)
+			self.broker.handleOnTrade(result["account_id"], res)
 		self.handleTransaction(res)
 
 		return res
 
 
 	def createOrderPosition(self, order):
-		if order.order_type == tl.LIMIT_ORDER:
+		if order["order_type"] == tl.LIMIT_ORDER:
 			order_type = tl.LIMIT_ENTRY
-		elif order.order_type == tl.STOP_ORDER:
+		elif order["order_type"] == tl.STOP_ORDER:
 			order_type = tl.STOP_ENTRY
 		else:
 			order_type = tl.MARKET_ENTRY
 
-		remaining, res = self._net_off(order.account_id, order.direction, order.lotsize)
+		remaining, res = self._net_off(order["account_id"], order["direction"], order["lotsize"])
 		if remaining > 0:
 			pos = tl.Position.fromOrder(self.broker, order)
-			pos.order_id = self.broker.generateReference()
-			pos.order_type = order_type
-			pos.lotsize = remaining
-			self.broker.positions.append(pos)
+			pos["order_id"] = self.broker.generateReference()
+			pos["order_type"] = order_type
+			pos["lotsize"] = remaining
+			# self.broker.positions.append(pos)
+			self.broker.appendDbPosition(pos)
 
 			res.update({
 				self.broker.generateReference(): {
 					'timestamp': math.floor(time.time()),
-					'type': pos.order_type,
+					'type': pos["order_type"],
 					'accepted': True,
 					'item': pos
 				}
