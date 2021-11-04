@@ -198,7 +198,7 @@ class FXCM(Broker):
 		start=None, end=None, count=None,
 		**kwargs
 	):
-		if tl.isWeekend(datetime.utcnow()) or self.ctrl.app.config['ENV'] == "development":
+		if tl.isWeekend(datetime.utcnow()) or self.ctrl.app.config['ENV'] == "development" or self.ctrl.app.config['NO_DATA_DOWNLOAD']:
 			return self._download_historical_data(
 				product, period, tz=tz, 
 				start=start, end=end, count=count,
