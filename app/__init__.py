@@ -155,12 +155,15 @@ def create_app(test_config=None):
 		controller.ctrl.startModules()
 		# controller.ctrl.redis_client.incr("workers_complete")
 		# print("[preload] COMPLETE 1", flush=True)
-		# while int(controller.ctrl.redis_client.get("workers_complete").decode()) != 5:
-		# 	time.sleep(1)
+		
+		print("[preload] WORKER COMPLETE", flush=True)
+		controller.ctrl.redis_client.incr("workers_complete")
+
+		while int(controller.ctrl.redis_client.get("workers_complete").decode()) != 5:
+			time.sleep(1)
+		
 		if controller.ctrl.connection_id == 0:
 			controller.ctrl.performRestartScripts()
-		print("[preload] COMPLETE 2", flush=True)
-		controller.ctrl.redis_client.incr("workers_complete")
 
 
 	return app

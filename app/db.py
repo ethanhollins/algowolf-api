@@ -155,26 +155,49 @@ class Database(object):
 	def registerUser(self, first_name, last_name, email, password, notify_me):
 		user_id = shortuuid.uuid()
 
-		res = self.userTable.put_item(
-			Item={
-				'user_id': user_id,
-				'first_name': first_name,
-				'last_name': last_name,
-				'email': email,
-				'password': password,
-				'email_opt_out': not notify_me,
-				'email_confirmed': False,
-				'beta_access': False,
-				'brokers': {},
-				'strategies': {},
-				'metadata': {
-					'current_strategy': '',
-					'open_strategies': []
-				},
-				'registration_date': datetime.utcnow().isoformat(),
-				'analytics': {}
-			}
-		)
+		if self.ctrl.app.config['CREATE_DUMMIES']:
+			res = self.userTable.put_item(
+				Item={
+					'user_id': user_id,
+					'first_name': first_name,
+					'last_name': last_name,
+					'email': email,
+					'password': password,
+					'email_opt_out': not notify_me,
+					'email_confirmed': False,
+					'beta_access': False,
+					'brokers': {},
+					'strategies': {},
+					'metadata': {
+						'current_strategy': '',
+						'open_strategies': []
+					},
+					'registration_date': datetime.utcnow().isoformat(),
+					'analytics': {},
+					'server': 2
+				}
+			)
+		else:
+			res = self.userTable.put_item(
+				Item={
+					'user_id': user_id,
+					'first_name': first_name,
+					'last_name': last_name,
+					'email': email,
+					'password': password,
+					'email_opt_out': not notify_me,
+					'email_confirmed': False,
+					'beta_access': False,
+					'brokers': {},
+					'strategies': {},
+					'metadata': {
+						'current_strategy': '',
+						'open_strategies': []
+					},
+					'registration_date': datetime.utcnow().isoformat(),
+					'analytics': {}
+				}
+			)
 
 		# self.generateHolyGrailStrategy(user_id)
 
