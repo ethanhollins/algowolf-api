@@ -319,7 +319,7 @@ class Controller(object):
 									# account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
 									script_count += 1
 									print(f"SCRIPT COUNT: {script_count}")
-									if script_count % 5 == 0:
+									if script_count % 2 == 0:
 										account._runStrategyScript(strategy_id, broker_id, [account_id], input_variables)
 									else:
 										Thread(target=account._runStrategyScript, args=(strategy_id, broker_id, [account_id], input_variables)).start()
