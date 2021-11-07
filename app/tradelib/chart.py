@@ -237,9 +237,12 @@ class Chart(object):
 				'timestamp': 1636241788,
 				# 'timestamp': self.lastTs[period],
 				'item': {
-					'ask': self.ask[period].tolist(),
-					'mid': self.mid[period].tolist(),
-					'bid': self.bid[period].tolist()
+					# 'ask': self.ask[period].tolist(),
+					# 'mid': self.mid[period].tolist(),
+					# 'bid': self.bid[period].tolist()
+					'ask': [1.15603, 1.15606, 1.15599, 1.15601],
+					'mid': [1.15603, 1.15606, 1.15599, 1.15601],
+					'bid': [1.15603, 1.15606, 1.15599, 1.15601]
 				}
 			}]
 			self.handleTick(result)
