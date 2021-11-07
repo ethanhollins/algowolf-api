@@ -228,20 +228,21 @@ class Chart(object):
 		period = tl.period.ONE_MINUTE
 		while self.broker.is_running:
 			time.sleep(60)
-			if self.lastTs.get(period):
-				result =[{
-					'broker': 'fxcm',
-					'product': self.product,
-					'period': period,
-					'bar_end': True,
-					'timestamp': self.lastTs[period],
-					'item': {
-						'ask': self.ask[period].tolist(),
-						'mid': self.mid[period].tolist(),
-						'bid': self.bid[period].tolist()
-					}
-				}]
-				self.handleTick(result)
+			# if self.lastTs.get(period):
+			result =[{
+				'broker': 'fxcm',
+				'product': self.product,
+				'period': period,
+				'bar_end': True,
+				'timestamp': 1636241788,
+				# 'timestamp': self.lastTs[period],
+				'item': {
+					'ask': self.ask[period].tolist(),
+					'mid': self.mid[period].tolist(),
+					'bid': self.bid[period].tolist()
+				}
+			}]
+			self.handleTick(result)
 
 
 	def handleTick(self, result):
