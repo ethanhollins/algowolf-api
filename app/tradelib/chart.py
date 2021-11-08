@@ -34,7 +34,7 @@ class Chart(object):
 
 		self.start(await_completion)
 
-		Thread(target=self._mock_ticks).start()
+		# Thread(target=self._mock_ticks).start()
 
 
 	def start(self, await_completion):
@@ -229,7 +229,7 @@ class Chart(object):
 		while self.broker.is_running:
 			time.sleep(60)
 			# if self.lastTs.get(period):
-			result =[{
+			result = [{
 				'broker': 'fxcm',
 				'product': self.product,
 				'period': period,
