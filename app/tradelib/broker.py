@@ -389,7 +389,7 @@ class Broker(object):
 				result = json.loads(result.decode())
 		else:
 			result = None
-		print(f"GET HANDLED: {self.strategyId}, {result}", flush=True)
+		print(f"GET HANDLED: {self.strategyId}, {result} | KEYS: {len(list(self.ctrl.redis_client.hgetall('handled').keys()))}", flush=True)
 		return result
 
 	def addHandledItem(self, handled_id, item):

@@ -16,13 +16,15 @@ from app.error import OrderException, BrokerException
 class IB(Broker):
 
 	def __init__(self,
-		ctrl, port=None, user_account=None, strategy_id=None, broker_id=None, accounts={}, 
+		ctrl, username, password, port=None, user_account=None, strategy_id=None, broker_id=None, accounts={}, 
 		display_name=None, is_dummy=False, is_parent=False
 	):
 		print('IB INIT')
 
 		super().__init__(ctrl, user_account, strategy_id, broker_id, tl.broker.IB_NAME, accounts, display_name, is_dummy, False)
 
+		self.username = username
+		self.password = password
 		if port is not None:
 			self.port = str(port)
 		else:
@@ -39,14 +41,13 @@ class IB(Broker):
 		self._gateway_loaded = False
 		self._queue = []
 
-		if self.port is not None:
-			self._add_user()
-			self._subscribe_gui_updates()
-			if not self._gateway_loaded:
-				self._start_gateway()
+		# if self.port is not None:
+		# 	self._add_user()
+		# 	# if not self._gateway_loaded:
+		# 	# 	self._start_gateway()
 
-		elif not is_parent:
-			self.findUser()
+		# elif not is_parent:
+		self._add_user()
 
 
 	def _add_user(self):
@@ -59,8 +60,8 @@ class IB(Broker):
 
 		res = self.ctrl.brokerRequest(
 			self.name, self.brokerId, 'add_user',
-			self.port, user_id, self.strategyId, 
-			self.brokerId, is_parent=self.is_parent
+			user_id, self.strategyId, self.brokerId, self.username, 
+			self.password, is_parent=self.is_parent
 		)
 
 		if 'error' in res:

@@ -650,14 +650,24 @@ class Database(object):
 			# 				raise BrokerException('One or more accounts is already being used. Please delete the broker container that account and try again.')
 
 		elif broker_name == tl.broker.IB_NAME:
+			if props.get('username') is None:
+				raise BrokerException('Invalid data submitted.')
+			if props.get('password') is None:
+				raise BrokerException('Invalid data submitted.')
+
 			print(f'ADDING IB: {broker_id}, {props}')
 			account = self.ctrl.accounts.getAccount(user_id)
 			ib_broker = tl.broker.IB(
-				self.ctrl, broker_id=broker_id, user_account=account
+				self.ctrl, props.get('username'), props.get('password'), broker_id=broker_id, user_account=account
 			)
+			# accounts = ib_broker.getAllAccounts()
 
 			account.brokers[broker_id] = ib_broker
 			props['accounts'] = {}
+			# props['accounts'] = {
+			# 	account_id: { 'active': True, 'nickname': '' }
+			# 	for account_id in accounts
+			# }
 			props['broker'] = tl.broker.IB_NAME
 
 		elif broker_name == tl.broker.DUKASCOPY_NAME:
