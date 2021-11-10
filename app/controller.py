@@ -150,7 +150,7 @@ class Controller(object):
 				result = data['result']
 				self._listeners[data['msg_id']](*result.get('args'), **result.get('kwargs'))
 			else:
-				self._msg_queue[data['msg_id']] = data
+				self._msg_queue[data['msg_id']] = (data, time.time())
 
 
 	def _wait_broker_response(self, msg_id, timeout=60):
@@ -158,7 +158,7 @@ class Controller(object):
 
 		while time.time() - start < timeout:
 			if msg_id in copy(list(self._msg_queue.keys())):
-				res = self._msg_queue[msg_id]
+				res = self._msg_queue[msg_id][0]
 				del self._msg_queue[msg_id]
 				print('WAIT RECV', flush=True)
 				return res.get('result')
@@ -167,6 +167,16 @@ class Controller(object):
 		return {
 			'error': 'No response.'
 		}
+
+	
+	def _clean_msg_queue(self):
+		try:
+			for msg_id in copy(list(self._msg_queue.keys())):
+				if time.time() - self._msg_queue[msg_id][1] > 120:
+					del self._msg_queue[msg_id]
+		except Exception:
+			print(traceback.format_exc())
+
 
 
 	# def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
@@ -333,7 +343,7 @@ class Controller(object):
 				result = message['result']
 				Thread(target=self._listeners[message['msg_id']], args=result.get('args'), kwargs=result.get('kwargs')).start()
 			else:
-				self._msg_queue[message['msg_id']] = message
+				self._msg_queue[message['msg_id']] = (message, time.time())
 
 	
 	def handleRequestMessage(self, message):
@@ -385,6 +395,7 @@ class Controller(object):
 		self.zmq_poller.register(self.zmq_pull_socket, zmq.POLLIN)
 		self.zmq_poller.register(self.zmq_sub_socket, zmq.POLLIN)
 
+		clean_check = time.time()
 		while True:
 			try:
 				socks = dict(self.zmq_poller.poll())
@@ -413,6 +424,10 @@ class Controller(object):
 						Thread(target=account.startStrategy, args=(strategy_id,)).start()
 					else:
 						self.handleListenerMessage(message)
+
+				if time.time() - clean_check > 30:
+					clean_check = time.time()
+					self._clean_msg_queue()
 
 			except Exception:
 				print(traceback.format_exc())
