@@ -224,7 +224,7 @@ class Controller(object):
 			result = self._wait_broker_response(msg_id)
 			
 			# result = self.zmq_dealer_socket.recv_json()
-			print(f"[brokerRequest] Result: ({msg_id}) {time.time()}, {result}")
+			print(f"[brokerRequest] Result: ({msg_id}) {time.time()}, {result} | MSGs {len(self._msg_queue)}")
 			
 		except Exception:
 			print(f"[brokerRequest] {traceback.format_exc()}")
