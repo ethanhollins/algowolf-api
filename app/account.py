@@ -1353,16 +1353,17 @@ class Account(object):
 	
 	def getStripePaymentDetails(self):
 		customer = self.getStripeCustomerDetails()
-		payment_method_id = customer["invoice_settings"]["default_payment_method"]
-		if "invoice_settings" in customer and "default_payment_method" in customer["invoice_settings"]:
-			payment_method = stripe.PaymentMethod.retrieve(
-				payment_method_id,
-				api_key=self.ctrl.app.config['STRIPE_API_KEY']
-			)
-			if payment_method is not None:
-				return {
-					"last4": payment_method["card"]["last4"]
-				}
+		if customer is not None:
+			payment_method_id = customer["invoice_settings"]["default_payment_method"]
+			if "invoice_settings" in customer and "default_payment_method" in customer["invoice_settings"]:
+				payment_method = stripe.PaymentMethod.retrieve(
+					payment_method_id,
+					api_key=self.ctrl.app.config['STRIPE_API_KEY']
+				)
+				if payment_method is not None:
+					return {
+						"last4": payment_method["card"]["last4"]
+					}
 
 		return None
 
