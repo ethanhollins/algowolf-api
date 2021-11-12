@@ -2865,10 +2865,36 @@ def list_all_subscribed_user_ids():
 	)
 
 
+@bp.route('/payments/card', methods=('PUT',))
+@auth.login_required
+def modify_payment_method():
+	body = getJson()
+	payment_method = body.get("payment_method")
+
+	customer = g.user.getStripeCustomerDetails()
+	stripe.PaymentMethod.attach(
+		payment_method,
+		api_key=ctrl.app.config['STRIPE_API_KEY'],
+		customer=customer["id"]
+	)
+	stripe.Customer.modify(
+		customer["id"],
+		api_key=ctrl.app.config['STRIPE_API_KEY'],
+		invoice_settings={"default_payment_method": payment_method}
+	)
+
+	res = {"message": "Success"}
+	return Response(
+		json.dumps(res, indent=2),
+		status=200, content_type='application/json'
+	)
+
+
 @bp.route('/payments/subscribe', methods=('GET',))
 @auth.login_required
 def get_subscriptions():
 	user = ctrl.getDb().getUser(g.user.userId)
+	payment_details = g.user.getStripePaymentDetails()
 
 	result = []
 	if "products" in user:
@@ -2876,7 +2902,10 @@ def get_subscriptions():
 			level = user["products"][plan]["level"]
 			result.append({ "name": subscription_info[plan][level]["name"], "plan": plan })
 		
-	res = { "subscriptions": result }
+	res = { 
+		"subscriptions": result, 
+		"payment_details": payment_details
+	}
 	return Response(
 		json.dumps(res, indent=2),
 		status=200, content_type='application/json'

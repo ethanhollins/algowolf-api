@@ -6,6 +6,7 @@ import requests
 import shortuuid
 import traceback
 import zmq
+import stripe
 from copy import deepcopy
 from datetime import datetime
 from app.controller import DictQueue
@@ -1330,6 +1331,40 @@ class Account(object):
 		self._replace_broker[broker_name] = broker_id
 		return True
 
+
+	def getStripeCustomerDetails(self):
+		starting_after = None
+		while True:
+			res = stripe.Customer.list(
+				api_key=self.ctrl.app.config['STRIPE_API_KEY'],
+				starting_after=starting_after
+			)
+			for i in res["data"]:
+				if "user_id" in i["metadata"] and i["metadata"]["user_id"] == self.userId:
+					return i
+
+			if not res["has_more"]:
+				break
+			else:
+				starting_after = res["data"][-1]
+		
+		return None
+
+	
+	def getStripePaymentDetails(self):
+		customer = self.getStripeCustomerDetails()
+		payment_method_id = customer["invoice_settings"]["default_payment_method"]
+		if "invoice_settings" in customer and "default_payment_method" in customer["invoice_settings"]:
+			payment_method = stripe.PaymentMethod.retrieve(
+				payment_method_id,
+				api_key=self.ctrl.app.config['STRIPE_API_KEY']
+			)
+			if payment_method is not None:
+				return {
+					"last4": payment_method["card"]["last4"]
+				}
+
+		return None
 
 	# Log Functions
 	def getLogs(self):
