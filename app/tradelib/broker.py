@@ -756,14 +756,15 @@ class Broker(object):
 	'''
 
 	def _handle_tick_checks(self, item):
-		product = item['product']
-		timestamp = int(item['timestamp'])
-		# ohlc = np.array([item['item']['ask'][3]]*4 + [item['item']['bid'][3]]*4, dtype=np.float64)
-		ohlc = np.array([item['item']['mid'][3]]*4 + [item['item']['mid'][3]]*4, dtype=np.float64)
+		if self.ctrl.connection_id == 0:
+			product = item['product']
+			timestamp = int(item['timestamp'])
+			# ohlc = np.array([item['item']['ask'][3]]*4 + [item['item']['bid'][3]]*4, dtype=np.float64)
+			ohlc = np.array([item['item']['mid'][3]]*4 + [item['item']['mid'][3]]*4, dtype=np.float64)
 
-		self.backtester.handleOrders(product, timestamp, ohlc)
-		self.backtester.handleStopLoss(product, timestamp, ohlc)
-		self.backtester.handleTakeProfit(product, timestamp, ohlc)
+			self.backtester.handleOrders(product, timestamp, ohlc)
+			self.backtester.handleStopLoss(product, timestamp, ohlc)
+			self.backtester.handleTakeProfit(product, timestamp, ohlc)
 		
 
 	'''
