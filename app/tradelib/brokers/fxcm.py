@@ -55,7 +55,7 @@ class FXCM(Broker):
 			self._add_user()
 
 			# Load Charts
-			CHARTS = ['EUR_USD']
+			CHARTS = ['EUR_USD', 'GBP_USD']
 			PERIODS = [tl.period.ONE_MINUTE]
 			for instrument in CHARTS:
 				chart = self.createChart(instrument, await_completion=True)
@@ -136,7 +136,7 @@ class FXCM(Broker):
 		# 		self._handle_live_strategy_setup()
 
 		if self.is_parent:
-			CHARTS = ['EUR_USD']
+			CHARTS = ['EUR_USD', 'GBP_USD']
 			for instrument in CHARTS:
 				print(f'LOADING {instrument}')
 				chart = self.getChart(instrument)
