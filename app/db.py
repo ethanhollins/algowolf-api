@@ -18,8 +18,38 @@ from botocore.exceptions import ClientError
 from threading import Thread
 
 class Database(object):
+	'''Class wrapper for all AWS Dynamo DB and S3 Storage functionality.
+	
+	Attributes:
+		_job_queue: A list forcing synchronous job execution where necessary.
+		_db_client: A Dynamo DB resource object.
+		_s3_client: A S3 Storage client object.
+		_s3_res: A S3 Storage resource object.
+		ctrl: A reference to the Controller object.
+		userTable: A Dynamo DB Table object.
+		scriptTable: A Dynamo DB Table object.
+		holygrailAccessTable: A Dynamo DB Table object.
+		holygrailTokenTable: A Dynamo DB Table object.
+		resetPasswordTokenTable: A Dynamo DB Table object.
+		strategyBucketName: A string containing strategy Bucket name.
+		scriptBucketName: A string containing script Bucket name.
+		prodStrategyBucketName: A string containing production strategy Bucket name.
+		prodUserTable: A Dynamo DB Table object.
+		messagesTable: A Dynamo DB Table object.
+		variablesTable: A Dynamo DB Table object.
+		analyticsTable: A Dynamo DB Table object.
+		emailsTable: A Dynamo DB Table object.
+		priceDataBucketName: A string containing price data Bucket name.
+	'''
 
 	def __init__(self, ctrl, env):
+		'''Initialize Dynamo DB and S3 objects variables and begin jobs thread.
+
+		Args:
+			ctrl: A reference to the Controller object.
+			env: A string containing the running environment of the program.
+		'''
+		
 		self._job_queue = []
 
 		self.ctrl = ctrl
@@ -64,6 +94,8 @@ class Database(object):
 
 
 	def _handle_jobs(self):
+		''' Indefinite loop handling queued jobs. '''
+		
 		while True:
 			if len(self._job_queue):
 				i = self._job_queue[0]
@@ -96,6 +128,16 @@ class Database(object):
 		self._s3_res = boto3.resource('s3')
 
 	def _convert_to_decimal(self, row):
+		'''Converts all float items in dict to Decimals
+
+		Runs recursively through entire dict.
+
+		Args:
+			row: A dict containing a row of db entry items.
+		Return:
+			A dict with all float items converted to Decimals.
+		'''
+
 		if isinstance(row, dict):
 			for k in row:
 				row[k] = self._convert_to_decimal(row[k])
@@ -110,6 +152,16 @@ class Database(object):
 		return row
 
 	def _convert_to_float(self, row):
+		'''Converts all Decimal items in dict to floats
+
+		Runs recursively through entire dict.
+
+		Args:
+			row: A dict containing a row of db entry items.
+		Return:
+			A dict with all Decimal items converted to floats.
+		'''
+
 		if isinstance(row, dict):
 			for k in row:
 				row[k] = self._convert_to_float(row[k])
@@ -124,6 +176,17 @@ class Database(object):
 		return row
 
 	def _flat_dump(self, obj, indent=2):
+		'''Converts a dict to JSON string.
+
+		Indentations are only made on the first list iterated over.
+
+		Args:
+			obj: The dict being converted to JSON string.
+			indent: An int denoting the number of spaces on an indent.
+		Returns:
+			A JSON string of the obj dict.
+		'''
+
 		assert isinstance(obj, dict)
 		if not len(obj):
 			return '{}'
@@ -153,6 +216,22 @@ class Database(object):
 	'''
 
 	def registerUser(self, first_name, last_name, email, password, notify_me):
+		'''Creates a new user in database
+
+		If config sets CREATE_DUMMIES to True, the new user is created to run
+		on the test server by default.
+
+		Args:
+			first_name: A string containing the user's first name.
+			last_name: A string containing the user's last name.
+			email: A string containing the user's email.
+			password: A string containing the user's hashed password.
+			notify_me: A boolean containing the user's email_opt_out setting.
+		Returns:
+			A string containing the generated user_id.
+
+		
+		'''
 		user_id = shortuuid.uuid()
 
 		if self.ctrl.app.config['CREATE_DUMMIES']:
@@ -205,6 +284,12 @@ class Database(object):
 
 
 	def getAllUsers(self):
+		'''Retrieves a list of all users from the user database.
+
+		Returns:
+			A list of all users from the user database.
+		'''
+
 		res = self.userTable.scan()
 		data = res['Items']
 
@@ -216,6 +301,14 @@ class Database(object):
 
 
 	def getUser(self, user_id):
+		'''Retrieves a user from the user database by user_id.
+
+		Args:
+			user_id: A string containing the user's user id.
+		Returns:
+			A dict containing user's database information.
+		'''
+
 		res = self.userTable.get_item(
 			Key={ 'user_id': user_id }
 		)
@@ -225,6 +318,14 @@ class Database(object):
 			return None
 
 	def getUserByUsername(self, username):
+		'''Retrieves user from user database by username.
+
+		Args:
+			username: A string containing the user's username.
+		Returns:
+			A dict containing user's database information.
+		'''
+
 		res = self.userTable.scan(
 			FilterExpression=Key('username').eq(username)
 		)
@@ -234,6 +335,14 @@ class Database(object):
 			return None
 
 	def getUserByEmail(self, email):
+		'''Retrueves user from user database by email.
+
+		Args:
+			email: A string containing the user's email.
+		Returns:
+			A dict containing user's database information.
+		'''
+
 		res = self.userTable.scan(
 			FilterExpression=Key('email').eq(email)
 		)
@@ -243,6 +352,15 @@ class Database(object):
 			return None
 
 	def updateUser(self, user_id, update):
+		'''Updates user from user database information.
+
+		Args:
+			user_id: A string containing the user's user id.
+			update: A dict containing the information to be updated
+					in the user's database entry.
+		
+		'''
+
 		update_values = self._convert_to_decimal(
 			dict([tuple([':{}'.format(i[0]), i[1]])
 					for i in update.items()])
@@ -264,6 +382,15 @@ class Database(object):
 
 	
 	def removeUserField(self, user_id, update):
+		'''Removes a field in user's database entry.
+
+		Args:
+			user_id: A string containing user ID.
+			update: A dict containing the field to be removed.
+		Returns:
+			A boolean if the user field was successfully removed.
+		'''
+
 		update_exp = ('REMOVE ' + ' '.join(
 			['{},'.format(k) for k in update]
 		))[:-1]
@@ -278,6 +405,14 @@ class Database(object):
 
 
 	def deleteUser(self, user_id):
+		'''Removes user database entry.
+		
+		Args:
+			user_id: A string containing user ID.
+		Returns:
+			A boolean if the user entry was successfully deleted.
+		'''
+
 		res = self.userTable.delete_item(
 			Key={
 				'user_id': user_id,
@@ -286,6 +421,18 @@ class Database(object):
 		return True
 
 	def getUserFile(self, user_id, file_name):
+		'''Retrieves file from user s3 storage.
+
+		File is retrieved from first level of their user storage.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			file_name: A string containing the name of the file to
+					   be retrieved.
+		Returns:
+			The decompressed raw file data that was retrieved.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -305,6 +452,12 @@ class Database(object):
 	'''
 
 	def getVisitors(self):
+		'''Retrieves number of site visitors from analytics database.
+
+		Returns:
+			A dict containing number of visitors.
+		'''
+
 		res = self.analyticsTable.get_item(
 			Key={ 'subject': 'visitors' }
 		)
@@ -315,6 +468,12 @@ class Database(object):
 
 
 	def countDailyVisitor(self):
+		'''Retrieves number of daily site visitors from analytics database.
+
+		Returns:
+			A dict containing number of daily site visitors.
+		'''
+
 		visitors = self.getVisitors()
 
 		if visitors is None:
@@ -351,6 +510,12 @@ class Database(object):
 
 
 	def countUniqueVisitor(self):
+		'''Retrieves number of unique site visitors from analytics database.
+
+		Returns:
+			A dict containing number of unique site visitors.
+		'''
+
 		visitors = self.getVisitors()
 
 		if visitors is None:
@@ -374,6 +539,14 @@ class Database(object):
 
 
 	def subscribeEmail(self, item):
+		'''Adds entry to emails database table.
+
+		Args:
+			item: A dict containing the entry information.
+		Returns:
+			A string containing the email that was added to the table.
+		'''
+
 		self.emailsTable.put_item(
 			Item={
 				'email': str(item.get('email')),
@@ -389,6 +562,15 @@ class Database(object):
 	'''
 
 	def getStrategy(self, user_id, strategy_id):
+		'''Retrieves user strategy information from user database.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			strategy_id: A string containing the user's strategy ID.
+		Returns:
+			A dict containing user strategy information.
+		'''
+
 		user = self.getUser(user_id)
 		if user is None:
 			return None
@@ -396,6 +578,16 @@ class Database(object):
 		return user['strategies'].get(strategy_id)
 	
 	def createStrategy(self, user_id, strategy):
+		'''Generates a user new strategy.
+		
+		Strategy user S3 storage and database entry item created a for strategy.
+
+		Args:
+			user_id: A string containing the user's ID.
+			strategy: a dict containing new strategy information.
+		Returns:
+			A string containing the new generated strategy ID.
+		'''
 		
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
@@ -432,6 +624,16 @@ class Database(object):
 		return strategy_id
 
 	def updateStrategy(self, user_id, strategy_id, update):
+		'''Updates user strategy database entry by strategy_id.
+		
+		Args:
+			user_id: A string containing the user's ID.
+			strategy_id: A string containing the user's strategy ID.
+			update: A dict containing the items to be updated in strategy entry.
+		Returns:
+			A boolean of the success of the update operation.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -448,6 +650,15 @@ class Database(object):
 		return result
 
 	def deleteStrategy(self, user_id, strategy_id):
+		'''Deletes user strategy database entry and strategy S3 storage.
+
+		Args:
+			user_id: A string containing the user's ID.
+			strategy_id: A string containing the user's strategy ID.
+		Returns:
+			A boolean of the success of the delete operation.		
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -468,6 +679,15 @@ class Database(object):
 		return True
 
 	def getKeys(self, user_id, strategy_id):
+		'''Retrieves keys entry from user database entry.
+
+		Args:
+			user_id: A string containing the user's ID.
+			strategy_id: A string containing the user's strategy ID.
+		Returns:
+			A list of strings containing keys for API access.
+		'''
+
 		strategy = self.getStrategy(user_id, strategy_id)
 		if strategy is None:
 			return None
@@ -475,6 +695,16 @@ class Database(object):
 		return strategy.get('keys')
 
 	def createKey(self, user_id, strategy_id, key):
+		'''Appends a key to user database keys entry.
+
+		Args:
+			user_id: A string containing the user's ID.
+			strategy_id: A string containing the user's strategy ID.
+			key: A string containing the key being appended.
+		Returns:
+			A boolean of the success of the append operation.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -491,6 +721,16 @@ class Database(object):
 		return result
 
 	def deleteKey(self, user_id, strategy_id, key):
+		'''Deletes specified key from user database keys entry.
+		
+		Args:
+			user_id: A string containing the user's ID.
+			strategy_id: A string containing the user's strategy ID.
+			key: A string containing the key being deleted.
+		Returns:
+			A boolean of the success of the delete operation.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -507,6 +747,15 @@ class Database(object):
 		return result
 
 	def getBroker(self, user_id, name):
+		'''Retrieves broker information from user database.
+
+		Args:
+			user_id: A string containing the user's ID.
+			name: A string containing the user's broker ID.
+		Returns:
+			A dict of the decoded JWT token containing broker information.
+		'''
+
 		user = self.getUser(user_id)
 		if user is None:
 			return None
@@ -518,6 +767,23 @@ class Database(object):
 		return jwt.decode(broker_key, self.ctrl.app.config['SECRET_KEY'], algorithms=['HS256'])
 
 	def createBroker(self, user_id, broker_id, name, broker_name, props):
+		'''Creates a new user broker.
+
+		A new Broker object is initialized and checked to see if access is
+		granted to broker's API. If access granted, user table is updated with
+		JWT token containing broker information.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			broker_id: A string containing the user's broker ID.
+			name: A string containing the new broker display name.
+			broker_name: A string containing the broker provider's name.
+			props: A dict containing additional information required for
+				   that broker.
+		Returns:
+			A string containing the newly generated broker ID.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -734,6 +1000,16 @@ class Database(object):
 
 
 	def updateBroker(self, user_id, broker_id, props):
+		'''Updates broker with JWT token containing new information in user db table.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			broker_id: A string containing the user's broker ID.
+			props: A dict containing the broker's updated information.
+		Returns:
+			A dict containing the broker's updated information.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -756,6 +1032,17 @@ class Database(object):
 
 
 	def updateBrokerName(self, user_id, old_name, new_name):
+		'''Updates broker with JWT token containing new name in user db table.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			broker_id: A string containing the user's broker ID.
+			old_name: A string containing the old broker name.
+			new_name: A string containing the new broker name.
+		Returns:
+			A string containing the ne broker name.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -770,6 +1057,15 @@ class Database(object):
 		return new_name
 
 	def deleteBroker(self, user_id, name):
+		'''Removes a broker from user db table.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			name: A string containing the user's broker ID to be removed.
+		Returns:
+			A string containing the broker ID that was removed.
+		'''
+
 		# Retrieve user and make changes
 		user = self.getUser(user_id)
 		if user is None:
@@ -789,6 +1085,16 @@ class Database(object):
 	'''
 
 	def initStrategyStorage(self, user_id, strategy_id, name, script_id):
+		'''Initializes S3 storage for new strategy.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			strategy_id: A string containing the user's strategy ID.
+			script_id: A string containing the user's script_id.
+		Returns:
+			A string containing the GUI name.
+		'''
+
 		gui = self.getScriptGui(script_id)
 		print(f'[initStrategyStorage] GUI: {gui}')
 
@@ -822,6 +1128,16 @@ class Database(object):
 
 
 	def getStrategyGui(self, user_id, strategy_id):
+		'''Retrieves strategy GUI JSON data by strategy_id.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			strategy_id: A string containing the user's strategy ID.
+		Returns:
+			A dict containing strategy GUI information, or empty dict if file
+			doesn't exist.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -837,6 +1153,18 @@ class Database(object):
 
 
 	def getAccountGui(self, user_id, strategy_id, account_code):
+		'''Retrieves strategy account GUI JSON data by strategy_id and account_code.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			strategy_id: A string containing the user's strategy ID.
+			account_code: A string containing user's broker ID and
+						  account ID separated by '.'.
+		Returns:
+			A dict containing strategy account GUI information, or empty dict if file
+			doesn't exist.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -852,6 +1180,16 @@ class Database(object):
 
 
 	def getStrategyTrades(self, user_id, strategy_id):
+		'''Retrieves strategy trades JSON data by strategy ID.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			strategy_id: A string containing the user's strategy ID.
+		Returns:
+			A dict containing strategy trades information, or empty dict if file
+			doesn't exist.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -867,6 +1205,15 @@ class Database(object):
 
 
 	def getStrategyTransactions(self, user_id, strategy_id):
+		'''Retrieves strategy transactions CSV data by strategy ID.
+
+		Args:
+			user_id: A string containing the user's user ID.
+			strategy_id: A string containing the user's strategy ID.
+		Returns:
+			A DataFrame containing strategy transactions information, or None if 
+			file doesn't exist.
+		'''
 
 		try:
 			res = self._s3_client.get_object(
@@ -884,6 +1231,17 @@ class Database(object):
 
 
 	def getStrategyInputVariables(self, user_id, strategy_id, script_id):
+		'''Retrieves strategy input variables by strategy_id and script_id.
+
+		Args:
+			user_id: A string containing user's user ID.
+			strategy_id: A string containing user's strategy ID.
+			script_id: A string containing user's script ID.
+		Returns:
+			A dict containing input variables JSON data or empty dict if file
+			doesn't exist.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -898,6 +1256,19 @@ class Database(object):
 			return {}
 
 	def getAccountInputVariables(self, user_id, strategy_id, account_code, script_id):
+		'''Retrieves strategy account input variables by strategy_id, account_code and script_id.
+
+		Args:
+			user_id: A string containing user's user ID.
+			strategy_id: A string containing user's strategy ID.
+			account_code: A string containing user's broker ID and
+						  account ID separated by '.'.
+			script_id: A string containing user's script ID.
+		Returns:
+			A dict containing account input variables JSON data or empty dict if file
+			doesn't exist.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.strategyBucketName,
@@ -913,6 +1284,14 @@ class Database(object):
 
 
 	def getScriptInputVariables(self, script_id):
+		'''Retrieves script default input variables.
+
+		Args:
+			script_id: A string containing script ID.
+		Returns:
+			A dict containing default input variables for script.		
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.scriptBucketName,
@@ -928,6 +1307,15 @@ class Database(object):
 
 
 	def getScriptGui(self, script_id):
+		'''Retrieves scripts default GUI.
+
+		Args:
+			script_id: A string containing script ID.
+		Returns:
+			A dict containing default script GUI.
+		
+		'''
+		
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.scriptBucketName,
@@ -943,6 +1331,15 @@ class Database(object):
 
 
 	def getScriptFile(self, script_id, file_name):
+		'''Retrieves a file from script bucket by script_id and file_name.
+
+		Args:
+			script_id: A string containing script ID.
+			file_name: A string containing the name of the file being retrieved.
+		Returns:
+			Raw decompressed file data retrieved from S3 storage.
+		'''
+
 		try:
 			res = self._s3_client.get_object(
 				Bucket=self.scriptBucketName,
@@ -958,6 +1355,10 @@ class Database(object):
 
 
 	def updateStrategyGui(self, user_id, strategy_id, obj):
+		'''
+		
+		'''
+
 		gui_object = self._s3_res.Object(
 			self.strategyBucketName,
 			f'{user_id}/{strategy_id}/gui.json.gz'
@@ -1832,37 +2233,37 @@ class Database(object):
 
 
 	def get_all_primary_keys(self):
-	    primary_keys = []
-	    count = 0
-	    r = self.prodUserTable.scan(
-	        AttributesToGet=[
-	            'user_id',
-	        ]
-	    )
-	    count += r['Count']
-	    print(r['Items'])
-	    for i in r['Items']:
-	        primary_keys.append(i['user_id'])
-	    '''discards data after 1MB, hence the following code'''
-	    while True:
-	        try:
-	            r = self.prodUserTable.scan(
-	                AttributesToGet=[
-	                    'user_id',
-	                ],
-	                ExclusiveStartKey={
-	                    'user_id': {
-	                        'S': r['LastEvaluatedKey']['user_id']
-	                    }
-	                }
-	            )
-	            count += r['Count']
-	            for i in r['Items']:
-	                primary_keys.append(i['user_id'])
-	        except KeyError as e:
-	            print(e)
-	            break
-	    return primary_keys
+		primary_keys = []
+		count = 0
+		r = self.prodUserTable.scan(
+			AttributesToGet=[
+				'user_id',
+			]
+		)
+		count += r['Count']
+		print(r['Items'])
+		for i in r['Items']:
+			primary_keys.append(i['user_id'])
+		'''discards data after 1MB, hence the following code'''
+		while True:
+			try:
+				r = self.prodUserTable.scan(
+					AttributesToGet=[
+						'user_id',
+					],
+					ExclusiveStartKey={
+						'user_id': {
+							'S': r['LastEvaluatedKey']['user_id']
+						}
+					}
+				)
+				count += r['Count']
+				for i in r['Items']:
+					primary_keys.append(i['user_id'])
+			except KeyError as e:
+				print(e)
+				break
+		return primary_keys
 
 
 	def updateProdUser(self, user_id, update):

@@ -42,8 +42,44 @@ class DictQueue(dict):
 
 
 class Controller(object):
+	'''Central handler containing containers for Accounts, Brokers, Charts and Database objects.
+
+	One Controller object exists per worker and is used throughout the program as a central
+	handler of Account, Broker, Chart and Database objects. Controller also handles tcp/socket
+	connections between other programs that this API communicates with.
+	
+	Attributes:
+		app: Flask app.
+		sio: Socket IO connection to local stream server.
+		main_sio: Socket IO connection to main stream server.
+		accounts: A dict that maps Account objects to their user ID
+		db: Central Database object.
+		charts: A dict that maps an instrument and Chart object key pair to
+				a broker provider name string.
+		brokers: A dict that maps parent Broker objects to a broker provider
+				 string name.
+		spots: A dict that maps currencies to their daily spot rate.
+		zmq_context: ZMQ Context object.
+		zmq_req_socket: ZMQ Request socket.
+		zmq_pull_socket: ZMQ Pull socket.
+		zmq_sub_socket: ZMQ Subscribe socket.
+		zmq_poller: ZMQ Poller object.
+		connection_id: An int denoting the worker's connection ID.
+		redis_client: Redis object.
+		_msg_queue: A dict that maps socket JSON messages to their msg ID string.
+		_listeners: A dict that maps a function to the msg ID that triggers 
+					the function call.
+		_send_queue: A list that queues JSON socket messages to be handled.
+
+	'''
 
 	def __init__(self, app):
+		'''Initializes Controller object and member variables.
+
+		Args:
+			app: Flask app.
+		'''
+
 		self.app = app
 		self._msg_queue = {}
 		self._listeners = {}
@@ -74,6 +110,8 @@ class Controller(object):
 		# 	Thread(target=self.restartScripts).start()
 		
 	def _setup_zmq_connections(self):
+		'''Initializes ZMQ sockets and starts message/send loop'''
+
 		self.zmq_context = zmq.Context()
 
 		# self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
@@ -103,6 +141,8 @@ class Controller(object):
 		Thread(target=self.zmq_send_loop).start()
 
 	def closeApp(self):
+		'''Shuts down Socket IO connection and stop all Brokers'''
+
 		# Discontinue any threads
 		print('Closing app... (This may take a few seconds)')
 
@@ -117,6 +157,16 @@ class Controller(object):
 		return
 
 	def setupSio(self, url):
+		'''Starts Socket IO connection.
+
+		Connection is retried until successful.
+
+		Args:
+			url: A string containing the URL the socket connects to.
+		Returns:
+			A connected socketio Client object.
+		'''
+
 		while True:
 			try:
 				sio = socketio.Client()
@@ -129,6 +179,15 @@ class Controller(object):
 		return sio
 
 	def emit(self, event, data=None, namespace=None, callback=None):
+		'''Initiates a Socket IO emit.
+
+		Args:
+			event: A string containing the name of the event.
+			data: A dict containing the JSON payload.
+			namespace: A string containing the namespace.
+			callback: A function containing the emit callback function.
+		'''
+
 		# _id = shortuuid.uuid()
 		# print(f"[emit] ({_id}) {event}, {data}, {namespace}, {callback}")
 		try:
@@ -145,6 +204,16 @@ class Controller(object):
 
 
 	def onCommand(self, data):
+		'''Handles incoming socket messages.
+
+		The msg_id is first checked if its contained in the _listeners dict whos
+		function is scalled if True. Else the message is added to the _msg_queue
+		to be processed.
+
+		Args:
+			data: A JSON dict containing the received socket data package.
+		'''
+
 		if 'msg_id' in data:
 			if data['msg_id'] in self._listeners:
 				result = data['result']
@@ -154,6 +223,13 @@ class Controller(object):
 
 
 	def _wait_broker_response(self, msg_id, timeout=60):
+		'''Waits for expected incoming socket message by msg_id
+
+		Args:
+			msg_id: A string containing a message ID.
+			timeout: An integer used as the timeout period.
+		'''
+
 		start = time.time()
 
 		while time.time() - start < timeout:
@@ -170,6 +246,8 @@ class Controller(object):
 
 	
 	def _clean_msg_queue(self):
+		''' Removes messages from _msg_queue older than 120 seconds. '''
+
 		try:
 			for msg_id in copy(list(self._msg_queue.keys())):
 				if time.time() - self._msg_queue[msg_id][1] > 120:
@@ -211,6 +289,18 @@ class Controller(object):
 
 	
 	def brokerRequest(self, broker, broker_id, func, *args, **kwargs):
+		'''Sends socket message to broker and waits for response.
+
+		Args:
+			broker: A string containing the name of the broker, recognised
+					by the broker application the message is sent to.
+			broker_id: A string containing the ID of the user broker.
+			func: A string containing the command to be performed on the
+				  broker application.
+		Returns:
+			A dict containing the resulting message response or error response.
+		'''
+
 		msg_id = shortuuid.uuid()
 
 		try:
@@ -247,6 +337,21 @@ class Controller(object):
 
 
 	def mainBrokerRequest(self, broker, broker_id, func, *args, **kwargs):
+		'''Sends socket message to broker and waits for response.
+
+		This message is sent through the main_sio socket which is connected
+		to the main server.
+
+		Args:
+			broker: A string containing the name of the broker, recognised
+					by the broker application the message is sent to.
+			broker_id: A string containing the ID of the user broker.
+			func: A string containing the command to be performed on the
+				  broker application.
+		Returns:
+			A dict containing the resulting message response or error response.
+		'''
+		
 		msg_id = shortuuid.uuid()
 
 		try:
@@ -275,10 +380,28 @@ class Controller(object):
 
 
 	def addBrokerListener(self, msg_id, listener):
+		'''Maps msg_id to a listener function.
+
+		Everytime a socket message with this msg_id is received
+		this listener function is called.
+
+		Args:
+			msg_id: A string containing a message ID.
+			listener: A function to be called when receiving the
+					  appropriate socket message.
+		'''
+
 		self._listeners[msg_id] = listener
 
 
 	def restartScripts(self):
+		'''Restarts all previously running scripts on startup.
+
+		Checks user database to see if their script was previously running
+		to continue that state on startup. A check is done to make sure 
+		the user is using this server.
+		'''
+
 		print(f"[restartScripts] WORKERS: {int(self.redis_client.get('workers_complete').decode())}", flush=True)
 		while int(self.redis_client.get("workers_complete").decode()) != 5:
 			time.sleep(1)
@@ -338,6 +461,15 @@ class Controller(object):
 
 
 	def handleListenerMessage(self, message):
+		'''Checks if message msg_id is handled by a listener.
+
+		If the msg_id is not handled by a listener it is added to the _msg_queue.
+		Listener functions are threaded to avoid blocking.
+
+		Args:
+			message: A dict containing a received socket message.
+		'''
+
 		if "msg_id" in message:
 			if message["msg_id"] in self._listeners:
 				result = message['result']
@@ -347,6 +479,14 @@ class Controller(object):
 
 	
 	def handleRequestMessage(self, message):
+		'''Handles received socket message commands.
+
+		A response message is sent once the command has been handled.
+
+		Args:
+			message: A dict containing a received socket message.
+		'''
+
 		if message.get("ept") == "init_strategy_by_broker_id_ept":
 			print(f"[handleRequestMessage] RECEIVED init_strategy_by_broker_id_ept {message}")
 			msg_id = message["msg_id"]
@@ -384,6 +524,8 @@ class Controller(object):
 
 
 	def zmq_message_loop(self):
+		''' Message loop for connected ZMQ sockets.	'''
+
 		self.zmq_pull_socket = self.zmq_context.socket(zmq.PULL)
 		self.zmq_pull_socket.connect("tcp://zmq_broker:5555")
 
@@ -433,6 +575,8 @@ class Controller(object):
 				print(traceback.format_exc())
 	
 	def zmq_send_loop(self):
+		''' Loop handling messages stored in _send_queue. '''
+
 		self.zmq_dealer_socket = self.zmq_context.socket(zmq.DEALER)
 		self.zmq_dealer_socket.connect("tcp://zmq_broker:5557")
 		
@@ -451,6 +595,11 @@ class Controller(object):
 
 
 	def startModules(self):
+		'''Initializes main member variables of Controller object.
+
+		Initializes Redis, Socket IO, ZMQ, Accounts, Database, Charts, Brokers
+		Spots.
+		'''
 
 		self.redis_client = Redis(host='redis', port=6379, password="dev")
 		
@@ -485,12 +634,24 @@ class Controller(object):
 
 
 	def performRestartScripts(self):
+		''' Calls restartScripts if enabled in config. '''
+		
 		print(f"RESTART SCRIPTS? {self.app.config['RESTART_SCRIPTS_ON_STARTUP']}")
 		if self.app.config['RESTART_SCRIPTS_ON_STARTUP']:
 			Thread(target=self.restartScripts).start()
 
 
 	def check_auth_key(self, key, strategy_id):
+		'''Checks JWT auth key validity.
+		
+		Args:
+			key: A string containing a JWT token.
+			strategy_id: A string containing the ID of the user strategy.
+		Returns:
+			A tuple of a string containing user_id or a dict containing an error message
+			and an integer containing the status code. 
+		'''
+
 		key = key.split(' ')
 		if len(key) == 2:
 			if key[0] == 'Bearer':
@@ -536,8 +697,20 @@ class Controller(object):
 
 
 class Brokers(dict):
+	'''A dict mapping broker name strings to the parent Broker object for that provider.
+	
+	Attributes:
+		ctrl: A reference to the Controller object.
+		ib_port_sessions: A dict mapping active port numbers to their session info. (Deprecated)
+	'''
 
 	def __init__(self, ctrl):
+		'''Initializes member variables and parent Broker objects.
+
+		Args:
+			ctrl: A reference to the Controller object.
+		'''
+
 		self.ctrl = ctrl
 		self.ib_port_sessions = {}
 
@@ -548,6 +721,12 @@ class Brokers(dict):
 			self[k] = self._init_broker(k, v)
 
 	def _get_options(self):
+		'''Reads broker JSON config file.
+
+		Retuns:
+			A dict containing broker configuration information. 
+		'''
+
 		path = self.ctrl.app.config['BROKERS']
 		if os.path.exists(path):
 			with open(path, 'r') as f:
@@ -556,6 +735,12 @@ class Brokers(dict):
 			raise Exception('Broker options file does not exist.')
 
 	def _get_spotware_items(self):
+		'''Loads Spotware asset and symbol data from file.
+
+		Returns:
+			A dict containing Spotware asset and symbol data. 
+		'''
+
 		assets_path = self.ctrl.app.config['SPOTWARE_ASSETS']
 		symbols_path = self.ctrl.app.config['SPOTWARE_SYMBOLS']
 		if os.path.exists(assets_path) and os.path.exists(symbols_path):
@@ -572,6 +757,13 @@ class Brokers(dict):
 		raise Exception('Spotware files do not exist.')
 
 	def _init_broker(self, name, options):
+		'''Initializes parent Broker object from broker config file.
+
+		Args:
+			name: A string containing the name of the broker provider.
+			options: A dict containing the broker config file information.
+		'''
+
 		key = options.get('key')
 		is_demo = options.get('is_demo')
 		if name == tl.broker.OANDA_NAME:
@@ -604,6 +796,12 @@ class Brokers(dict):
 		return self.get(name)
 
 	def setBroker(self, name, obj):
+		'''Writes broker configuration to file.
+		
+		Args:
+			name: A string containing the name of the broker provider.
+			obj: A dict containing new config options.
+		'''
 		options = self._get_options()
 		options[name] = obj
 
@@ -612,6 +810,12 @@ class Brokers(dict):
 			f.write(json.dumps(f, indent=2))
 
 	def getUsedPorts(self):
+		'''Generates a list of current actively used IB ports.
+
+		Returns:
+			A list containing currently active IB ports.
+		'''
+
 		used_ports = []
 		for port in self.ib_port_sessions:
 			port = str(port)
@@ -628,6 +832,13 @@ class Brokers(dict):
 		return used_ports
 
 	def assignPort(self, client, port):
+		'''Maps a port number to IB client.
+
+		Args:
+			client: A user IB object.
+			port: An integer representing the active port number.
+		'''
+
 		port = str(port)
 		if port in self.ib_port_sessions:
 			self.ib_port_sessions[port]['expiry'] = time.time() + (60*10)
@@ -638,6 +849,12 @@ class Brokers(dict):
 
 
 class Charts(dict):
+	'''A dict mapping brokers and instruments to a Chart object.
+
+	Attributes:
+		ctrl: A reference to the Controller object.
+		queue: A queue to enforce synchronous Chart initialization.
+	'''
 
 	def __init__(self, ctrl):
 		self.ctrl = ctrl
@@ -650,10 +867,28 @@ class Charts(dict):
 	# 		self[k] = {}
 
 	def _init_broker_charts(self, broker):
+		'''Maps broker name to an empty dict.
+
+		Args:
+			broker: A string containing the name of the broker provider.
+		'''
+
 		self[broker] = {}
 
 
 	def createChart(self, broker, product, await_completion):
+		'''Initializes Chart object and maps to broker name and instrument (product).
+
+		If the Chart already exists, the existing Chart is returned.
+
+		Args:
+			broker: A string containing the name of the broker provider.
+			product: A string containing the financial instrument name.
+			await_completion: A bool passed to the Chart object on initialization.
+		Returns:
+			A Chart object mapped to the broker and instrument (product)
+		'''
+
 		if 'brokers' in dir(self.ctrl):
 			broker = self.ctrl.brokers[broker.name]
 		print(f'CREATE CTRL: {broker} {broker.name}')
@@ -667,6 +902,18 @@ class Charts(dict):
 
 
 	def getChart(self, broker, product, await_completion):
+		'''Retrieves the Chart object mapped to broker name and instrument (product).
+
+		If the Chart object does not exists it is initialized.
+
+		Args:
+			broker: A string containing the name of the broker provider.
+			product: A string containing the financial instrument name.
+			await_completion: A bool passed to the Chart object on initialization.
+		Returns:
+			A Chart object mapped to the broker and instrument (product)
+		'''
+
 		print(self)
 		if broker.name in self:
 			if product in self[broker.name]:
@@ -683,6 +930,13 @@ class Charts(dict):
 
 
 	def deleteChart(self, broker_name, product):
+		'''Deletes Chart object mapping.
+
+		Args:
+			broker_name: A string containing the name of the broker provider.
+			product: A string containing the financial instrument name.
+		'''
+
 		try:
 			del broker[broker_name][product]
 		except:
@@ -690,12 +944,28 @@ class Charts(dict):
 
 
 class Accounts(dict):
+	'''A dict mapping user ID to Account object.
+	
+	Attributes:
+		ctrl: A reference to the Controller object.
+		queue: A queue to enforce synchronous Chart initialization.
+	'''
 
 	def __init__(self, ctrl):
 		self.ctrl = ctrl
 		self.queue = DictQueue()
 
 	def initAccount(self, user_id):
+		'''Initializes Account object and maps to user_id.
+
+		A check is done to see if Account object already exists.
+
+		Args:
+			user_id: A string containing user ID.
+		Returns:
+			An Account object mapped to the user_id.
+		'''
+
 		if user_id not in self:
 			try:
 				acc = Account(self.ctrl, user_id)
@@ -708,9 +978,23 @@ class Accounts(dict):
 
 
 	def addAccount(self, account):
+		'''Maps user ID to Account object.
+
+		Args:
+			account: An Account object.
+		'''
+
 		self[account.user_id] = account
 
 	def getAccount(self, user_id):
+		'''Retrieves Account object mapped to user_id.
+
+		If mapping does not exists, Account object is initialized.
+
+		Args:
+			user_id: A string containing user ID.
+		'''
+
 		acc = self.get(user_id)
 		if acc is None:
 			return self.queue.handle(user_id, self.initAccount, user_id)
@@ -718,13 +1002,32 @@ class Accounts(dict):
 			return acc
 
 	def deleteAccount(self, user_id):
+		'''Deletes user_id mapping.
+
+		Args:
+			user_id: A string containing user ID.
+		'''
+
 		if user_id in self:
 			del self[user_id]
 
 
 class Spots(dict):
+	'''A dict mapping currencies to their base USD spot rate wrapped by Spot object.
+
+	Attributes:
+		ctrl: A reference to the Controller object.
+		prices: A dict containing the retrieved currency prices from the Fixer API.
+	'''
 
 	def __init__(self, ctrl, spots):
+		'''Initializes member variables and retrieves curreny spot prices.
+		
+		Args:
+			ctrl: A reference to the Controller object.
+			spots: A dict containing old currency spot rates.
+		'''
+
 		self.ctrl = ctrl
 		self.prices = self._get_prices()
 
@@ -735,6 +1038,12 @@ class Spots(dict):
 
 
 	def _get_prices(self):
+		'''Retrieves spot prices from Fixer API.
+
+		Returns:
+			A dict containing curreny data retrieved from Fixer API.
+		'''
+
 		uri = "http://data.fixer.io/api/latest"
 		res = requests.get(uri + f"?access_key={self.ctrl.app.config['FIXER_IO_ACCESS_KEY']}&base=USD")
 		if res.status_code == 200:
@@ -746,17 +1055,22 @@ class Spots(dict):
 
 
 	def _init_spots(self):
+		''' Maps currency to Spot object containing currency rate. '''
+
 		for i in self.prices:
 			self[i] = tl.Spot(self.ctrl, i, rate=1/self.prices[i])
 
 
 	def _init_spots_backup(self, spots):
+		''' Maps currency to Spot object containing old currency rate. '''
 		for i in spots:
 			self[i] = tl.Spot(self.ctrl, i)
 			self[i].getRate()
 
 
 	def _update_spots(self):
+		''' Updates currency spot rate. '''
+
 		for i in self:
 			self[i].getRate()
 

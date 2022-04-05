@@ -13,12 +13,27 @@ from app.error import AccountException, BrokerException
 bp = Blueprint('auth', __name__)
 
 def start_session(user_id):
+	'''Initializes account if uninitialized.
+
+	Args:
+		user_id: A string containing the user ID.
+	Returns:
+		An Account object linked to the user_id.
+	'''
+
 	# Check if account unintialized
 	acc = ctrl.accounts.getAccount(user_id)
 	return acc
 
 @bp.route('/register', methods=('POST',))
 def register():
+	'''Registers a new user account.
+
+	Returns:
+		A JSON html response containing the generated user ID or
+		an error message.	
+	'''
+
 	body = request.get_json(force=True)
 	first_name = body.get('first_name')
 	last_name = body.get('last_name')
@@ -86,6 +101,13 @@ def register():
 
 @bp.route('/login', methods=('POST',))
 def login():
+	'''Generates a login token on a successful login.
+
+	Returns:
+		A JSON html response containing the user ID and
+		session token or an error message.
+	'''
+
 	body = request.get_json(force=True)
 	email = body.get('email')
 	password = body.get('password')
@@ -125,6 +147,12 @@ def login():
 
 @bp.route('/logout', methods=('POST',))
 def logout():
+	'''Clears a user session.
+
+	Returns:
+		A JSON html response containing the user ID.
+	'''
+
 	user_id = session.get('user_id')
 	msg = {}
 	if user_id:
@@ -139,6 +167,13 @@ def logout():
 
 
 def decode_auth_token():
+	'''Validates the request Authorization header session token.
+	
+	Returns:
+		A dict containing the decoded user JWT session token or an
+		error message. 
+	'''
+
 	key = request.headers.get('Authorization')
 	if key is None:
 		error = {
@@ -180,6 +215,13 @@ def decode_auth_token():
 
 
 def check_login():
+	'''Checks if user Authorization token was validated successfully.
+
+	Returns:
+		A string containing the user id or a dict containing an
+		AuthorizationException error and the status code.
+	'''
+
 	if g.get('user') is None:
 		error = {
 			'error': 'AuthorizationException',
@@ -189,6 +231,18 @@ def check_login():
 	return g.user.userId, 200
 
 def login_required(view):
+	'''Checks if user Authorization token was validated successfully.
+
+	Used as a wrapper for endpoint functions to validating a user
+	successfully logged in.
+
+	Args:
+		view: A Flask object for fulfilling requests.
+	Returns:
+		A Response containing the user id or a dict containing an
+		AuthorizationException error.
+	'''
+
 	@functools.wraps(view)
 	def wrapped_view(*args, **kwargs):
 		res, status = check_login()
@@ -213,6 +267,11 @@ def login_required(view):
 
 @bp.before_app_request
 def load_logged_in_user():
+	'''Checks Authorization header and retrieves user Account object.
+
+	Called before any html request is made.	
+	'''
+
 	token, status = decode_auth_token()
 	if status == 200:
 		try:
@@ -226,6 +285,12 @@ def load_logged_in_user():
 @bp.route('/authorize', methods=('POST',))
 @login_required
 def check_auth():
+	'''Checks if user requests are authorized.
+	
+	Returns:
+		A JSON html response containing user information.
+	'''
+
 	user_info = ctrl.getDb().getUser(g.user.userId)
 
 	res = {
@@ -244,6 +309,12 @@ def check_auth():
 @bp.route('/broker', methods=('GET',))
 @login_required
 def get_all_brokers():
+	'''Retrieves user broker information.
+	
+	Returns:
+		A JSON html response containing user broker information.
+	'''
+
 	res = g.user.getAllBrokers()
 	return Response(
 		json.dumps(res, indent=2),
@@ -254,6 +325,12 @@ def get_all_brokers():
 @bp.route('/broker', methods=('POST',))
 @login_required
 def create_broker():
+	'''Creates a new user broker item.
+	
+	Returns:
+		A JSON html response containing new broker information.
+	'''
+
 	body = request.get_json(force=True)
 	print(body)
 	broker_id = body.get('broker_id')
@@ -280,6 +357,12 @@ def create_broker():
 @bp.route('/broker', methods=('PUT',))
 @login_required
 def update_broker():
+	'''Updates a user broker item.
+	
+	Returns:
+		A JSON html response containing updated broker information.
+	'''
+
 	body = request.get_json(force=True)
 	broker_id = body.get('broker_id')
 
@@ -301,6 +384,14 @@ def update_broker():
 @bp.route('/broker/<name>', methods=('GET',))
 @login_required
 def get_broker(name):
+	'''Retrieves a user broker item by broker ID.
+	
+	Args:
+		name: A string containing the ID of the user broker.
+	Returns:
+		A JSON html response containing broker information.
+	'''
+	
 	res = g.user.getBroker(name)
 	return Response(
 		json.dumps(res, indent=2),
@@ -311,6 +402,15 @@ def get_broker(name):
 @bp.route('/broker/<old_name>/<new_name>', methods=('PUT',))
 @login_required
 def change_broker_name(old_name, new_name):
+	'''Updates a user broker ID by its old broker ID.
+	
+	Args:
+		old_name: A string containing the old ID of the user broker.
+		new_name: A string containing the new ID of the user broker.
+	Returns:
+		A JSON html response containing broker information.
+	'''
+
 	res = g.user.changeBrokerName(old_name, new_name)
 	return Response(
 		json.dumps(res, indent=2),
@@ -321,6 +421,16 @@ def change_broker_name(old_name, new_name):
 @bp.route('/broker/<broker_id>', methods=('DELETE',))
 @login_required
 def delete_broker(broker_id):
+	'''Deletes a user broker item by broker ID.
+	
+	Deletion is blocked if any script is running.
+
+	Args:
+		broker_id: A string containing the ID of the user broker.
+	Returns:
+		A JSON html response containing deleted broker ID.
+	'''
+
 	# Check no scripts are running on broker
 	if g.user.isAnyScriptRunning():
 		res = {
@@ -344,6 +454,12 @@ def delete_broker(broker_id):
 @bp.route('/auth/spotware', methods=('GET',))
 @login_required
 def spotware_broker_auth():
+	'''Completes Spotware OAuth process and creates new Spotware broker.
+	
+	Returns:
+		A JSON html response containing new broker ID.
+	'''
+	
 	code = request.args.get('code')
 	broker_id = request.args.get('broker_id')
 	print('SPOTWARE BROKER AUTH')

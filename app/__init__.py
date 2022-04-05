@@ -15,6 +15,21 @@ import uwsgidecorators
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def create_app(test_config=None):
+	'''Initializes the Flask app configuration and endpoints.
+
+	Loads the app configuration on file or uses test_config to initialize the
+	Flask app and its endpoints.
+
+	Args:
+		test_config:
+			A custom provided configuration dictionary to replace the default config
+			for the purpose of testing.
+	
+	Returns:
+		A fully configured Flask app to be run.
+	
+	'''
+
 
 	# Create and configure app
 	instance_path = os.path.join(os.path.abspath(os.getcwd()), 'instance')
